@@ -43,14 +43,3 @@ resources:
               - GET
               - POST
             authType: anonymous
-
-  domain:
-    component: fc3-domain
-    props:
-      region: ${vars.region}
-      domainName: auto
-      protocol: HTTP
-      routeConfig:
-        routes:
-          - path: /*
-            functionName: ${vars.functionName}

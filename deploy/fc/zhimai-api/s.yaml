@@ -41,14 +41,11 @@ resources:
         QWEN_MODEL_CHAT: ${env(QWEN_MODEL_CHAT)}
         EMBEDDING_MODEL: ${env(EMBEDDING_MODEL)}
         MIN_RETRIEVE_SCORE: ${env(MIN_RETRIEVE_SCORE)}
-
-  domain:
-    component: fc3-domain
-    props:
-      region: ${vars.region}
-      domainName: auto
-      protocol: HTTP
-      routeConfig:
-        routes:
-          - path: /*
-            functionName: ${vars.functionName}
+      triggers:
+        - triggerName: http
+          triggerType: http
+          triggerConfig:
+            methods:
+              - GET
+              - POST
+            authType: anonymous
