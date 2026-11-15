@@ -27,3 +27,6 @@ data/embed_cache.jsonl
 # 编辑器
 .idea/
 .vscode/
+
+# 本地运行日志
+logs-*.txt
