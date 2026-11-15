@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<style>
+  @page { size: A3 landscape; margin: 8mm; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:"Microsoft YaHei","PingFang SC",sans-serif; background:#fff; }
+  .title { text-align:center; padding:10px 0 2px; }
+  .title h1 { font-size:22px; color:#1a202c; }
+  .title p { font-size:11px; color:#718096; margin-top:4px; }
+
+  .map { display:flex; align-items:stretch; justify-content:center; padding:14px 10px; }
+  .side { display:flex; flex-direction:column; justify-content:space-around; }
+  .root-wrap { display:flex; align-items:center; padding:0 6px; }
+  .root {
+    background:linear-gradient(135deg,#2b6cb0,#4c51bf); color:#fff;
+    border-radius:16px; padding:22px 20px; text-align:center;
+    box-shadow:0 4px 14px rgba(43,108,176,.35); max-width:190px;
+  }
+  .root .t { font-size:19px; font-weight:700; line-height:1.35; }
+  .root .s { font-size:10.5px; opacity:.85; margin-top:8px; line-height:1.5; }
+
+  /* ===== right side tree (children extend rightward) ===== */
+  .tree { display:flex; align-items:center; margin:6px 0; }
+  .bnode {
+    border-radius:10px; padding:8px 14px; color:#fff; font-weight:700;
+    font-size:13.5px; white-space:nowrap; box-shadow:0 2px 6px rgba(0,0,0,.15);
+  }
+  ul.kids { list-style:none; }
+  ul.kids li { position:relative; padding-left:26px; margin:5px 0; }
+  ul.kids li::before { /* vertical line */
+    content:""; position:absolute; left:10px; top:-5px; bottom:50%; width:1.6px; background:#cbd5e0;
+  }
+  ul.kids li::after { /* horizontal line */
+    content:""; position:absolute; left:10px; top:50%; width:16px; height:1.6px; background:#cbd5e0;
+  }
+  ul.kids li:first-child::before { top:50%; }
+  ul.kids li:only-child::before { display:none; }
+  .leaf {
+    display:inline-block; background:#f7fafc; border:1.4px solid #cbd5e0;
+    border-radius:8px; padding:4px 10px; font-size:11.5px; color:#2d3748;
+  }
+  .leaf b { color:#1a202c; }
+  /* grandchildren */
+  ul.gkids { list-style:none; margin-top:4px; }
+  ul.gkids li { padding-left:18px; margin:3px 0; }
+  ul.gkids li::before { left:6px; }
+  ul.gkids li::after { left:6px; width:10px; }
+  .gleaf { display:inline-block; font-size:10.5px; color:#4a5568; background:#edf2f7;
+           border-radius:6px; padding:2px 8px; }
+
+  /* connector between branch node and kids */
+  .tree > .bnode { position:relative; }
+  .tree.R > ul.kids { margin-left:0; }
+
+  /* left side: mirror */
+  .side.L .tree { flex-direction:row-reverse; }
+  .side.L ul.kids li { padding-left:0; padding-right:26px; text-align:right; }
+  .side.L ul.kids li::before { left:auto; right:10px; }
+  .side.L ul.kids li::after { left:auto; right:10px; }
+  .side.L ul.gkids li { padding-left:0; padding-right:18px; }
+  .side.L ul.gkids li::before { right:6px; }
+  .side.L ul.gkids li::after { right:6px; }
+
+  /* branch colors */
+  .c1 .bnode{background:#2f855a} .c1 .leaf{border-color:#9ae6b4}
+  .c2 .bnode{background:#b7791f} .c2 .leaf{border-color:#f6e05e}
+  .c3 .bnode{background:#2b6cb0} .c3 .leaf{border-color:#90cdf4}
+  .c4 .bnode{background:#c53030} .c4 .leaf{border-color:#feb2b2}
+  .c5 .bnode{background:#6b46c1} .c5 .leaf{border-color:#d6bcfa}
+  .c6 .bnode{background:#2c7a7b} .c6 .leaf{border-color:#81e6d9}
+  .c7 .bnode{background:#b83280} .c7 .leaf{border-color:#fbb6ce}
+</style>
+</head>
+<body>
+<div class="title">
+  <h1>知脉 RAG 问答 + 简历助手 · 开发方案思维导图</h1>
+  <p>2026 Qoder 高校创造力大赛 · StudyHack 学习科研赛道 ｜ 截止 2026-11-30 18:00 ｜ v1.0 / 2026-11-15</p>
+</div>
+
+<div class="map">
+  <!-- ================= LEFT ================= -->
+  <div class="side L">
+    <div class="tree c5">
+      <div class="bnode">技术与部署</div>
+      <ul class="kids">
+        <li><span class="leaf"><b>前端</b>：Vue3+Vite+Tailwind → Qoder Sites</span></li>
+        <li><span class="leaf"><b>后端</b>：FastAPI on CloudBase（复用队友服务）</span></li>
+        <li><span class="leaf"><b>数据</b>：Supabase Postgres+pgvector</span></li>
+        <li><span class="leaf"><b>生成</b>：百炼 qwen-plus（DeepSeek 兜底）</span></li>
+        <li><span class="leaf"><b>分类</b>：qwen-turbo；<b>向量</b>：BGE-M3</span></li>
+      </ul>
+    </div>
+
+    <div class="tree c6">
+      <div class="bnode">16 天里程碑</div>
+      <ul class="kids">
+        <li><span class="leaf"><b>D1</b> 后端健康+Supabase schema+百炼key</span></li>
+        <li><span class="leaf"><b>D2-3</b> 前端骨架+接通问答流式</span></li>
+        <li><span class="leaf"><b>D4-7</b> 路由L1-L3+意图评测集+简历解析/诊断</span></li>
+        <li><span class="leaf"><b>D8-11</b> 改写+DiffView+PDF导出+JD匹配</span></li>
+        <li><span class="leaf"><b>D12-13</b> 联动引导卡+打磨+隐私声明</span></li>
+        <li><span class="leaf"><b>D14-16</b> 部署+录屏+作品帖发布</span></li>
+      </ul>
+    </div>
+
+    <div class="tree c7">
+      <div class="bnode">评测与风险</div>
+      <ul class="kids">
+        <li><span class="leaf">路由准确率 ≥92%（50-80条语料）</span>
+          <ul class="gkids"><li><span class="gleaf">L1/L2 分流占比 = 成本优势证据</span></li></ul>
+        </li>
+        <li><span class="leaf">RAG：Top-K召回/来源匹配/拒答率/P95</span></li>
+        <li><span class="leaf">权限：public+ready 过滤不泄漏</span></li>
+        <li><span class="leaf">风险：后端503/跨云延迟/隐私/超支</span>
+          <ul class="gkids"><li><span class="gleaf">砍单序：微调→JD→对比→PDF精排</span></li></ul>
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ================= ROOT ================= -->
+  <div class="root-wrap">
+    <div class="root">
+      <div class="t">知脉 RAG 问答<br>+<br>简历助手</div>
+      <div class="s">双板块 Web 应用<br>统一意图入口<br>知识库 ↔ 简历联动</div>
+    </div>
+  </div>
+
+  <!-- ================= RIGHT ================= -->
+  <div class="side R">
+    <div class="tree c1">
+      <div class="bnode">整体架构</div>
+      <ul class="kids">
+        <li><span class="leaf">Qoder Sites 静态前端（必须，公开访问）</span></li>
+        <li><span class="leaf">CloudBase FastAPI 后端（复用）</span>
+          <ul class="gkids">
+            <li><span class="gleaf">/api/route 意图路由</span></li>
+            <li><span class="gleaf">/api/resume/* 简历管线</span></li>
+            <li><span class="gleaf">/api/public/chat 已有问答</span></li>
+          </ul>
+        </li>
+        <li><span class="leaf">Supabase：1945 篇笔记 chunks</span></li>
+      </ul>
+    </div>
+
+    <div class="tree c2">
+      <div class="bnode">Decision Layer 意图路由</div>
+      <ul class="kids">
+        <li><span class="leaf"><b>L1</b> 规则快通道：强关键词/带附件</span></li>
+        <li><span class="leaf"><b>L2</b> 语义路由：bge-m3 × 示例语料</span>
+          <ul class="gkids"><li><span class="gleaf">top1≥0.72 且 margin≥0.08 才放行</span></li></ul>
+        </li>
+        <li><span class="leaf"><b>L3</b> qwen-turbo JSON 分类兜底</span>
+          <ul class="gkids"><li><span class="gleaf">置信度低 → 反问澄清</span></li></ul>
+        </li>
+        <li><span class="leaf">意图：kb_qa / resume_edit / resume_qa / chitchat / out_of_scope</span></li>
+        <li><span class="leaf">输出 kb_scope → 收窄检索域（6目录）</span></li>
+      </ul>
+    </div>
+
+    <div class="tree c3">
+      <div class="bnode">板块A：RAG 知识问答</div>
+      <ul class="kids">
+        <li><span class="leaf">混合检索：向量 0.7 + 关键词 0.3</span></li>
+        <li><span class="leaf">流式输出 + 来源引用（文件/页码）</span></li>
+        <li><span class="leaf">无依据拒答 + 建议问法</span></li>
+        <li><span class="leaf">简历意图 → RouteGuideCard 导流卡</span></li>
+        <li><span class="leaf">引导问题 / 多轮追问 / 赞踩反馈</span></li>
+      </ul>
+    </div>
+
+    <div class="tree c4">
+      <div class="bnode">板块B：简历助手</div>
+      <ul class="kids">
+        <li><span class="leaf">上传解析 PDF/DOCX/MD → 结构化JSON</span></li>
+        <li><span class="leaf">诊断报告：5维 rubric 打分 + 雷达图</span>
+          <ul class="gkids"><li><span class="gleaf">结构/量化/ATS/动词/篇幅</span></li></ul>
+        </li>
+        <li><span class="leaf">STAR 改写：<b>禁虚构</b>，缺数据反问</span></li>
+        <li><span class="leaf">前后对比逐条 accept/reject</span></li>
+        <li><span class="leaf">JD 匹配：覆盖率+差距+定制建议</span></li>
+        <li><span class="leaf">PDF 模板精排版导出</span></li>
+        <li><span class="leaf">诊断引用知识库求职方法论（联动）</span></li>
+        <li><span class="leaf">隐私：不落库 + 声明 + 一键清除</span></li>
+      </ul>
+    </div>
+  </div>
+</div>
+</body>
+</html>

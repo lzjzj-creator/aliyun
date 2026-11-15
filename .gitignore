@@ -1,0 +1,26 @@
+# 环境与密钥
+.env
+.env.*
+*.key
+secrets.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Node / 前端
+node_modules/
+dist/
+*.local
+
+# 系统
+.DS_Store
+Thumbs.db
+nul
+*.log
+
+# 编辑器
+.idea/
+.vscode/
