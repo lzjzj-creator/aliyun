@@ -30,3 +30,7 @@ data/embed_cache.jsonl
 
 # 本地运行日志
 logs-*.txt
+
+# FC 部署产物
+backend/vendor/
+.s/
