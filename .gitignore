@@ -34,3 +34,5 @@ logs-*.txt
 # FC 部署产物
 backend/vendor/
 .s/
+sites-status.tmp.json
+*.tmp.json
