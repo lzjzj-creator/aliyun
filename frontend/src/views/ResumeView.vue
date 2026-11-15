@@ -60,6 +60,25 @@ async function runAnalyze() {
   finally { busy.value = false; }
 }
 
+// 评委演示模式：加载预存的真实接口响应，不消耗 API 配额
+const demoMode = ref(false);
+async function loadDemo() {
+  busy.value = true; errMsg.value = "";
+  try {
+    const [analyze, rewriteR, text] = await Promise.all([
+      fetch("/demo/analyze.json").then((r) => r.json()),
+      fetch("/demo/rewrite.json").then((r) => r.json()),
+      fetch("/demo/resume.txt").then((r) => r.text()),
+    ]);
+    resumeText.value = text;
+    report.value = analyze;
+    rewrite.value = rewriteR?.ok ? rewriteR.data : null;
+    demoMode.value = true;
+    step.value = 3;
+  } catch (e) { errMsg.value = `示例加载失败：${e.message}`; }
+  finally { busy.value = false; }
+}
+
 const REWRITE_SEED = /[。；;\n]/;
 async function runRewrite() {
   busy.value = true; errMsg.value = "";
@@ -86,7 +105,10 @@ async function runRewrite() {
       <textarea v-model="resumeText" :maxlength="MAX"
         placeholder="或直接粘贴简历文本…" rows="10" />
       <p class="count">{{ resumeText.length }} / {{ MAX }}</p>
-      <button :disabled="!resumeText.trim()" @click="step = 2">下一步：核对文本 →</button>
+      <div class="row">
+        <button :disabled="!resumeText.trim()" @click="step = 2">下一步：核对文本 →</button>
+        <button class="ghost" :disabled="busy" @click="loadDemo">📋 示例演示（无需上传）</button>
+      </div>
     </div>
 
     <div v-else-if="step === 2" class="pane">
@@ -102,7 +124,7 @@ async function runRewrite() {
     </div>
 
     <div v-else class="pane">
-      <h2>诊断结果</h2>
+      <h2>诊断结果 <span v-if="demoMode" class="demo-badge">示例快照</span></h2>
       <p v-if="errMsg" class="warn">{{ errMsg }}</p>
 
       <template v-if="report">
