@@ -1,6 +1,11 @@
 """LLM/Embedding 调用层：百炼 DashScope（OpenAI 兼容）+ DeepSeek 兜底。"""
 import os
+from pathlib import Path
+
 import httpx
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 DASHSCOPE_KEY = os.getenv("DASHSCOPE_API_KEY", "")
 DEEPSEEK_KEY = os.getenv("DEEPSEEK_API_KEY", "")
@@ -50,6 +55,20 @@ class LLM:
                     continue
                 if delta.get("content"):
                     yield delta["content"]
+
+    def decide(self, content: str, questions: dict, ticket_id: str = "q") -> dict:
+        """decision-model-preview 结构化决策（systemone 专用端点）。
+        返回 answers 字典：choice→{choice,confidence,probabilities}，noul→{noul}，score→{score,confidence}"""
+        r = self._client.post(
+            "https://cn-beijing.maas.qianwenaiapi.com/compatible-mode/v1/systemone",
+            json={"model": "decision-model-preview",
+                  "state": {"ticket_id": ticket_id, "content": content},
+                  "questions": questions},
+            headers={"Authorization": f"Bearer {DASHSCOPE_KEY}"},
+            timeout=15,
+        )
+        r.raise_for_status()
+        return r.json()["answers"]
 
     def embed(self, text: str, text_type: str = "query") -> list[float]:
         r = self._client.post(

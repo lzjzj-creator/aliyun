@@ -1,6 +1,11 @@
 """知识库检索：Supabase RPC match_chunks（向量+关键词混合，见 ingest/schema.sql）。"""
 import os
+from pathlib import Path
+
 import httpx
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")

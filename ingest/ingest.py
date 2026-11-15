@@ -30,7 +30,7 @@ DASHSCOPE_KEY = os.getenv("DASHSCOPE_API_KEY", "")
 
 EMBED_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-v4")
 EMBED_DIM = int(os.getenv("EMBEDDING_DIM", "1024"))
-EMBED_BATCH = 25          # DashScope 单次上限
+EMBED_BATCH = 10          # text-embedding-v4 单次上限
 INSERT_BATCH = 200        # PostgREST 批量插入
 MAX_CHUNK = 500           # 每段目标字符数
 OVERLAP = 80              # 段间重叠
@@ -94,9 +94,12 @@ def embed_batch(client: httpx.Client, texts: list[str]) -> list[list[float]]:
     url = "https://dashscope.aliyuncs.com/api/v1/services/embeddings/text-embedding/text-embedding"
     body = {"model": EMBED_MODEL, "input": {"texts": texts},
             "parameters": {"text_type": "document"}}
+    headers = {"Authorization": f"Bearer {DASHSCOPE_KEY}"}
     for attempt in range(3):
         try:
-            r = client.post(url, json=body, timeout=60)
+            r = client.post(url, json=body, headers=headers, timeout=60)
+            if r.status_code != 200:
+                raise RuntimeError(f"HTTP {r.status_code}: {r.text[:200]}")
             r.raise_for_status()
             out = r.json()["output"]["embeddings"]
             out.sort(key=lambda e: e["text_index"])
