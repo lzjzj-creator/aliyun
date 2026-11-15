@@ -5,8 +5,13 @@
 用法：
   pip install -r requirements.txt
   python ingest.py --dry-run          # 只统计，不联网（验证清洗/切分逻辑）
-  python ingest.py                    # 全量入库（需要 .env 里的 SUPABASE_*/DASHSCOPE_*）
+  python ingest.py                    # 增量入库（已入库的文档/分段自动跳过，断点续传）
+  python ingest.py --wipe             # 清空后全量重灌
   python ingest.py --limit 50         # 只跑前 50 篇试水
+
+断点续传：
+  - embedding 结果逐批写入 data/embed_cache.jsonl，重跑时不再调用 API
+  - documents / chunks 写入前查询已存在的 key，只补缺的
 """
 import argparse
 import json
@@ -19,8 +24,12 @@ from pathlib import Path
 import httpx
 from dotenv import load_dotenv
 
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data" / "contentIndex.json"
+CACHE = ROOT / "data" / "embed_cache.jsonl"
 BASE_URL = "https://zhimai-rag-knowledge.pages.dev"
 
 load_dotenv(ROOT / ".env")
@@ -31,7 +40,8 @@ DASHSCOPE_KEY = os.getenv("DASHSCOPE_API_KEY", "")
 EMBED_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-v4")
 EMBED_DIM = int(os.getenv("EMBEDDING_DIM", "1024"))
 EMBED_BATCH = 10          # text-embedding-v4 单次上限
-INSERT_BATCH = 200        # PostgREST 批量插入
+DOC_BATCH = 200           # documents 无向量，批量可大
+CHUNK_BATCH = 100         # 含 1024 维向量，批量大了会被断连
 MAX_CHUNK = 500           # 每段目标字符数
 OVERLAP = 80              # 段间重叠
 
@@ -89,6 +99,10 @@ def chunk_text(text: str) -> list[str]:
     return chunks
 
 
+def chunk_key(c: dict) -> str:
+    return f"{c['doc_slug']}#{c['seq']}"
+
+
 def embed_batch(client: httpx.Client, texts: list[str]) -> list[list[float]]:
     """DashScope 原生 embedding 接口，失败重试 3 次。"""
     url = "https://dashscope.aliyuncs.com/api/v1/services/embeddings/text-embedding/text-embedding"
@@ -100,7 +114,6 @@ def embed_batch(client: httpx.Client, texts: list[str]) -> list[list[float]]:
             r = client.post(url, json=body, headers=headers, timeout=60)
             if r.status_code != 200:
                 raise RuntimeError(f"HTTP {r.status_code}: {r.text[:200]}")
-            r.raise_for_status()
             out = r.json()["output"]["embeddings"]
             out.sort(key=lambda e: e["text_index"])
             return [e["embedding"] for e in out]
@@ -108,9 +121,24 @@ def embed_batch(client: httpx.Client, texts: list[str]) -> list[list[float]]:
             if attempt == 2:
                 raise
             wait = 2 ** attempt * 2
-            print(f"  embedding 重试 {attempt + 1}: {e}，{wait}s 后重试")
+            print(f"  embedding 重试 {attempt + 1}: {e}，{wait}s 后重试", flush=True)
             time.sleep(wait)
     return []  # unreachable
+
+
+def load_embed_cache() -> dict:
+    cache = {}
+    if CACHE.exists():
+        for line in CACHE.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                row = json.loads(line)
+                cache[row["key"]] = row["vec"]
+    return cache
+
+
+def append_embed_cache(key: str, vec: list):
+    with CACHE.open("a", encoding="utf-8") as f:
+        f.write(json.dumps({"key": key, "vec": vec}) + "\n")
 
 
 def sb_client() -> httpx.Client:
@@ -120,12 +148,42 @@ def sb_client() -> httpx.Client:
                  "Authorization": f"Bearer {SUPABASE_KEY}",
                  "Content-Type": "application/json",
                  "Prefer": "return=minimal"},
-        timeout=60,
+        timeout=120,
     )
 
 
+def post_retry(sb: httpx.Client, path: str, rows: list, label: str):
+    """批量写入，断连/5xx 自动重试 4 次。"""
+    for attempt in range(4):
+        try:
+            r = sb.post(path, json=rows, timeout=180)
+            if r.status_code < 300:
+                return
+            err = f"HTTP {r.status_code}: {r.text[:300]}"
+        except httpx.HTTPError as e:
+            err = str(e)
+        if attempt == 3:
+            raise RuntimeError(f"{label} 写入失败: {err}")
+        wait = 2 ** attempt * 3
+        print(f"  {label} 重试 {attempt + 1}: {err}，{wait}s 后重试", flush=True)
+        time.sleep(wait)
+
+
+def fetch_existing_keys(sb: httpx.Client, path: str, select: str) -> set:
+    """分页拉全表 key（PostgREST 单页上限 1000 行）。"""
+    keys, offset = set(), 0
+    while True:
+        r = sb.get(path, params={"select": select, "limit": 1000, "offset": offset}, timeout=120)
+        r.raise_for_status()
+        rows = r.json()
+        for row in rows:
+            keys.add(tuple(row.values()))
+        if len(rows) < 1000:
+            return keys
+        offset += 1000
+
+
 def wipe(sb: httpx.Client):
-    """全量重灌：先清 chunks 再清 documents。"""
     r = sb.delete("/chunks", params={"id": "gte.0"})
     r.raise_for_status()
     r = sb.delete("/documents", params={"slug": "neq."})
@@ -136,6 +194,7 @@ def wipe(sb: httpx.Client):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true", help="只统计不联网")
+    ap.add_argument("--wipe", action="store_true", help="清空后全量重灌")
     ap.add_argument("--limit", type=int, default=0)
     args = ap.parse_args()
 
@@ -154,7 +213,7 @@ def main():
 
     all_chunks = []
     for d in docs:
-        for i, c in enumerate(chunk_text(d.pop("_content"))):
+        for i, c in enumerate(chunk_text(d["_content"])):
             all_chunks.append({"doc_slug": d["slug"], "seq": i,
                                "text": f"《{d['title']}》\n{c}",
                                "kb_scope": d["kb_scope"],
@@ -173,27 +232,48 @@ def main():
         sys.exit("缺少 SUPABASE_URL / SUPABASE_SERVICE_KEY / DASHSCOPE_API_KEY，请填 .env")
 
     with httpx.Client(timeout=60) as emb, sb_client() as sb:
-        wipe(sb)
-        for i in range(0, len(docs), INSERT_BATCH):
-            r = sb.post("/documents", json=[{k: v for k, v in d.items()} for d in docs[i:i + INSERT_BATCH]])
-            r.raise_for_status()
-        print(f"documents 写入 {len(docs)} 行")
+        if args.wipe:
+            wipe(sb)
 
-        for i in range(0, len(all_chunks), EMBED_BATCH):
-            batch = all_chunks[i:i + EMBED_BATCH]
+        # 1) documents：只补缺的
+        existing_docs = fetch_existing_keys(sb, "/documents", "slug")
+        todo_docs = [{k: v for k, v in d.items() if k != "_content"}
+                     for d in docs if (d["slug"],) not in existing_docs]
+        for i in range(0, len(todo_docs), DOC_BATCH):
+            post_retry(sb, "/documents", todo_docs[i:i + DOC_BATCH], "documents")
+        print(f"documents 新增 {len(todo_docs)} 行（已存在 {len(existing_docs)}）", flush=True)
+
+        # 2) embedding：缓存命中跳过 API，未命中边算边落盘
+        cache = load_embed_cache()
+        pending = [c for c in all_chunks if chunk_key(c) not in cache]
+        print(f"embedding 待算 {len(pending)} 个（缓存命中 {len(all_chunks) - len(pending)}）", flush=True)
+        done = 0
+        for i in range(0, len(pending), EMBED_BATCH):
+            batch = pending[i:i + EMBED_BATCH]
             vecs = embed_batch(emb, [c["text"] for c in batch])
             for c, v in zip(batch, vecs):
-                c["embedding"] = "[" + ",".join(f"{x:.6f}" for x in v) + "]"
-            if (i // EMBED_BATCH) % 10 == 0:
-                print(f"embedding {i}/{len(all_chunks)}")
-        print("embedding 全部完成")
+                key = chunk_key(c)
+                cache[key] = v
+                append_embed_cache(key, v)
+            done += len(batch)
+            if done % 100 < EMBED_BATCH or done == len(pending):
+                print(f"embedding {done}/{len(pending)}", flush=True)
 
-        for i in range(0, len(all_chunks), INSERT_BATCH):
-            r = sb.post("/chunks", json=all_chunks[i:i + INSERT_BATCH])
-            r.raise_for_status()
-            if (i // INSERT_BATCH) % 5 == 0:
-                print(f"chunks 写入 {i}/{len(all_chunks)}")
-        print(f"完成：{len(all_chunks)} 个分段入库。")
+        for c in all_chunks:
+            v = cache[chunk_key(c)]
+            c["embedding"] = "[" + ",".join(f"{x:.6f}" for x in v) + "]"
+
+        # 3) chunks：只补缺的
+        existing_chunks = fetch_existing_keys(sb, "/chunks", "doc_slug,seq")
+        todo_chunks = [c for c in all_chunks
+                       if (c["doc_slug"], c["seq"]) not in existing_chunks]
+        print(f"chunks 待写 {len(todo_chunks)} 个（已存在 {len(existing_chunks)}）", flush=True)
+        for i in range(0, len(todo_chunks), CHUNK_BATCH):
+            post_retry(sb, "/chunks", todo_chunks[i:i + CHUNK_BATCH], "chunks")
+            done = i + len(todo_chunks[i:i + CHUNK_BATCH])
+            if done % 500 < CHUNK_BATCH or done == len(todo_chunks):
+                print(f"chunks 写入 {done}/{len(todo_chunks)}", flush=True)
+        print(f"完成：chunks 在库 {len(existing_chunks) + len(todo_chunks)} 个分段。")
 
 
 if __name__ == "__main__":

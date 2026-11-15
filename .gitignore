@@ -21,6 +21,9 @@ Thumbs.db
 nul
 *.log
 
+# 入库缓存（45MB 向量缓存，不入库）
+data/embed_cache.jsonl
+
 # 编辑器
 .idea/
 .vscode/
