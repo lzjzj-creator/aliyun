@@ -34,6 +34,14 @@ h1 { font-size: 1.4rem; margin: 0; color: var(--teal); }
 .bubble { max-width: 78%; padding: 10px 14px; border-radius: 14px; background: #fff; border: 1px solid var(--line); white-space: pre-wrap; line-height: 1.65; font-size: .95rem; }
 .msg.user .bubble { background: var(--teal); color: #fff; border-color: var(--teal); }
 .bubble.pending { color: #9a9186; }
+/* 路由徽章 */
+.route-badge { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 7px; font-size: .7rem; line-height: 1.4; }
+.route-badge .pill {
+  padding: 1px 8px; border-radius: 999px; white-space: nowrap; font-size: inherit;
+  color: var(--teal); background: rgba(20, 82, 90, .08); border: 1px solid rgba(20, 82, 90, .18);
+}
+.route-badge.low .pill { color: var(--accent); background: rgba(224, 100, 58, .10); border-color: rgba(224, 100, 58, .30); }
+.route-badge .pill.low-tag { background: var(--accent); border-color: var(--accent); color: #fff; }
 .guide-card { margin-top: 8px; padding: 10px; background: #fdf3ee; border: 1px solid #f0cdb9; border-radius: 10px; }
 .guide-card .go { margin-top: 6px; background: var(--accent); border-color: var(--accent); color: #fff; }
 .sources { margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--line); font-size: .8rem; }
