@@ -23,6 +23,11 @@ _fails: dict[str, tuple[int, float]] = {}
 
 
 def _client_key(request: Request) -> str:
+    # FC 网关在函数之前，client.host 是网关 IP：取 XFF 链尾（网关追加的真实来源），
+    # 否则所有访客共用一个限流桶，任意人输错 5 次会把管理员也锁在门外。
+    xff = request.headers.get("x-forwarded-for", "")
+    if xff.strip():
+        return xff.split(",")[-1].strip()
     return (request.client.host if request.client else "") or "unknown"
 
 
