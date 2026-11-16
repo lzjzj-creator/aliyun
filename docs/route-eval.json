@@ -1,0 +1,828 @@
+{
+  "generated_at": "2026-11-16T05:38:25.208229+00:00",
+  "base": "https://zhimai-api-hiwijfvopw.cn-beijing.fcapp.run",
+  "total": 50,
+  "correct": 49,
+  "accuracy": 0.98,
+  "confusion_matrix": {
+    "kb_qa": {
+      "kb_qa": 24,
+      "resume_edit": 0,
+      "resume_qa": 0,
+      "chitchat": 0,
+      "out_of_scope": 0
+    },
+    "resume_edit": {
+      "kb_qa": 0,
+      "resume_edit": 8,
+      "resume_qa": 0,
+      "chitchat": 0,
+      "out_of_scope": 0
+    },
+    "resume_qa": {
+      "kb_qa": 1,
+      "resume_edit": 0,
+      "resume_qa": 7,
+      "chitchat": 0,
+      "out_of_scope": 0
+    },
+    "chitchat": {
+      "kb_qa": 0,
+      "resume_edit": 0,
+      "resume_qa": 0,
+      "chitchat": 5,
+      "out_of_scope": 0
+    },
+    "out_of_scope": {
+      "kb_qa": 0,
+      "resume_edit": 0,
+      "resume_qa": 0,
+      "chitchat": 0,
+      "out_of_scope": 5
+    }
+  },
+  "per_class": {
+    "kb_qa": {
+      "support": 24,
+      "precision": 0.96,
+      "recall": 1.0,
+      "f1": 0.98
+    },
+    "resume_edit": {
+      "support": 8,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    "resume_qa": {
+      "support": 8,
+      "precision": 1.0,
+      "recall": 0.875,
+      "f1": 0.933
+    },
+    "chitchat": {
+      "support": 5,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    "out_of_scope": {
+      "support": 5,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    }
+  },
+  "cases": [
+    {
+      "query": "大一应该重点补什么信息差？",
+      "has_attachment": false,
+      "expected": "kb_qa",
+      "predicted": "kb_qa",
+      "ok": true,
+      "route": {
+        "intent": "kb_qa",
+        "kb_scope": "all",
+        "confidence": 0.95,
+        "route_layer": "decision-model",
+        "action": "answer",
+        "clarify_question": null
+      }
+    },
+    {
+      "query": "大三找实习该怎么规划时间线？",
+      "has_attachment": false,
+      "expected": "kb_qa",
+      "predicted": "kb_qa",
+      "ok": true,
+      "route": {
+        "intent": "kb_qa",
+        "kb_scope": "sophomore_junior",
+        "confidence": 1.0,
+        "route_layer": "decision-model",
+        "action": "answer",
+        "clarify_question": null
+      }
+    },
+    {
+      "query": "大四秋招什么时候开始准备？",
+      "has_attachment": false,
+      "expected": "kb_qa",
+      "predicted": "kb_qa",
+      "ok": true,
+      "route": {
+        "intent": "kb_qa",
+        "kb_scope": "senior",
+        "confidence": 0.99,
+        "route_layer": "decision-model",
+        "action": "answer",
+        "clarify_question": null
+      }
+    },
+    {
+      "query": "保研需要准备哪些材料？",
+      "has_attachment": false,
+      "expected": "kb_qa",
+      "predicted": "kb_qa",
+      "ok": true,
+      "route": {
+        "intent": "kb_qa",
+        "kb_scope": "senior",
+        "confidence": 0.97,
+        "route_layer": "decision-model",
+        "action": "answer",
+        "clarify_question": null
+      }
+    },
+    {
+      "query": "出国留学怎么规划申请？",
+      "has_attachment": false,
+      "expected": "kb_qa",
+      "predicted": "kb_qa",
+      "ok": true,
+      "route": {
+        "intent": "kb_qa",
+        "kb_scope": "all",
+        "confidence": 0.63,
+        "route_layer": "decision-model",
+        "action": "answer",
+        "clarify_question": null
+      }
+    },
+    {
+      "query": "考公应该从什么时候开始准备？",
+      "has_attachment": false,
+      "expected": "kb_qa",
+      "predicted": "kb_qa",
+      "ok": true,
+      "route": {
+        "intent": "kb_qa",
+        "kb_scope": "all",
+        "confidence": 0.76,
+        "route_layer": "decision-model",
+        "action": "answer",
+        "clarify_question": null
+      }
+    },
+    {
+      "query": "怎么提高大学绩点？",
+      "has_attachment": false,
+      "expected": "kb_qa",
+      "predicted": "kb_qa",
+      "ok": true,
+      "route": {
+        "intent": "kb_qa",
+        "kb_scope": "all",
+        "confidence": 0.98,
+        "route_layer": "decision-model",
+        "action": "answer",
+        "clarify_question": null
+      }
+    },
+    {
+      "query": "转专业需要做哪些准备？",
+      "has_attachment": false,
+      "expected": "kb_qa",
+      "predicted": "kb_qa",
+      "ok": true,
+      "route": {
+        "intent": "kb_qa",
+        "kb_scope": "all",
+        "confidence": 0.95,
+        "route_layer": "decision-model",
+        "action": "answer",
+        "clarify_question": null
+      }
+    },
+    {
+      "query": "大学四年应该怎么规划？",
+      "has_attachment": false,
+      "expected": "kb_qa",
+      "predicted": "kb_qa",
+      "ok": true,
+      "route": {
+        "intent": "kb_qa",
+        "kb_scope": "all",
+        "confidence": 1.0,
+        "route_layer": "decision-model",
+        "action": "answer",
+        "clarify_question": null
+      }
+    },
+    {
+      "query": "没有实习经历怎么办？",
+      "has_attachment": false,
+      "expected": "kb_qa",
+      "predicted": "kb_qa",
+      "ok": true,
+      "route": {
+        "intent": "kb_qa",
+        "kb_scope": "all",
+        "confidence": 0.68,
+        "route_layer": "decision-model",
+        "action": "answer",
+        "clarify_question": null
+      }
+    },
+    {
+      "query": "怎么找第一份实习？",
+      "has_attachment": false,
+      "expected": "kb_qa",
+      "predicted": "kb_qa",
+      "ok": true,
+      "route": {
+        "intent": "kb_qa",
+        "kb_scope": "all",
+        "confidence": 0.99,
+        "route_layer": "decision-model",
+        "action": "answer",
+        "clarify_question": null
+      }
+    },
+    {
+      "query": "计算机专业以后能做什么工作？",
+      "has_attachment": false,
+      "expected": "kb_qa",
+      "predicted": "kb_qa",
+      "ok": true,
+      "route": {
+        "intent": "kb_qa",
+        "kb_scope": "major",
+        "confidence": 0.97,
+        "route_layer": "decision-model",
+        "action": "answer",
+        "clarify_question": null
+      }
+    },
+    {
+      "query": "参加哪些竞赛对求职有帮助？",
+      "has_attachment": false,
+      "expected": "kb_qa",
+      "predicted": "kb_qa",
+      "ok": true,
+      "route": {
+        "intent": "kb_qa",
+        "kb_scope": "all",
+        "confidence": 0.99,
+        "route_layer": "decision-model",
+        "action": "answer",
+        "clarify_question": null
+      }
+    },
+    {
+      "query": "如何弥补大学里的信息差？",
+      "has_attachment": false,
+      "expected": "kb_qa",
+      "predicted": "kb_qa",
+      "ok": true,
+      "route": {
+        "intent": "kb_qa",
+        "kb_scope": "all",
+        "confidence": 0.61,
+        "route_layer": "decision-model",
+        "action": "answer",
+        "clarify_question": null
+      }
+    },
+    {
+      "query": "大二应该确定什么方向？",
+      "has_attachment": false,
+      "expected": "kb_qa",
+      "predicted": "kb_qa",
+      "ok": true,
+      "route": {
+        "intent": "kb_qa",
+        "kb_scope": "sophomore_junior",
+        "confidence": 0.99,
+        "route_layer": "decision-model",
+        "action": "answer",
+        "clarify_question": null
+      }
+    },
+    {
+      "query": "秋招和春招有什么区别？",
+      "has_attachment": false,
+      "expected": "kb_qa",
+      "predicted": "kb_qa",
+      "ok": true,
+      "route": {
+        "intent": "kb_qa",
+        "kb_scope": "all",
+        "confidence": 0.99,
+        "route_layer": "decision-model",
+        "action": "answer",
+        "clarify_question": null
+      }
+    },
+    {
+      "query": "考研和就业应该怎么选？",
+      "has_attachment": false,
+      "expected": "kb_qa",
+      "predicted": "kb_qa",
+      "ok": true,
+      "route": {
+        "intent": "kb_qa",
+        "kb_scope": "all",
+        "confidence": 0.98,
+        "route_layer": "decision-model",
+        "action": "answer",
+        "clarify_question": null
+      }
+    },
+    {
+      "query": "大学期间要不要参加学生会？",
+      "has_attachment": false,
+      "expected": "kb_qa",
+      "predicted": "kb_qa",
+      "ok": true,
+      "route": {
+        "intent": "kb_qa",
+        "kb_scope": "all",
+        "confidence": 0.94,
+        "route_layer": "decision-model",
+        "action": "answer",
+        "clarify_question": null
+      }
+    },
+    {
+      "query": "帮我改一下简历，突出我的项目成果",
+      "has_attachment": false,
+      "expected": "resume_edit",
+      "predicted": "resume_edit",
+      "ok": true,
+      "route": {
+        "intent": "resume_edit",
+        "kb_scope": "all",
+        "confidence": 0.9,
+        "route_layer": "decision-model",
+        "action": "guide_resume",
+        "clarify_question": null
+      }
+    },
+    {
+      "query": "我的简历太长了，帮我压缩到一页",
+      "has_attachment": false,
+      "expected": "resume_edit",
+      "predicted": "resume_edit",
+      "ok": true,
+      "route": {
+        "intent": "resume_edit",
+        "kb_scope": "all",
+        "confidence": 0.67,
+        "route_layer": "decision-model",
+        "action": "guide_resume",
+        "clarify_question": null
+      }
+    },
+    {
+      "query": "把这段实习经历改写成STAR结构",
+      "has_attachment": false,
+      "expected": "resume_edit",
+      "predicted": "resume_edit",
+      "ok": true,
+      "route": {
+        "intent": "resume_edit",
+        "kb_scope": "all",
+        "confidence": 0.48,
+        "route_layer": "decision-model",
+        "action": "guide_resume",
+        "clarify_question": null
+      }
+    },
+    {
+      "query": "这是我的简历文件，帮我优化",
+      "has_attachment": true,
+      "expected": "resume_edit",
+      "predicted": "resume_edit",
+      "ok": true,
+      "route": {
+        "intent": "resume_edit",
+        "kb_scope": "all",
+        "confidence": 0.95,
+        "route_layer": "rule",
+        "action": "guide_resume",
+        "clarify_question": null
+      }
+    },
+    {
+      "query": "简历上要不要放照片？",
+      "has_attachment": false,
+      "expected": "resume_qa",
+      "predicted": "resume_qa",
+      "ok": true,
+      "route": {
+        "intent": "resume_qa",
+        "kb_scope": "all",
+        "confidence": 0.92,
+        "route_layer": "decision-model",
+        "action": "answer",
+        "clarify_question": null
+      }
+    },
+    {
+      "query": "简历里的自我评价应该写多长？",
+      "has_attachment": false,
+      "expected": "resume_qa",
+      "predicted": "kb_qa",
+      "ok": false,
+      "route": {
+        "intent": "kb_qa",
+        "kb_scope": "all",
+        "confidence": 0.47,
+        "route_layer": "decision-model",
+        "action": "answer",
+        "clarify_question": null
+      }
+    },
+    {
+      "query": "简历用一页还是两页比较好？",
+      "has_attachment": false,
+      "expected": "resume_qa",
+      "predicted": "resume_qa",
+      "ok": true,
+      "route": {
+        "intent": "resume_qa",
+        "kb_scope": "all",
+        "confidence": 0.77,
+        "route_layer": "decision-model",
+        "action": "answer",
+        "clarify_question": null
+      }
+    },
+    {
+      "query": "你好",
+      "has_attachment": false,
+      "expected": "chitchat",
+      "predicted": "chitchat",
+      "ok": true,
+      "route": {
+        "intent": "chitchat",
+        "kb_scope": "all",
+        "confidence": 0.9,
+        "route_layer": "rule",
+        "action": "answer",
+        "clarify_question": null
+      }
+    },
+    {
+      "query": "谢谢！",
+      "has_attachment": false,
+      "expected": "chitchat",
+      "predicted": "chitchat",
+      "ok": true,
+      "route": {
+        "intent": "chitchat",
+        "kb_scope": "all",
+        "confidence": 0.9,
+        "route_layer": "rule",
+        "action": "answer",
+        "clarify_question": null
+      }
+    },
+    {
+      "query": "在吗？",
+      "has_attachment": false,
+      "expected": "chitchat",
+      "predicted": "chitchat",
+      "ok": true,
+      "route": {
+        "intent": "chitchat",
+        "kb_scope": "all",
+        "confidence": 0.9,
+        "route_layer": "rule",
+        "action": "answer",
+        "clarify_question": null
+      }
+    },
+    {
+      "query": "今天天气怎么样？",
+      "has_attachment": false,
+      "expected": "out_of_scope",
+      "predicted": "out_of_scope",
+      "ok": true,
+      "route": {
+        "intent": "out_of_scope",
+        "kb_scope": "all",
+        "confidence": 0.84,
+        "route_layer": "decision-model",
+        "action": "refuse",
+        "clarify_question": null
+      }
+    },
+    {
+      "query": "推荐一部好看的电影",
+      "has_attachment": false,
+      "expected": "out_of_scope",
+      "predicted": "out_of_scope",
+      "ok": true,
+      "route": {
+        "intent": "out_of_scope",
+        "kb_scope": "all",
+        "confidence": 1.0,
+        "route_layer": "decision-model",
+        "action": "refuse",
+        "clarify_question": null
+      }
+    },
+    {
+      "query": "实习面试一般会问哪些问题？",
+      "has_attachment": false,
+      "expected": "kb_qa",
+      "predicted": "kb_qa",
+      "ok": true,
+      "route": {
+        "intent": "kb_qa",
+        "kb_scope": "all",
+        "confidence": 0.99,
+        "route_layer": "decision-model",
+        "action": "answer",
+        "clarify_question": null
+      }
+    },
+    {
+      "query": "大厂秋招笔试都考什么内容？",
+      "has_attachment": false,
+      "expected": "kb_qa",
+      "predicted": "kb_qa",
+      "ok": true,
+      "route": {
+        "intent": "kb_qa",
+        "kb_scope": "all",
+        "confidence": 0.93,
+        "route_layer": "decision-model",
+        "action": "answer",
+        "clarify_question": null
+      }
+    },
+    {
+      "query": "大学生要不要考教师资格证？",
+      "has_attachment": false,
+      "expected": "kb_qa",
+      "predicted": "kb_qa",
+      "ok": true,
+      "route": {
+        "intent": "kb_qa",
+        "kb_scope": "all",
+        "confidence": 0.98,
+        "route_layer": "decision-model",
+        "action": "answer",
+        "clarify_question": null
+      }
+    },
+    {
+      "query": "第一份实习没有工资值得去吗？",
+      "has_attachment": false,
+      "expected": "kb_qa",
+      "predicted": "kb_qa",
+      "ok": true,
+      "route": {
+        "intent": "kb_qa",
+        "kb_scope": "all",
+        "confidence": 0.96,
+        "route_layer": "decision-model",
+        "action": "answer",
+        "clarify_question": null
+      }
+    },
+    {
+      "query": "大创项目对保研有加分吗？",
+      "has_attachment": false,
+      "expected": "kb_qa",
+      "predicted": "kb_qa",
+      "ok": true,
+      "route": {
+        "intent": "kb_qa",
+        "kb_scope": "senior",
+        "confidence": 0.98,
+        "route_layer": "decision-model",
+        "action": "clarify",
+        "clarify_question": "想确认一下：你是要「查资料问答」，还是「简历写法咨询」？"
+      }
+    },
+    {
+      "query": "暑期实习和日常实习有什么区别？",
+      "has_attachment": false,
+      "expected": "kb_qa",
+      "predicted": "kb_qa",
+      "ok": true,
+      "route": {
+        "intent": "kb_qa",
+        "kb_scope": "all",
+        "confidence": 0.99,
+        "route_layer": "decision-model",
+        "action": "answer",
+        "clarify_question": null
+      }
+    },
+    {
+      "query": "简历上要不要写期望薪资？",
+      "has_attachment": false,
+      "expected": "resume_qa",
+      "predicted": "resume_qa",
+      "ok": true,
+      "route": {
+        "intent": "resume_qa",
+        "kb_scope": "all",
+        "confidence": 0.68,
+        "route_layer": "decision-model",
+        "action": "answer",
+        "clarify_question": null
+      }
+    },
+    {
+      "query": "简历里的项目经历按什么时间顺序排？",
+      "has_attachment": false,
+      "expected": "resume_qa",
+      "predicted": "resume_qa",
+      "ok": true,
+      "route": {
+        "intent": "resume_qa",
+        "kb_scope": "all",
+        "confidence": 0.94,
+        "route_layer": "decision-model",
+        "action": "answer",
+        "clarify_question": null
+      }
+    },
+    {
+      "query": "简历照片用证件照还是生活照？",
+      "has_attachment": false,
+      "expected": "resume_qa",
+      "predicted": "resume_qa",
+      "ok": true,
+      "route": {
+        "intent": "resume_qa",
+        "kb_scope": "all",
+        "confidence": 0.4,
+        "route_layer": "decision-model",
+        "action": "answer",
+        "clarify_question": null
+      }
+    },
+    {
+      "query": "没有实习经历简历怎么写？",
+      "has_attachment": false,
+      "expected": "resume_qa",
+      "predicted": "resume_qa",
+      "ok": true,
+      "route": {
+        "intent": "resume_qa",
+        "kb_scope": "all",
+        "confidence": 0.73,
+        "route_layer": "decision-model",
+        "action": "answer",
+        "clarify_question": null
+      }
+    },
+    {
+      "query": "简历一页放不下怎么办？",
+      "has_attachment": false,
+      "expected": "resume_qa",
+      "predicted": "resume_qa",
+      "ok": true,
+      "route": {
+        "intent": "resume_qa",
+        "kb_scope": "all",
+        "confidence": 0.2,
+        "route_layer": "decision-model",
+        "action": "answer",
+        "clarify_question": null
+      }
+    },
+    {
+      "query": "我把简历发给你，帮我润色一下",
+      "has_attachment": false,
+      "expected": "resume_edit",
+      "predicted": "resume_edit",
+      "ok": true,
+      "route": {
+        "intent": "resume_edit",
+        "kb_scope": "all",
+        "confidence": 0.99,
+        "route_layer": "decision-model",
+        "action": "guide_resume",
+        "clarify_question": null
+      }
+    },
+    {
+      "query": "帮我把这段实习经历写得更有说服力",
+      "has_attachment": false,
+      "expected": "resume_edit",
+      "predicted": "resume_edit",
+      "ok": true,
+      "route": {
+        "intent": "resume_edit",
+        "kb_scope": "all",
+        "confidence": 0.64,
+        "route_layer": "decision-model",
+        "action": "guide_resume",
+        "clarify_question": null
+      }
+    },
+    {
+      "query": "这是我的简历文件",
+      "has_attachment": true,
+      "expected": "resume_edit",
+      "predicted": "resume_edit",
+      "ok": true,
+      "route": {
+        "intent": "resume_edit",
+        "kb_scope": "all",
+        "confidence": 0.95,
+        "route_layer": "rule",
+        "action": "guide_resume",
+        "clarify_question": null
+      }
+    },
+    {
+      "query": "帮我把简历改成英文版",
+      "has_attachment": false,
+      "expected": "resume_edit",
+      "predicted": "resume_edit",
+      "ok": true,
+      "route": {
+        "intent": "resume_edit",
+        "kb_scope": "all",
+        "confidence": 0.99,
+        "route_layer": "decision-model",
+        "action": "guide_resume",
+        "clarify_question": null
+      }
+    },
+    {
+      "query": "晚安",
+      "has_attachment": false,
+      "expected": "chitchat",
+      "predicted": "chitchat",
+      "ok": true,
+      "route": {
+        "intent": "chitchat",
+        "kb_scope": "all",
+        "confidence": 0.71,
+        "route_layer": "decision-model",
+        "action": "answer",
+        "clarify_question": null
+      }
+    },
+    {
+      "query": "你真棒",
+      "has_attachment": false,
+      "expected": "chitchat",
+      "predicted": "chitchat",
+      "ok": true,
+      "route": {
+        "intent": "chitchat",
+        "kb_scope": "all",
+        "confidence": 0.75,
+        "route_layer": "decision-model",
+        "action": "answer",
+        "clarify_question": null
+      }
+    },
+    {
+      "query": "帮我写一段 Python 爬虫代码",
+      "has_attachment": false,
+      "expected": "out_of_scope",
+      "predicted": "out_of_scope",
+      "ok": true,
+      "route": {
+        "intent": "out_of_scope",
+        "kb_scope": "all",
+        "confidence": 0.96,
+        "route_layer": "decision-model",
+        "action": "refuse",
+        "clarify_question": null
+      }
+    },
+    {
+      "query": "学校附近有什么好吃的？",
+      "has_attachment": false,
+      "expected": "out_of_scope",
+      "predicted": "out_of_scope",
+      "ok": true,
+      "route": {
+        "intent": "out_of_scope",
+        "kb_scope": "all",
+        "confidence": 0.99,
+        "route_layer": "decision-model",
+        "action": "refuse",
+        "clarify_question": null
+      }
+    },
+    {
+      "query": "帮我写期末作业",
+      "has_attachment": false,
+      "expected": "out_of_scope",
+      "predicted": "out_of_scope",
+      "ok": true,
+      "route": {
+        "intent": "out_of_scope",
+        "kb_scope": "all",
+        "confidence": 0.94,
+        "route_layer": "decision-model",
+        "action": "refuse",
+        "clarify_question": null
+      }
+    }
+  ]
+}

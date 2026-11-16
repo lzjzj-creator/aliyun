@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Decision Layer 路由评测：30 条标注用例 → 混淆矩阵 + 分类指标。
+"""Decision Layer 路由评测：50 条标注用例 → 混淆矩阵 + 分类指标。
 
 用法：
   python tests/route_cases.py
@@ -54,6 +54,30 @@ CASES = [
     ("chitchat", "在吗？"),
     ("out_of_scope", "今天天气怎么样？"),
     ("out_of_scope", "推荐一部好看的电影"),
+    # 卡 #16 扩充：跨域知识问答
+    ("kb_qa", "实习面试一般会问哪些问题？"),
+    ("kb_qa", "大厂秋招笔试都考什么内容？"),
+    ("kb_qa", "大学生要不要考教师资格证？"),
+    ("kb_qa", "第一份实习没有工资值得去吗？"),
+    ("kb_qa", "大创项目对保研有加分吗？"),
+    ("kb_qa", "暑期实习和日常实习有什么区别？"),
+    # 简历咨询边界：只问写法不改简历 → resume_qa
+    ("resume_qa", "简历上要不要写期望薪资？"),
+    ("resume_qa", "简历里的项目经历按什么时间顺序排？"),
+    ("resume_qa", "简历照片用证件照还是生活照？"),
+    ("resume_qa", "没有实习经历简历怎么写？"),
+    ("resume_qa", "简历一页放不下怎么办？"),
+    # 改简历边界：带着自己的简历诉求 → resume_edit
+    ("resume_edit", "我把简历发给你，帮我润色一下"),
+    ("resume_edit", "帮我把这段实习经历写得更有说服力"),
+    ("resume_edit", "这是我的简历文件", True),
+    ("resume_edit", "帮我把简历改成英文版"),
+    # 闲聊与超范围
+    ("chitchat", "晚安"),
+    ("chitchat", "你真棒"),
+    ("out_of_scope", "帮我写一段 Python 爬虫代码"),
+    ("out_of_scope", "学校附近有什么好吃的？"),
+    ("out_of_scope", "帮我写期末作业"),
 ]
 
 
