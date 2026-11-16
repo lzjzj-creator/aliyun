@@ -1,0 +1,162 @@
+"""管理员入口：密码校验、无状态会话令牌、知识库概览与检索。"""
+import os
+import re
+import time
+from collections import Counter
+
+import httpx
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+from pydantic import BaseModel, Field
+
+try:
+    from .admin_auth import (SESSION_TTL, admin_ready, issue_session,
+                             verify_password, verify_session)
+except ImportError:  # FC 以 backend 目录为根启动
+    from admin_auth import (SESSION_TTL, admin_ready, issue_session,
+                            verify_password, verify_session)
+
+router = APIRouter()
+
+MAX_FAILS = 5
+FAIL_WINDOW = 300
+_fails: dict[str, tuple[int, float]] = {}
+
+
+def _client_key(request: Request) -> str:
+    return (request.client.host if request.client else "") or "unknown"
+
+
+def _check_throttle(key: str) -> None:
+    count, first = _fails.get(key, (0, 0.0))
+    if count and time.monotonic() - first > FAIL_WINDOW:
+        _fails.pop(key, None)
+        return
+    if count >= MAX_FAILS:
+        raise HTTPException(status_code=429, detail="尝试次数过多，请 5 分钟后再试")
+
+
+def _record_fail(key: str) -> None:
+    now = time.monotonic()
+    count, first = _fails.get(key, (0, now))
+    if now - first > FAIL_WINDOW:
+        count, first = 0, now
+    _fails[key] = (count + 1, first)
+    if len(_fails) > 1000:
+        for k, (_, started) in list(_fails.items()):
+            if now - started > FAIL_WINDOW:
+                _fails.pop(k, None)
+
+
+def require_admin(authorization: str | None = Header(default=None)) -> None:
+    if not admin_ready():
+        raise HTTPException(status_code=503, detail="管理员入口尚未配置")
+    token = authorization[7:] if authorization and authorization.startswith("Bearer ") else ""
+    if not verify_session(token):
+        raise HTTPException(status_code=401, detail="登录已失效，请重新登录")
+
+
+class AdminLoginReq(BaseModel):
+    password: str = Field(min_length=1, max_length=256)
+
+
+@router.post("/api/admin/login")
+def admin_login(req: AdminLoginReq, request: Request):
+    if not admin_ready():
+        raise HTTPException(status_code=503, detail="管理员入口尚未配置")
+    key = _client_key(request)
+    _check_throttle(key)
+    if not verify_password(req.password):
+        _record_fail(key)
+        raise HTTPException(status_code=401, detail="密码不正确")
+    _fails.pop(key, None)
+    return {"ok": True, "token": issue_session(), "expires_in": SESSION_TTL}
+
+
+def _sb_client() -> httpx.Client:
+    url = os.getenv("SUPABASE_URL", "").rstrip("/")
+    key = os.getenv("SUPABASE_SERVICE_KEY", "")
+    if not url or not key:
+        raise HTTPException(status_code=503, detail="知识库数据源尚未配置")
+    return httpx.Client(
+        base_url=f"{url}/rest/v1",
+        headers={"apikey": key, "Authorization": f"Bearer {key}"},
+        timeout=30,
+    )
+
+
+def _count(client: httpx.Client, table: str) -> int:
+    r = client.get(f"/{table}", params={"select": "*", "limit": 1},
+                   headers={"Prefer": "count=exact", "Range": "0-0"})
+    r.raise_for_status()
+    total = r.headers.get("content-range", "/0").rsplit("/", 1)[-1]
+    return int(total) if total.isdigit() else 0
+
+
+def _all_scopes(client: httpx.Client) -> Counter:
+    counts, offset = Counter(), 0
+    while True:
+        r = client.get("/documents", params={
+            "select": "kb_scope", "limit": 1000, "offset": offset})
+        r.raise_for_status()
+        rows = r.json()
+        counts.update((row.get("kb_scope") or "meta") for row in rows)
+        if len(rows) < 1000:
+            return counts
+        offset += 1000
+
+
+@router.get("/api/admin/overview")
+def admin_overview(_: None = Depends(require_admin)):
+    with _sb_client() as client:
+        try:
+            documents = _count(client, "documents")
+            chunks = _count(client, "chunks")
+            by_scope = _all_scopes(client)
+            r = client.get("/documents", params={
+                "select": "slug,title,kb_scope,source_url,char_count,created_at",
+                "order": "created_at.desc", "limit": 8,
+            })
+            r.raise_for_status()
+            recent = r.json()
+        except httpx.HTTPError:
+            raise HTTPException(status_code=502, detail="知识库数据源暂时不可用，请稍后重试")
+    return {
+        "ok": True,
+        "data": {
+            "documents": documents,
+            "chunks": chunks,
+            "by_scope": dict(by_scope),
+            "recent": recent,
+        },
+    }
+
+
+@router.get("/api/admin/documents")
+def admin_documents(
+    q: str = Query(default="", max_length=80),
+    scope: str = Query(default="", max_length=30),
+    _: None = Depends(require_admin),
+):
+    params = {
+        "select": "slug,title,kb_scope,source_url,char_count",
+        "order": "char_count.desc",
+        "limit": 30,
+    }
+    q = q.strip()
+    if q:
+        # 过滤 PostgREST 过滤表达式保留字符，避免管理员输入破坏查询结构
+        q = re.sub(r"[,()*%\"\\]", " ", q).strip()
+        if q:
+            params["title"] = f"ilike.*{q}*"
+    if scope:
+        if not re.fullmatch(r"[a-z_]{1,30}", scope):
+            raise HTTPException(status_code=400, detail="范围参数不合法")
+        params["kb_scope"] = f"eq.{scope}"
+    with _sb_client() as client:
+        try:
+            r = client.get("/documents", params=params)
+            r.raise_for_status()
+            items = r.json()
+        except httpx.HTTPError:
+            raise HTTPException(status_code=502, detail="知识库数据源暂时不可用，请稍后重试")
+    return {"ok": True, "data": {"items": items}}

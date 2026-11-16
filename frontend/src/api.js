@@ -61,3 +61,37 @@ export function rewriteBullets(bullets, confirmedFacts = "") {
     body: JSON.stringify({ bullets, confirmed_facts: confirmedFacts }),
   }).then((r) => r.json());
 }
+
+async function adminFetch(path, { token = "", body } = {}) {
+  const headers = {};
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: body === undefined ? "GET" : "POST",
+    headers,
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new Error(data.detail || `HTTP ${res.status}`);
+    err.status = res.status;
+    throw err;
+  }
+  return data;
+}
+
+export function adminLogin(password) {
+  return adminFetch("/api/admin/login", { body: { password } });
+}
+
+export function adminOverview(token) {
+  return adminFetch("/api/admin/overview", { token });
+}
+
+export function adminDocuments(token, q = "", scope = "") {
+  const params = new URLSearchParams();
+  if (q.trim()) params.set("q", q.trim());
+  if (scope) params.set("scope", scope);
+  const qs = params.toString();
+  return adminFetch(`/api/admin/documents${qs ? `?${qs}` : ""}`, { token });
+}

@@ -42,6 +42,9 @@ resources:
         EMBEDDING_MODEL: ${env(EMBEDDING_MODEL)}
         MIN_RETRIEVE_SCORE: ${env(MIN_RETRIEVE_SCORE)}
         KB_SOURCE_BASE: ${env(KB_SOURCE_BASE)}
+        ADMIN_PASSWORD_HASH: ${env(ADMIN_PASSWORD_HASH)}
+        ADMIN_SESSION_SECRET: ${env(ADMIN_SESSION_SECRET)}
+        ADMIN_SESSION_TTL: ${env(ADMIN_SESSION_TTL)}
       triggers:
         - triggerName: http
           triggerType: http

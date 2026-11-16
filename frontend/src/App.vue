@@ -1,13 +1,29 @@
 <script setup>
-import { ref } from "vue";
+import { onMounted, onUnmounted, ref } from "vue";
+import AdminView from "./views/AdminView.vue";
 import ChatView from "./views/ChatView.vue";
 import ResumeView from "./views/ResumeView.vue";
 
 const tab = ref("chat");
+const admin = ref(false);
+
+function syncAdminRoute() {
+  admin.value = /^#\/?admin\/?$/.test(location.hash);
+}
+
+onMounted(() => {
+  syncAdminRoute();
+  window.addEventListener("hashchange", syncAdminRoute);
+});
+onUnmounted(() => window.removeEventListener("hashchange", syncAdminRoute));
 </script>
 
 <template>
-  <div class="shell">
+  <div v-if="admin" class="shell admin-shell">
+    <AdminView />
+  </div>
+
+  <div v-else class="shell">
     <header class="top">
       <div class="brand">
         <h1>知脉 · 简历成长助手</h1>

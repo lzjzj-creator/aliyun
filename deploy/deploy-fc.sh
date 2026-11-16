@@ -16,6 +16,12 @@ export DEEPSEEK_API_KEY="${DEEPSEEK_API_KEY:-}"
 # 线上来源链接指向 CloudBase 公开镜像；本地 .env 的 127.0.0.1 只用于开发，不能带上 FC
 export KB_SOURCE_BASE="${CLOUDBASE_KB_URL:-https://spicy-guanaco-d0gd9oj994ceedce6-1422760240.tcloudbaseapp.com}"
 
+if [ -z "${ADMIN_PASSWORD_HASH:-}" ] || [ -z "${ADMIN_SESSION_SECRET:-}" ]; then
+  echo '缺少管理员配置：先运行 python ingest/make_admin_password.py' >&2
+  exit 1
+fi
+export ADMIN_SESSION_TTL="${ADMIN_SESSION_TTL:-7200}"
+
 echo '=== 部署 zhimai-api (FastAPI) ==='
 (cd "$ROOT/deploy/fc/zhimai-api" && s deploy -y)
 
