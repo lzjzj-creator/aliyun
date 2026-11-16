@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Decision Layer 路由评测：50 条标注用例 → 混淆矩阵 + 分类指标。
+"""Decision Layer 路由评测：50 条标注用例 → 意图混淆矩阵 + 动作一致性。
 
 用法：
   python tests/route_cases.py
@@ -15,6 +15,13 @@ import httpx
 
 DEFAULT_BASE = "https://zhimai-api-hiwijfvopw.cn-beijing.fcapp.run"
 INTENTS = ["kb_qa", "resume_edit", "resume_qa", "chitchat", "out_of_scope"]
+ACTION_BY_INTENT = {
+    "kb_qa": "answer",
+    "resume_edit": "guide_resume",
+    "resume_qa": "answer",
+    "chitchat": "answer",
+    "out_of_scope": "refuse",
+}
 INTENT_CN = {
     "kb_qa": "知识问答",
     "resume_edit": "改简历",
@@ -114,8 +121,12 @@ def per_class(table: dict[str, dict[str, int]]) -> dict[str, dict[str, float]]:
 
 def print_report(rows: list[dict], table: dict, metrics: dict, base: str) -> None:
     correct = sum(1 for row in rows if row["ok"])
+    actions = sum(1 for row in rows if row["action_ok"])
+    behavior = sum(1 for row in rows if row["behavior_ok"])
     print(f"路由评测 · {base}")
-    print(f"用例 {len(rows)} · 正确 {correct} · 准确率 {correct / len(rows):.1%}\n")
+    print(f"用例 {len(rows)} · 意图正确 {correct} ({correct / len(rows):.1%}) · "
+          f"动作正确 {actions} ({actions / len(rows):.1%}) · "
+          f"行为正确 {behavior} ({behavior / len(rows):.1%})\n")
 
     print("混淆矩阵（行=标注，列=预测）")
     head = "".join(f"{INTENT_CN[name]:>10}" for name in INTENTS)
@@ -139,6 +150,14 @@ def print_report(rows: list[dict], table: dict, metrics: dict, base: str) -> Non
                   f" | {row['query']} | action={row['route'].get('action')} "
                   f"conf={row['route'].get('confidence')}")
 
+    action_misses = [row for row in rows if not row["action_ok"]]
+    if action_misses:
+        print("\n动作不一致")
+        for row in action_misses:
+            print(f"  期望 {row['expected_action']} → 实际 {row['predicted_action']}"
+                  f" | 预测 {INTENT_CN.get(row['predicted'], row['predicted'])}"
+                  f" | {row['query']} | conf={row['route'].get('confidence')}")
+
 
 def main() -> int:
     parser = argparse.ArgumentParser()
@@ -146,6 +165,7 @@ def main() -> int:
     parser.add_argument("--timeout", type=float, default=60)
     parser.add_argument("--json-out", default="")
     parser.add_argument("--min-accuracy", type=float, default=0.0)
+    parser.add_argument("--min-action-accuracy", type=float, default=0.0)
     args = parser.parse_args()
     base = args.base.rstrip("/")
 
@@ -160,12 +180,21 @@ def main() -> int:
                 print(f"请求失败：{query} → {e}", file=sys.stderr)
                 return 2
             predicted = route.get("intent", "")
+            expected_action = ACTION_BY_INTENT[expected]
+            predicted_action = route.get("action", "")
+            intent_ok = predicted == expected
+            action_ok = predicted_action == expected_action
             rows.append({
                 "query": query,
                 "has_attachment": attachment,
                 "expected": expected,
                 "predicted": predicted,
-                "ok": predicted == expected,
+                "expected_action": expected_action,
+                "predicted_action": predicted_action,
+                "ok": intent_ok,
+                "intent_ok": intent_ok,
+                "action_ok": action_ok,
+                "behavior_ok": intent_ok and action_ok,
                 "route": route,
             })
 
@@ -175,12 +204,18 @@ def main() -> int:
 
     correct = sum(1 for row in rows if row["ok"])
     accuracy = correct / len(rows)
+    action_correct = sum(1 for row in rows if row["action_ok"])
+    behavior_correct = sum(1 for row in rows if row["behavior_ok"])
     report = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "base": base,
         "total": len(rows),
         "correct": correct,
         "accuracy": round(accuracy, 4),
+        "action_correct": action_correct,
+        "action_accuracy": round(action_correct / len(rows), 4),
+        "behavior_correct": behavior_correct,
+        "behavior_accuracy": round(behavior_correct / len(rows), 4),
         "confusion_matrix": table,
         "per_class": metrics,
         "cases": rows,
@@ -192,6 +227,11 @@ def main() -> int:
 
     if accuracy < args.min_accuracy:
         print(f"\n准确率 {accuracy:.1%} 低于阈值 {args.min_accuracy:.1%}", file=sys.stderr)
+        return 1
+    action_accuracy = action_correct / len(rows)
+    if action_accuracy < args.min_action_accuracy:
+        print(f"\n动作准确率 {action_accuracy:.1%} 低于阈值 {args.min_action_accuracy:.1%}",
+              file=sys.stderr)
         return 1
     return 0
 

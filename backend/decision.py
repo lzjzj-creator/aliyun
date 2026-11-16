@@ -15,6 +15,7 @@ ATTACH_HINT = re.compile(r"上传|文件|附件|docx|pdf", re.I)
 GREETING = re.compile(r"^(你好|您好|hi|hello|嗨|哈喽|在吗|在不在|谢谢|thanks|早|晚上好)[。！!~？?]*$", re.I)
 
 CLARIFY_THRESHOLD = 0.7   # need_clarify 的 noul 概率超过此值 → 反问
+CLARIFY_MAX_INTENT_CONF = 0.8  # 意图已足够明确时直接回答，不被高澄清概率带偏
 
 QUESTIONS = {
     "intent": {
@@ -77,7 +78,7 @@ def route(query: str, has_attachment: bool = False) -> dict:
     if intent not in INTENT_LABEL:
         intent = "kb_qa"
 
-    if clarify_p >= CLARIFY_THRESHOLD:
+    if clarify_p >= CLARIFY_THRESHOLD and conf < CLARIFY_MAX_INTENT_CONF:
         top2 = sorted(probs, key=probs.get, reverse=True)[:2]
         cq = (f"想确认一下：你是要「{INTENT_LABEL.get(top2[0], '问答')}」，"
               f"还是「{INTENT_LABEL.get(top2[1], '其他')}」？" if len(top2) == 2
