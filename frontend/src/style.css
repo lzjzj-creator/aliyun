@@ -28,6 +28,12 @@ h1 { font-size: 1.4rem; margin: 0; color: var(--teal); }
 .suggested { display: flex; flex-wrap: wrap; gap: 8px; }
 .suggested button { border: 1px dashed var(--teal); background: #fff; border-radius: 8px; padding: 8px 12px; cursor: pointer; color: var(--teal); }
 .suggested button:hover { background: #eef4f4; }
+.demo-chat {
+  margin-top: 14px; border: 1px solid var(--accent); background: #fdf3ee; color: var(--accent);
+  border-radius: 999px; padding: 8px 18px; cursor: pointer; font-size: .88rem;
+}
+.demo-chat:hover { background: #f9e7dd; }
+.demo-chat:disabled { opacity: .6; cursor: default; }
 .stream { min-height: 200px; max-height: 56vh; overflow-y: auto; padding: 12px 0; }
 .msg { display: flex; margin-bottom: 12px; }
 .msg.user { justify-content: flex-end; }
@@ -44,8 +50,40 @@ h1 { font-size: 1.4rem; margin: 0; color: var(--teal); }
 .route-badge .pill.low-tag { background: var(--accent); border-color: var(--accent); color: #fff; }
 .guide-card { margin-top: 8px; padding: 10px; background: #fdf3ee; border: 1px solid #f0cdb9; border-radius: 10px; }
 .guide-card .go { margin-top: 6px; background: var(--accent); border-color: var(--accent); color: #fff; }
-.sources { margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--line); font-size: .8rem; }
-.sources a { color: var(--teal); margin-right: 10px; }
+.sources { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line); font-size: .8rem; }
+.sources-label { display: block; margin-bottom: 6px; color: #9a9186; font-size: .75rem; }
+.source-cards { display: flex; flex-wrap: wrap; gap: 8px; }
+.source-card {
+  display: flex; align-items: center; gap: 6px; max-width: 100%;
+  padding: 6px 10px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--paper); color: var(--teal); text-decoration: none; line-height: 1.4;
+}
+.source-card:hover { border-color: var(--teal); background: #eef4f4; }
+.source-card .seq {
+  flex: none; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 5px;
+  background: rgba(20, 82, 90, .10); color: var(--teal);
+  font-size: .68rem; display: inline-flex; align-items: center; justify-content: center;
+}
+.source-card .src-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.source-card .src-domain { flex: none; color: #9a9186; font-size: .68rem; }
+
+/* Markdown 正文 */
+.bubble .md { white-space: normal; overflow-wrap: anywhere; }
+.md > :first-child { margin-top: 0; }
+.md > :last-child { margin-bottom: 0; }
+.md p { margin: 0 0 8px; }
+.md ul, .md ol { margin: 0 0 8px; padding-left: 1.3em; }
+.md li { margin-bottom: 4px; }
+.md h1, .md h2, .md h3, .md h4 { margin: 12px 0 6px; color: var(--teal); font-size: 1rem; line-height: 1.5; }
+.md strong { color: var(--teal); }
+.md a { color: var(--teal); }
+.md code { background: #f3eee6; border-radius: 4px; padding: 1px 5px; font-size: .85em; }
+.md pre { background: #f3eee6; border-radius: 8px; padding: 10px; overflow-x: auto; }
+.md pre code { background: none; padding: 0; }
+.md blockquote { margin: 0 0 8px; padding-left: 10px; border-left: 3px solid var(--line); color: #7a6f63; }
+.md table { border-collapse: collapse; margin-bottom: 8px; font-size: .85rem; }
+.md th, .md td { border: 1px solid var(--line); padding: 4px 8px; }
+.md hr { border: none; border-top: 1px solid var(--line); margin: 10px 0; }
 .composer { display: flex; gap: 8px; margin-top: 8px; }
 .composer input { flex: 1; padding: 10px 14px; border: 1px solid var(--line); border-radius: 999px; font-size: .95rem; background: #fff; }
 
@@ -66,5 +104,59 @@ textarea { width: 100%; border: 1px solid var(--line); border-radius: 10px; padd
 .pair b { color: var(--teal); font-size: .75rem; }
 .pair p { margin: 4px 0 0; line-height: 1.6; }
 .questions { margin-top: 10px; color: #b3402a; font-size: .88rem; }
-@media (max-width: 600px) { .pair { grid-template-columns: 1fr; } .bubble { max-width: 92%; } }
+
+/* JD 定向分析 */
+.jd-panel { background: #fff; border: 1px solid var(--teal); border-radius: 10px; padding: 12px 14px; margin: 12px 0; }
+.jd-panel h3 { margin: 0 0 8px; }
+.jd-score { margin: 0 0 6px; font-size: .9rem; }
+.jd-score b { color: var(--teal); font-size: 1.3rem; margin: 0 4px; }
+.jd-score span { color: #9a9186; font-size: .78rem; margin-left: 6px; }
+.jd-bar { height: 6px; border-radius: 999px; background: #f3eee6; overflow: hidden; margin-bottom: 10px; }
+.jd-bar i { display: block; height: 100%; background: var(--teal); border-radius: 999px; transition: width .4s; }
+.jd-group { margin-bottom: 8px; }
+.jd-group > b { display: block; font-size: .78rem; color: #7a6f63; margin-bottom: 4px; }
+.chip {
+  display: inline-block; margin: 0 6px 6px 0; padding: 2px 10px; border-radius: 999px;
+  font-size: .78rem; border: 1px solid transparent;
+}
+.chip.hit { color: var(--teal); background: rgba(20, 82, 90, .08); border-color: rgba(20, 82, 90, .25); }
+.chip.miss { color: var(--accent); background: rgba(224, 100, 58, .08); border-color: rgba(224, 100, 58, .28); }
+.jd-readiness { margin: 4px 0 0; font-size: .82rem; color: var(--teal); }
+.jd-safety { margin: 8px 0 0; font-size: .75rem; color: #9a9186; line-height: 1.6; }
+
+/* 首页介绍条 */
+.intro { margin: 12px 0; padding: 12px 14px; background: #fff; border: 1px solid var(--line); border-radius: 12px; }
+.intro .slogan { margin: 0 0 6px; color: var(--teal); font-size: .92rem; font-weight: 600; }
+.intro-entries { display: flex; flex-wrap: wrap; gap: 4px 20px; font-size: .8rem; color: #7a6f63; line-height: 1.7; }
+.intro-entries b { color: var(--ink); font-weight: 600; }
+@media (max-width: 640px) {
+  .shell { padding: 12px 10px 24px; }
+  .top { align-items: flex-start; gap: 8px; }
+  h1 { font-size: 1.15rem; }
+  .tagline { font-size: .75rem; }
+  .tabs { gap: 6px; flex: none; }
+  .tabs button { padding: 6px 12px; font-size: .8rem; }
+  .privacy { font-size: .7rem; padding: 6px 10px; }
+  .stream { max-height: 60vh; }
+  .pair { grid-template-columns: 1fr; }
+  .bubble { max-width: 92%; padding: 9px 12px; font-size: .9rem; }
+  .route-badge { gap: 3px; font-size: .62rem; max-width: 100%; }
+  .route-badge .pill { padding: 1px 6px; }
+  .source-cards { flex-direction: column; align-items: stretch; }
+  .source-card { width: 100%; }
+  .source-card .src-domain { display: none; }
+  .composer {
+    position: sticky; bottom: 0; z-index: 5;
+    background: var(--paper); padding: 8px 0 4px; gap: 6px;
+  }
+  .composer input { padding: 9px 12px; font-size: .88rem; min-width: 0; }
+  .composer button { padding: 8px 14px; font-size: .85rem; flex: none; }
+  .pane h2 { font-size: 1.05rem; }
+  .pane h3 { font-size: .95rem; }
+  .upload { padding: 14px 10px; font-size: .82rem; }
+  .row { flex-wrap: wrap; gap: 8px; }
+  .row button { flex: 1 1 auto; padding: 8px 12px; font-size: .85rem; }
+  .summary, .gaps, .rewrite { padding: 10px 12px; font-size: .88rem; }
+  .issues { padding-left: 1.1em; }
+}
 .demo-badge { font-size: .7rem; background: #f5a623; color: #fff; border-radius: 4px; padding: 2px 6px; vertical-align: middle; }

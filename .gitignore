@@ -36,3 +36,13 @@ backend/vendor/
 .s/
 sites-status.tmp.json
 *.tmp.json
+
+# 可公开的环境模板与前端公开服务地址（不含密钥）
+!.env.example
+!frontend/.env.production
+
+# 知识库镜像产物（体量大，不入库；脚本 mirror/mirror.mjs 入库）
+mirror/site/
+mirror/site-html/
+mirror/dist/
+mirror/*-report.json

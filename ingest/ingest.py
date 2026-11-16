@@ -30,7 +30,7 @@ sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data" / "contentIndex.json"
 CACHE = ROOT / "data" / "embed_cache.jsonl"
-BASE_URL = "https://zhimai-rag-knowledge.pages.dev"
+BASE_URL = os.getenv("KB_SOURCE_BASE", "http://127.0.0.1:4310").rstrip("/")
 
 load_dotenv(ROOT / ".env")
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
@@ -65,7 +65,7 @@ def kb_scope(slug: str) -> str:
 
 def source_url(slug: str) -> str:
     from urllib.parse import quote
-    return f"{BASE_URL}/{quote(slug)}/"
+    return f"{BASE_URL}/{quote(slug)}/index.html"
 
 
 def is_article(item: dict) -> bool:

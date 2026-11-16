@@ -13,6 +13,8 @@ export QWEN_MODEL_CHAT="${QWEN_MODEL_CHAT:-qwen-plus}"
 export EMBEDDING_MODEL="${EMBEDDING_MODEL:-text-embedding-v4}"
 export MIN_RETRIEVE_SCORE="${MIN_RETRIEVE_SCORE:-0.25}"
 export DEEPSEEK_API_KEY="${DEEPSEEK_API_KEY:-}"
+# 线上来源链接指向 CloudBase 公开镜像；本地 .env 的 127.0.0.1 只用于开发，不能带上 FC
+export KB_SOURCE_BASE="${CLOUDBASE_KB_URL:-https://spicy-guanaco-d0gd9oj994ceedce6-1422760240.tcloudbaseapp.com}"
 
 echo '=== 部署 zhimai-api (FastAPI) ==='
 (cd "$ROOT/deploy/fc/zhimai-api" && s deploy -y)

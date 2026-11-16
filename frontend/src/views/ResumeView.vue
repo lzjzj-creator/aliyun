@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from "vue";
+import { ref, computed } from "vue";
 import { analyzeResume, rewriteBullets } from "../api";
 
 const MAX = 12000;
@@ -51,6 +51,7 @@ async function onFile(e) {
 
 async function runAnalyze() {
   busy.value = true; errMsg.value = ""; report.value = null; rewrite.value = null;
+  demoMode.value = false;
   try {
     const r = await analyzeResume(resumeText.value, jobText.value);
     if (!r.ok) { errMsg.value = r.error?.message || "分析失败"; return; }
@@ -80,6 +81,38 @@ async function loadDemo() {
 }
 
 const REWRITE_SEED = /[。；;\n]/;
+
+// 定向模式没有数值匹配分，覆盖率由规则层真实命中/缺失项计算，不虚构分数
+const JD_COVERED = /检测到岗位要求对应证据：(.+)/;
+const JD_MISSING = /要求包括：(.+?)。/;
+const splitLabels = (s) => s.split("、").map((x) => x.trim()).filter(Boolean);
+
+const jdResult = computed(() => {
+  const r = report.value;
+  if (!r || r.mode !== "targeted") return null;
+  const covered = (r.rule_analysis?.evidence_found || [])
+    .map((e) => e.match(JD_COVERED)?.[1]).filter(Boolean).flatMap(splitLabels);
+  const missing = (r.rule_analysis?.issues || [])
+    .filter((it) => it.category === "岗位要求覆盖")
+    .map((it) => it.description?.match(JD_MISSING)?.[1]).filter(Boolean).flatMap(splitLabels);
+  const total = covered.length + missing.length;
+  return {
+    covered,
+    missing,
+    pct: total ? Math.round((covered.length / total) * 100) : null,
+    readiness: r.model_analysis?.rewrite_readiness,
+    questions: r.model_analysis?.follow_up_questions || [],
+    safety: r.model_analysis?.safety_note || "",
+  };
+});
+
+const KNOWN_MODEL_KEYS = new Set([
+  "provider", "model", "is_real_ai", "summary", "evidence_found",
+  "evidence_gaps", "follow_up_questions", "rewrite_readiness", "safety_note",
+]);
+const extraModelFields = computed(() =>
+  Object.entries(report.value?.model_analysis || {}).filter(([k]) => !KNOWN_MODEL_KEYS.has(k)));
+
 async function runRewrite() {
   busy.value = true; errMsg.value = "";
   try {
@@ -102,6 +135,7 @@ async function runRewrite() {
         选择 TXT / DOCX / 文字型 PDF（≤5MB·≤5页，浏览器本地提取）
       </label>
       <p v-if="fileMsg" class="warn">{{ fileMsg }}</p>
+      <p v-if="errMsg" class="warn">{{ errMsg }}</p>
       <textarea v-model="resumeText" :maxlength="MAX"
         placeholder="或直接粘贴简历文本…" rows="10" />
       <p class="count">{{ resumeText.length }} / {{ MAX }}</p>
@@ -117,6 +151,7 @@ async function runRewrite() {
       <h3>目标岗位 JD（可选）</h3>
       <textarea v-model="jobText" rows="4" :maxlength="MAX"
         placeholder="粘贴招聘 JD 进入岗位定向分析；留空则通用体检" />
+      <p v-if="errMsg" class="warn">{{ errMsg }}</p>
       <div class="row">
         <button class="ghost" @click="step = 1">← 返回</button>
         <button :disabled="busy" @click="runAnalyze">{{ busy ? "分析中…" : "开始分析 →" }}</button>
@@ -128,7 +163,35 @@ async function runRewrite() {
       <p v-if="errMsg" class="warn">{{ errMsg }}</p>
 
       <template v-if="report">
-        <p class="summary">{{ report.summary || report.rule_analysis?.summary }}</p>
+        <p class="summary">{{ report.model_analysis?.summary || report.summary || report.rule_analysis?.summary }}</p>
+
+        <div v-if="jdResult" class="jd-panel">
+          <h3>岗位定向分析</h3>
+          <template v-if="jdResult.pct !== null">
+            <p class="jd-score">
+              JD 要求证据覆盖 <b>{{ jdResult.pct }}%</b>
+              <span>命中 {{ jdResult.covered.length }} 项 · 缺失 {{ jdResult.missing.length }} 项</span>
+            </p>
+            <div class="jd-bar"><i :style="{ width: jdResult.pct + '%' }"></i></div>
+          </template>
+          <div v-if="jdResult.covered.length" class="jd-group">
+            <b>命中关键词</b>
+            <div><span v-for="k in jdResult.covered" :key="'c' + k" class="chip hit">{{ k }}</span></div>
+          </div>
+          <div v-if="jdResult.missing.length" class="jd-group">
+            <b>缺失关键词（指简历中暂无证据，不代表你不具备）</b>
+            <div><span v-for="k in jdResult.missing" :key="'m' + k" class="chip miss">{{ k }}</span></div>
+          </div>
+          <p class="jd-readiness">
+            改写就绪度：{{ jdResult.readiness === "ready_for_limited_rewrite" ? "可进入有限改写" : "需先补充事实" }}
+          </p>
+          <div v-if="jdResult.questions.length" class="questions">
+            <b>需要你补充的事实：</b>
+            <p v-for="(q, i) in jdResult.questions" :key="i">· {{ q }}</p>
+          </div>
+          <p v-if="jdResult.safety" class="jd-safety">{{ jdResult.safety }}</p>
+        </div>
+
         <ul class="issues">
           <li v-for="(it, i) in (report.issues || report.rule_analysis?.issues || [])" :key="i">
             <b>[P{{ it.priority }}] {{ it.title }}</b> — {{ it.description }}
@@ -140,6 +203,10 @@ async function runRewrite() {
           <p v-for="(g, i) in report.model_analysis.evidence_gaps" :key="i">
             · {{ g.claim }}：{{ g.explanation }}
           </p>
+        </div>
+        <div v-if="extraModelFields.length" class="gaps">
+          <h3>模型其他输出</h3>
+          <p v-for="([k, v]) in extraModelFields" :key="k">· {{ k }}：{{ typeof v === "string" ? v : JSON.stringify(v) }}</p>
         </div>
       </template>
 

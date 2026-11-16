@@ -1,6 +1,29 @@
 <script setup>
 import { ref, reactive, nextTick } from "vue";
+import MarkdownIt from "markdown-it";
 import { chatStream } from "../api";
+
+const md = new MarkdownIt({ linkify: true, html: false, breaks: true });
+const renderMd = (text) => md.render(text || "");
+
+// 来源一律指向知识库镜像站：镜像地址由 VITE_KB_SOURCE_BASE 配置，fixture 里只存路径
+const KB_BASE = (import.meta.env.VITE_KB_SOURCE_BASE || "").replace(/\/$/, "");
+function sourceHref(url) {
+  if (!url) return "#";
+  let path = url;
+  if (!url.startsWith("/")) {
+    if (!KB_BASE) return url;
+    try { path = new URL(url).pathname; } catch { return url; }
+  }
+  // 镜像站是静态托管，目录型链接显式落到 index.html；/index 结尾对应索引页 index.html
+  const stripped = path.replace(/\/+$/, "");
+  if (stripped.endsWith("/index")) path = stripped + ".html";
+  else if (path.endsWith("/")) path += "index.html";
+  else if (!/\.[a-zA-Z0-9]{1,8}$/.test(path)) path += "/index.html";
+  // 镜像打包清理过零宽字符，链接同步去掉
+  path = path.replace(/[​-‏‪-‮﻿]/g, "");
+  return KB_BASE + path;
+}
 
 const emit = defineEmits(["goto-resume"]);
 const SUGGESTED = [
@@ -83,6 +106,35 @@ async function scroll() {
   await nextTick();
   box.value?.scrollTo({ top: box.value.scrollHeight, behavior: "smooth" });
 }
+
+// 评委演示模式：加载预存的真实 RAG 响应快照，离线逐字回放，不消耗 API 配额
+async function loadDemo() {
+  if (busy.value) return;
+  busy.value = true;
+  try {
+    const d = await fetch("/demo/chat.json").then((r) => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    });
+    messages.value.push({ role: "user", text: d.query || "演示问题" });
+    const ai = reactive({ role: "assistant", text: "", route: d.route || null, sources: [], guide: null });
+    messages.value.push(ai);
+    await scroll();
+    const answer = d.answer || "";
+    for (let i = 0; i < answer.length; i++) {
+      ai.text += answer[i];
+      if (i % 6 === 0) scroll();
+      await new Promise((r) => setTimeout(r, 15));
+    }
+    if (!answer) ai.text = "演示快照尚未填充内容（public/demo/chat.json 的 answer 为空）。";
+    ai.sources = d.sources || [];
+  } catch (e) {
+    messages.value.push({ role: "assistant", text: `演示数据加载失败：${e.message}`, route: null, sources: [], guide: null });
+  } finally {
+    busy.value = false;
+    scroll();
+  }
+}
 </script>
 
 <template>
@@ -92,6 +144,7 @@ async function scroll() {
       <div class="suggested">
         <button v-for="s in SUGGESTED" :key="s" @click="ask(s)">{{ s }}</button>
       </div>
+      <button class="demo-chat" :disabled="busy" @click="loadDemo">▶ 演示问答（离线快照，无需联网）</button>
     </div>
 
     <div ref="box" class="stream">
@@ -105,7 +158,7 @@ async function scroll() {
             <span v-if="isLowConf(m.route)" class="pill low-tag">低置信</span>
           </div>
 
-          <template v-if="m.text">{{ m.text }}</template>
+          <div v-if="m.text" class="md" v-html="renderMd(m.text)"></div>
           <template v-else-if="busy && i === messages.length - 1">思考中…</template>
 
           <div v-if="m.guide" class="guide-card">
@@ -114,17 +167,22 @@ async function scroll() {
           </div>
 
           <div v-if="m.sources?.length" class="sources">
-            <span>来源：</span>
-            <a v-for="s in m.sources" :key="s.url + s.seq" :href="s.url" target="_blank" rel="noopener">
-              {{ s.title }}
-            </a>
+            <span class="sources-label">来源</span>
+            <div class="source-cards">
+              <a v-for="(s, si) in m.sources" :key="s.url + s.seq" class="source-card"
+                 :href="sourceHref(s.url)" target="_blank" rel="noopener" :title="`知脉知识库 · 分段 ${s.seq}`">
+                <span class="seq">{{ si + 1 }}</span>
+                <span class="src-title">{{ s.title }}</span>
+                <span class="src-domain">分段 {{ s.seq }}</span>
+              </a>
+            </div>
           </div>
         </div>
       </div>
     </div>
 
     <form class="composer" @submit.prevent="ask()">
-      <input v-model="input" placeholder="问求职、实习、规划、简历写法…" :disabled="busy" />
+      <input v-model="input" :placeholder="busy ? '思考中…' : '问求职、实习、规划、简历写法…'" :disabled="busy" />
       <button type="submit" :disabled="busy || !input.trim()">发送</button>
     </form>
   </section>

@@ -41,6 +41,7 @@ resources:
         QWEN_MODEL_CHAT: ${env(QWEN_MODEL_CHAT)}
         EMBEDDING_MODEL: ${env(EMBEDDING_MODEL)}
         MIN_RETRIEVE_SCORE: ${env(MIN_RETRIEVE_SCORE)}
+        KB_SOURCE_BASE: ${env(KB_SOURCE_BASE)}
       triggers:
         - triggerName: http
           triggerType: http

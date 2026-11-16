@@ -19,6 +19,14 @@ const tab = ref("chat");
       </nav>
     </header>
 
+    <section class="intro">
+      <p class="slogan">证据优先的大学规划与简历助手</p>
+      <div class="intro-entries">
+        <span><b>知识问答</b>：检索知脉知识库 2790 篇规划/求职笔记，回答附真实来源，没有依据就明说不知道。</span>
+        <span><b>简历助手</b>：证据诊断 → 不虚构事实的安全改写，粘贴 JD 可看岗位匹配与缺失关键词。</span>
+      </div>
+    </section>
+
     <p class="privacy">
       简历只在浏览器内存读取、提交分析才出网；不存储简历内容，不同会话互相隔离。
       建议先删除姓名、电话等敏感信息。
