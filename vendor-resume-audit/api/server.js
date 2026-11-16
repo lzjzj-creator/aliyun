@@ -579,6 +579,7 @@ function analyzeRules(body) {
   const job = typeof body.job_text === "string" ? body.job_text : "";
   const issues = [];
   const evidence = [];
+  let jobCoverage = null;
 
   const vagueMatches = resume.match(/负责|参与|协助|配合|熟悉|了解/g) || [];
   const resultMatches = resume.match(/\d+(?:\.\d+)?\s*(?:%|秒|毫秒|人|个|条|次|万元|万)/g) || [];
@@ -648,6 +649,15 @@ function analyzeRules(body) {
       evidence.push(`检测到岗位要求对应证据：${coveredRequirements.map((rule) => rule.label).join("、")}`);
     }
 
+    jobCoverage = {
+      total: detectedRequirements.length,
+      covered: coveredRequirements.map((rule) => rule.label),
+      missing: missingRequirements.map((rule) => rule.label),
+      pct: detectedRequirements.length
+        ? Math.round((coveredRequirements.length / detectedRequirements.length) * 100)
+        : null
+    };
+
     if (missingRequirements.length > 0) {
       addIssue(issues, {
         priority: 1,
@@ -659,7 +669,7 @@ function analyzeRules(body) {
     }
   }
 
-  return { issues, evidence };
+  return { issues, evidence, job_coverage: jobCoverage };
 }
 
 function buildRuleResult(body) {
@@ -675,6 +685,7 @@ function buildRuleResult(body) {
       : "规则检查完成：先处理最影响简历可信度的证据缺口。",
     evidence_found: analysis.evidence,
     issues: analysis.issues.slice(0, 5),
+    job_coverage: analysis.job_coverage,
     next_step: "这是确定性规则检查，不调用大模型，也不会补写简历中没有的数字或职责。"
   };
 }

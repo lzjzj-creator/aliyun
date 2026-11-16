@@ -7,39 +7,27 @@
 """
 import argparse
 import os
-import re
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from urllib.parse import urlsplit
 
 import httpx
 from dotenv import load_dotenv
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+from backend.kb_source import to_mirror_url  # noqa: E402
+
 load_dotenv(ROOT / ".env")
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
 BASE = os.getenv("KB_SOURCE_BASE", "").rstrip("/")
-ZERO_WIDTH = re.compile(r"[​-‏‪-‮﻿]")
 
 
 def mirror_url(old: str) -> str:
-    path = urlsplit(old).path
-    if not path or path == "/":
-        return old
-    # 静态托管不开目录索引，目录型链接显式落到 index.html；/index 结尾是索引页
-    stripped = path.rstrip("/")
-    if stripped.endswith("/index"):
-        path = stripped + ".html"
-    elif path.endswith("/"):
-        path += "index.html"
-    elif not Path(path).suffix:
-        path += "/index.html"
-    # 镜像打包时清理过零宽/控制字符，链接同步去掉
-    return BASE + ZERO_WIDTH.sub("", path)
+    return to_mirror_url(old, BASE)
 
 
 def main():

@@ -28,11 +28,15 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 ROOT = Path(__file__).resolve().parent.parent
-DATA = ROOT / "data" / "contentIndex.json"
-CACHE = ROOT / "data" / "embed_cache.jsonl"
-BASE_URL = os.getenv("KB_SOURCE_BASE", "http://127.0.0.1:4310").rstrip("/")
+sys.path.insert(0, str(ROOT))
+from backend.kb_source import to_mirror_url  # noqa: E402
 
 load_dotenv(ROOT / ".env")
+
+DATA = ROOT / "data" / "contentIndex.json"
+CACHE = ROOT / "data" / "embed_cache.jsonl"
+BASE_URL = os.getenv("KB_SOURCE_BASE", "").rstrip("/")
+
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
 DASHSCOPE_KEY = os.getenv("DASHSCOPE_API_KEY", "")
@@ -65,7 +69,8 @@ def kb_scope(slug: str) -> str:
 
 def source_url(slug: str) -> str:
     from urllib.parse import quote
-    return f"{BASE_URL}/{quote(slug)}/index.html"
+    path = f"/{quote(slug)}/index.html"
+    return to_mirror_url(BASE_URL + path, BASE_URL) if BASE_URL else path
 
 
 def is_article(item: dict) -> bool:
@@ -228,8 +233,8 @@ def main():
         print("dry-run 结束，未联网。")
         return
 
-    if not (SUPABASE_URL and SUPABASE_KEY and DASHSCOPE_KEY):
-        sys.exit("缺少 SUPABASE_URL / SUPABASE_SERVICE_KEY / DASHSCOPE_API_KEY，请填 .env")
+    if not (BASE_URL and SUPABASE_URL and SUPABASE_KEY and DASHSCOPE_KEY):
+        sys.exit("缺少 KB_SOURCE_BASE / SUPABASE_URL / SUPABASE_SERVICE_KEY / DASHSCOPE_API_KEY，请填 .env")
 
     with httpx.Client(timeout=60) as emb, sb_client() as sb:
         if args.wipe:

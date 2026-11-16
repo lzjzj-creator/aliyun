@@ -1,15 +1,9 @@
 {
   "name": "mirror",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [],
-  "author": "",
+  "description": "知脉知识库静态镜像构建脚本",
+  "private": true,
   "license": "ISC",
-  "type": "commonjs",
   "dependencies": {
     "website-scraper": "^6.0.1"
   }

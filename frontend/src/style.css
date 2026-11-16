@@ -122,6 +122,7 @@ textarea { width: 100%; border: 1px solid var(--line); border-radius: 10px; padd
 .chip.hit { color: var(--teal); background: rgba(20, 82, 90, .08); border-color: rgba(20, 82, 90, .25); }
 .chip.miss { color: var(--accent); background: rgba(224, 100, 58, .08); border-color: rgba(224, 100, 58, .28); }
 .jd-readiness { margin: 4px 0 0; font-size: .82rem; color: var(--teal); }
+.jd-empty { margin: 6px 0 0; font-size: .82rem; color: #7a6f63; }
 .jd-safety { margin: 8px 0 0; font-size: .75rem; color: #9a9186; line-height: 1.6; }
 
 /* 首页介绍条 */

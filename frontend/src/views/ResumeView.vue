@@ -82,29 +82,27 @@ async function loadDemo() {
 
 const REWRITE_SEED = /[。；;\n]/;
 
-// 定向模式没有数值匹配分，覆盖率由规则层真实命中/缺失项计算，不虚构分数
-const JD_COVERED = /检测到岗位要求对应证据：(.+)/;
-const JD_MISSING = /要求包括：(.+?)。/;
-const splitLabels = (s) => s.split("、").map((x) => x.trim()).filter(Boolean);
-
+// 定向模式没有数值匹配分，覆盖率直接使用服务端结构化结果，不解析散文
 const jdResult = computed(() => {
   const r = report.value;
-  if (!r || r.mode !== "targeted") return null;
-  const covered = (r.rule_analysis?.evidence_found || [])
-    .map((e) => e.match(JD_COVERED)?.[1]).filter(Boolean).flatMap(splitLabels);
-  const missing = (r.rule_analysis?.issues || [])
-    .filter((it) => it.category === "岗位要求覆盖")
-    .map((it) => it.description?.match(JD_MISSING)?.[1]).filter(Boolean).flatMap(splitLabels);
-  const total = covered.length + missing.length;
+  const coverage = r?.rule_analysis?.job_coverage || r?.job_coverage;
+  if (!r || r.mode !== "targeted" || !coverage) return null;
   return {
-    covered,
-    missing,
-    pct: total ? Math.round((covered.length / total) * 100) : null,
-    readiness: r.model_analysis?.rewrite_readiness,
+    total: coverage.total || 0,
+    covered: coverage.covered || [],
+    missing: coverage.missing || [],
+    pct: Number.isFinite(coverage.pct) ? coverage.pct : null,
+    readiness: r.model_analysis?.rewrite_readiness || "",
     questions: r.model_analysis?.follow_up_questions || [],
     safety: r.model_analysis?.safety_note || "",
   };
 });
+
+const READINESS_CN = {
+  ready_for_limited_rewrite: "可进入有限改写",
+  needs_facts: "需先补充事实",
+};
+const readinessText = (code) => READINESS_CN[code] || code;
 
 const KNOWN_MODEL_KEYS = new Set([
   "provider", "model", "is_real_ai", "summary", "evidence_found",
@@ -167,7 +165,10 @@ async function runRewrite() {
 
         <div v-if="jdResult" class="jd-panel">
           <h3>岗位定向分析</h3>
-          <template v-if="jdResult.pct !== null">
+          <p v-if="jdResult.total === 0" class="jd-empty">
+            JD 中暂未识别到可匹配的能力要求，可补充更具体的技术栈与职责描述后重试。
+          </p>
+          <template v-else>
             <p class="jd-score">
               JD 要求证据覆盖 <b>{{ jdResult.pct }}%</b>
               <span>命中 {{ jdResult.covered.length }} 项 · 缺失 {{ jdResult.missing.length }} 项</span>
@@ -182,8 +183,8 @@ async function runRewrite() {
             <b>缺失关键词（指简历中暂无证据，不代表你不具备）</b>
             <div><span v-for="k in jdResult.missing" :key="'m' + k" class="chip miss">{{ k }}</span></div>
           </div>
-          <p class="jd-readiness">
-            改写就绪度：{{ jdResult.readiness === "ready_for_limited_rewrite" ? "可进入有限改写" : "需先补充事实" }}
+          <p v-if="jdResult.readiness" class="jd-readiness">
+            改写就绪度：{{ readinessText(jdResult.readiness) }}
           </p>
           <div v-if="jdResult.questions.length" class="questions">
             <b>需要你补充的事实：</b>

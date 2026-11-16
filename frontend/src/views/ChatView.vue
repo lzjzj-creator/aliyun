@@ -2,28 +2,22 @@
 import { ref, reactive, nextTick } from "vue";
 import MarkdownIt from "markdown-it";
 import { chatStream } from "../api";
+import { toMirrorHref } from "../kbSource.mjs";
 
 const md = new MarkdownIt({ linkify: true, html: false, breaks: true });
 const renderMd = (text) => md.render(text || "");
 
 // 来源一律指向知识库镜像站：镜像地址由 VITE_KB_SOURCE_BASE 配置，fixture 里只存路径
 const KB_BASE = (import.meta.env.VITE_KB_SOURCE_BASE || "").replace(/\/$/, "");
-function sourceHref(url) {
-  if (!url) return "#";
-  let path = url;
-  if (!url.startsWith("/")) {
-    if (!KB_BASE) return url;
-    try { path = new URL(url).pathname; } catch { return url; }
+const KB_HOST = (() => {
+  try {
+    return new URL(KB_BASE).host;
+  } catch {
+    return "";
   }
-  // 镜像站是静态托管，目录型链接显式落到 index.html；/index 结尾对应索引页 index.html
-  const stripped = path.replace(/\/+$/, "");
-  if (stripped.endsWith("/index")) path = stripped + ".html";
-  else if (path.endsWith("/")) path += "index.html";
-  else if (!/\.[a-zA-Z0-9]{1,8}$/.test(path)) path += "/index.html";
-  // 镜像打包清理过零宽字符，链接同步去掉
-  path = path.replace(/[​-‏‪-‮﻿]/g, "");
-  return KB_BASE + path;
-}
+})();
+const sourceHref = (url) => toMirrorHref(url, KB_BASE);
+const sourceTitle = (s) => `${KB_HOST || "知识库镜像"} · 分段 ${s.seq}`;
 
 const emit = defineEmits(["goto-resume"]);
 const SUGGESTED = [
@@ -170,7 +164,7 @@ async function loadDemo() {
             <span class="sources-label">来源</span>
             <div class="source-cards">
               <a v-for="(s, si) in m.sources" :key="s.url + s.seq" class="source-card"
-                 :href="sourceHref(s.url)" target="_blank" rel="noopener" :title="`知脉知识库 · 分段 ${s.seq}`">
+                 :href="sourceHref(s.url)" target="_blank" rel="noopener" :title="sourceTitle(s)">
                 <span class="seq">{{ si + 1 }}</span>
                 <span class="src-title">{{ s.title }}</span>
                 <span class="src-domain">分段 {{ s.seq }}</span>
