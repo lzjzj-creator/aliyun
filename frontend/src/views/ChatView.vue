@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, nextTick } from "vue";
+import { ref, reactive, nextTick, onUnmounted } from "vue";
 import MarkdownIt from "markdown-it";
 import { chatStream } from "../api";
 import { toMirrorHref } from "../kbSource.mjs";
@@ -69,7 +69,20 @@ function isLowConf(r) {
 const input = ref("");
 const messages = ref([]); // {role:'user'|'assistant', text, route, sources, guide}
 const busy = ref(false);
+const slow = ref(false);
 const box = ref(null);
+let slowTimer = null;
+
+function startSlowHint() {
+  clearTimeout(slowTimer);
+  slow.value = false;
+  slowTimer = setTimeout(() => { slow.value = true; }, 1500);
+}
+function stopSlowHint() {
+  clearTimeout(slowTimer);
+  slow.value = false;
+}
+onUnmounted(stopSlowHint);
 
 function ask(q) {
   const query = (q ?? input.value).trim();
@@ -79,6 +92,7 @@ function ask(q) {
   const ai = reactive({ role: "assistant", text: "", route: null, sources: [], guide: null });
   messages.value.push(ai);
   busy.value = true;
+  startSlowHint();
 
   const history = messages.value.slice(-7, -1)
     .map((m) => ({ role: m.role, content: m.text }));
@@ -89,10 +103,13 @@ function ask(q) {
     sources: (s) => { ai.sources = s; scroll(); },
     token: (t) => { ai.text += t; scroll(); },
     error: (e) => { ai.text += `\n[出错了：${e.message || e}]`; },
-    done: () => { busy.value = false; scroll(); },
+    done: () => { scroll(); },
   }).catch((e) => {
     ai.text += `\n[网络错误：${e.message}]`;
+  }).finally(() => {
+    stopSlowHint();
     busy.value = false;
+    scroll();
   });
 }
 
@@ -153,7 +170,9 @@ async function loadDemo() {
           </div>
 
           <div v-if="m.text" class="md" v-html="renderMd(m.text)"></div>
-          <template v-else-if="busy && i === messages.length - 1">思考中…</template>
+          <template v-else-if="busy && i === messages.length - 1">
+            {{ slow ? "首次唤醒服务，约 3–8 秒，请稍候…" : "思考中…" }}
+          </template>
 
           <div v-if="m.guide" class="guide-card">
             {{ m.guide.text }}
@@ -176,7 +195,7 @@ async function loadDemo() {
     </div>
 
     <form class="composer" @submit.prevent="ask()">
-      <input v-model="input" :placeholder="busy ? '思考中…' : '问求职、实习、规划、简历写法…'" :disabled="busy" />
+      <input v-model="input" :placeholder="busy ? (slow ? '首次唤醒服务，约 3–8 秒…' : '思考中…') : '问求职、实习、规划、简历写法…'" :disabled="busy" />
       <button type="submit" :disabled="busy || !input.trim()">发送</button>
     </form>
   </section>

@@ -93,6 +93,7 @@ h1 { font-size: 1.4rem; margin: 0; color: var(--teal); }
 textarea { width: 100%; border: 1px solid var(--line); border-radius: 10px; padding: 10px; font: inherit; font-size: .9rem; background: #fff; resize: vertical; }
 .count { text-align: right; font-size: .75rem; color: #9a9186; margin: 4px 0 10px; }
 .warn { color: #b3402a; font-size: .85rem; }
+.slow-hint { margin: 10px 0 0; color: var(--accent); font-size: .8rem; }
 .row { display: flex; justify-content: space-between; margin-top: 12px; }
 .pane .ghost { border-color: var(--line); color: #7a6f63; }
 .summary { background: #fff; border-left: 3px solid var(--accent); padding: 10px 14px; border-radius: 8px; }
@@ -212,3 +213,20 @@ textarea { width: 100%; border: 1px solid var(--line); border-radius: 10px; padd
   .admin-table .admin-title { min-width: 160px; }
 }
 .demo-badge { font-size: .7rem; background: #f5a623; color: #fff; border-radius: 4px; padding: 2px 6px; vertical-align: middle; }
+
+/* 简历结果打印：A4、隐藏导航与操作按钮，内容过多时自然分页 */
+@media print {
+  @page { size: A4; margin: 12mm 14mm; }
+  :root { --paper: #fff; --ink: #111; }
+  body { background: #fff; }
+  .shell { max-width: none; padding: 0; }
+  .top, .intro, .privacy, .row, .demo-badge, .slow-hint, .composer { display: none !important; }
+  .pane { font-size: 10.5pt; }
+  .pane h2 { margin: 0 0 10px; font-size: 18pt; }
+  .pane h3 { font-size: 12pt; }
+  .summary, .gaps, .rewrite, .jd-panel, .pair, .issues li { break-inside: avoid; }
+  .summary, .gaps, .rewrite, .jd-panel { border-color: #bbb; }
+  .pair { grid-template-columns: 1fr 1fr; gap: 8mm; }
+  .issues { padding-left: 1.2em; }
+  a { color: inherit; text-decoration: none; }
+}

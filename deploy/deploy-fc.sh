@@ -13,8 +13,8 @@ export QWEN_MODEL_CHAT="${QWEN_MODEL_CHAT:-qwen-plus}"
 export EMBEDDING_MODEL="${EMBEDDING_MODEL:-text-embedding-v4}"
 export MIN_RETRIEVE_SCORE="${MIN_RETRIEVE_SCORE:-0.25}"
 export DEEPSEEK_API_KEY="${DEEPSEEK_API_KEY:-}"
-# 线上来源链接指向 CloudBase 公开镜像；本地 .env 的 127.0.0.1 只用于开发，不能带上 FC
-export KB_SOURCE_BASE="${CLOUDBASE_KB_URL:-https://spicy-guanaco-d0gd9oj994ceedce6-1422760240.tcloudbaseapp.com}"
+# 线上来源链接指向 GitHub Pages 公开镜像；本地 .env 的 127.0.0.1 只用于开发，不能带上 FC
+export KB_SOURCE_BASE="${KB_MIRROR_URL:-https://lzjzj-creator.github.io}"
 
 if [ -z "${ADMIN_PASSWORD_HASH:-}" ] || [ -z "${ADMIN_SESSION_SECRET:-}" ]; then
   echo '缺少管理员配置：先运行 python ingest/make_admin_password.py' >&2

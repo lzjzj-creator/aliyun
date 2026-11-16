@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from "vue";
+import { ref, computed, onUnmounted } from "vue";
 import { analyzeResume, rewriteBullets } from "../api";
 
 const MAX = 12000;
@@ -8,9 +8,22 @@ const resumeText = ref("");
 const jobText = ref("");
 const fileMsg = ref("");
 const busy = ref(false);
+const slow = ref(false);
 const report = ref(null);
 const rewrite = ref(null);
 const errMsg = ref("");
+let slowTimer = null;
+
+function startSlowHint() {
+  clearTimeout(slowTimer);
+  slow.value = false;
+  slowTimer = setTimeout(() => { slow.value = true; }, 1500);
+}
+function stopSlowHint() {
+  clearTimeout(slowTimer);
+  slow.value = false;
+}
+onUnmounted(stopSlowHint);
 
 // 浏览器本地提取 TXT / DOCX / 文字型 PDF（文件不出浏览器，点分析才发文本）
 async function onFile(e) {
@@ -50,7 +63,7 @@ async function onFile(e) {
 }
 
 async function runAnalyze() {
-  busy.value = true; errMsg.value = ""; report.value = null; rewrite.value = null;
+  busy.value = true; startSlowHint(); errMsg.value = ""; report.value = null; rewrite.value = null;
   demoMode.value = false;
   try {
     const r = await analyzeResume(resumeText.value, jobText.value);
@@ -58,7 +71,7 @@ async function runAnalyze() {
     report.value = r;
     step.value = 3;
   } catch (e) { errMsg.value = `请求失败：${e.message}`; }
-  finally { busy.value = false; }
+  finally { stopSlowHint(); busy.value = false; }
 }
 
 // 评委演示模式：加载预存的真实接口响应，不消耗 API 配额
@@ -111,8 +124,12 @@ const KNOWN_MODEL_KEYS = new Set([
 const extraModelFields = computed(() =>
   Object.entries(report.value?.model_analysis || {}).filter(([k]) => !KNOWN_MODEL_KEYS.has(k)));
 
+function exportPdf() {
+  window.print();
+}
+
 async function runRewrite() {
-  busy.value = true; errMsg.value = "";
+  busy.value = true; startSlowHint(); errMsg.value = "";
   try {
     const bullets = resumeText.value.split(REWRITE_SEED)
       .map((s) => s.trim()).filter((s) => s.length >= 8).slice(0, 12);
@@ -120,7 +137,7 @@ async function runRewrite() {
     if (!r.ok) { errMsg.value = r.error?.message || "改写失败"; return; }
     rewrite.value = r.data;
   } catch (e) { errMsg.value = `请求失败：${e.message}`; }
-  finally { busy.value = false; }
+  finally { stopSlowHint(); busy.value = false; }
 }
 </script>
 
@@ -150,6 +167,7 @@ async function runRewrite() {
       <textarea v-model="jobText" rows="4" :maxlength="MAX"
         placeholder="粘贴招聘 JD 进入岗位定向分析；留空则通用体检" />
       <p v-if="errMsg" class="warn">{{ errMsg }}</p>
+      <p v-if="busy && slow" class="slow-hint">首次唤醒服务，约 3–8 秒，按钮已锁定，请稍候…</p>
       <div class="row">
         <button class="ghost" @click="step = 1">← 返回</button>
         <button :disabled="busy" @click="runAnalyze">{{ busy ? "分析中…" : "开始分析 →" }}</button>
@@ -211,11 +229,13 @@ async function runRewrite() {
         </div>
       </template>
 
+      <p v-if="busy && slow" class="slow-hint">首次唤醒服务，约 3–8 秒，按钮已锁定，请稍候…</p>
       <div class="row">
         <button class="ghost" @click="step = 2">← 回去改文本</button>
         <button :disabled="busy || !report" @click="runRewrite">
           {{ busy ? "生成中…" : "生成安全改写建议 →" }}
         </button>
+        <button class="ghost" :disabled="busy || !report" @click="exportPdf">导出 PDF</button>
       </div>
 
       <div v-if="rewrite" class="rewrite">

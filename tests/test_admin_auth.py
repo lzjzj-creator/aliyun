@@ -2,6 +2,9 @@ import os
 import unittest
 from unittest.mock import patch
 
+from starlette.requests import Request
+
+from backend.admin import _client_key
 from backend.admin_auth import (admin_ready, hash_password, issue_session,
                                 verify_password, verify_session)
 
@@ -64,6 +67,30 @@ class SessionTest(unittest.TestCase):
     def test_malformed_token(self):
         for token in ("", "abc", "a.b.c", "!!!.???"):
             self.assertFalse(verify_session(token, SECRET, now=1100))
+
+
+class ClientKeyTest(unittest.TestCase):
+    def request(self, xff=None, client=("10.0.0.9", 1234)):
+        headers = [] if xff is None else [(b"x-forwarded-for", xff.encode())]
+        return Request({"type": "http", "headers": headers, "client": client})
+
+    def test_uses_last_xff_hop(self):
+        self.assertEqual(_client_key(self.request("198.51.100.1, 203.0.113.7")), "203.0.113.7")
+
+    def test_strips_last_hop_whitespace(self):
+        self.assertEqual(_client_key(self.request("198.51.100.1 , 203.0.113.7 ")), "203.0.113.7")
+
+    def test_single_xff_value(self):
+        self.assertEqual(_client_key(self.request("203.0.113.7")), "203.0.113.7")
+
+    def test_no_xff_falls_back_to_client_host(self):
+        self.assertEqual(_client_key(self.request(client=("192.0.2.5", 443))), "192.0.2.5")
+
+    def test_blank_xff_falls_back_to_client_host(self):
+        self.assertEqual(_client_key(self.request("   ", client=("192.0.2.6", 80))), "192.0.2.6")
+
+    def test_missing_client_uses_unknown(self):
+        self.assertEqual(_client_key(self.request(client=None)), "unknown")
 
 
 if __name__ == "__main__":
