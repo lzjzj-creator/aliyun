@@ -20,15 +20,18 @@ import decision
 import kb
 from admin import router as admin_router
 from llm import llm, QWEN_CHAT
+from routers.resume import router as resume_v2_router
 
 app = FastAPI(title="zhimai-api", version="0.1.0")
 app.include_router(admin_router)
+app.include_router(resume_v2_router)
 
 origins = [o.strip() for o in os.getenv("ALLOWED_ORIGINS",
            "http://localhost:5173,http://127.0.0.1:5173").split(",") if o.strip()]
 app.add_middleware(CORSMiddleware, allow_origins=origins,
-                   allow_methods=["POST", "GET", "OPTIONS"],
-                   allow_headers=["Content-Type", "X-File-Name", "Authorization"])
+                   allow_methods=["POST", "GET", "DELETE", "OPTIONS"],
+                   allow_headers=["Content-Type", "X-File-Name", "Authorization",
+                                  "X-Anon-Id", "X-Session-Token"])
 
 MIN_SCORE = float(os.getenv("MIN_RETRIEVE_SCORE", "0.25"))
 
