@@ -1,4 +1,6 @@
 """v2 sessions and transitional v1 pair persistence; no LLM/business logic."""
+import json
+
 from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -22,16 +24,25 @@ def _storage(call):
 
 class MessageReq(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    session_id: str = Field(min_length=1, max_length=64)
+    # null 时由服务端建会话并一次性返回 session_token（fixture messages.json 契约）
+    session_id: str | None = Field(default=None, min_length=1, max_length=64)
     client_msg_id: str = Field(min_length=1, max_length=128)
     user: str = Field(min_length=1, max_length=12000)
     assistant: str = Field(min_length=1, max_length=30000)
+    meta: dict | None = None
 
     @field_validator("client_msg_id", "user", "assistant")
     @classmethod
     def not_blank(cls, value):
         if not value.strip():
             raise ValueError("must not be blank")
+        return value
+
+    @field_validator("meta")
+    @classmethod
+    def meta_bounded(cls, value):
+        if value is not None and len(json.dumps(value, ensure_ascii=False)) > 4000:
+            raise ValueError("meta too large")
         return value
 
 
@@ -73,11 +84,30 @@ def delete_session(request: Request, session_id: str,
     return {"ok": True}
 
 
+def _write_pair(sid, req):
+    user = _storage(lambda: memory.append_message(sid, "user", req.user,
+                                                  client_msg_id=req.client_msg_id))
+    assistant = _storage(lambda: memory.append_message(sid, "assistant", req.assistant,
+                                                       client_msg_id=req.client_msg_id,
+                                                       meta=req.meta))
+    return {"session_id": sid, "message_ids": [user["id"], assistant["id"]]}
+
+
 @router.post("/messages")
 def append_legacy_message(req: MessageReq, request: Request,
                          x_anon_id: str | None = Header(default=None),
                          x_session_token: str | None = Header(default=None)):
-    anon, sid = _owner(request, req.session_id, x_anon_id, x_session_token)
+    security.enforce_ip(request)
+    anon = security.require_anon(x_anon_id)
+    if req.session_id is None:
+        # First round: no session exists yet, so no token/ownership check. The
+        # token is returned exactly once; clients must reuse session_id on retry
+        # (a retried null session_id creates a new session by design).
+        security.charge_turn(anon)
+        created = _storage(lambda: memory.create_session(anon))
+        result = _write_pair(created["session"]["id"], req)
+        return {**result, "session_token": created["token"]}
+    sid = security.require_owner(req.session_id, anon, x_session_token)
     # All pair checks and writes are inside the lease. A concurrent request gets
     # 429 and can retry; no stale pre-lock snapshot or double assistant insert.
     with security.limiter.stream(sid):
@@ -100,5 +130,6 @@ def append_legacy_message(req: MessageReq, request: Request,
         # and complete only the missing half, without charging a second turn.
         if assistant is None:
             assistant = _storage(lambda: memory.append_message(sid, "assistant", req.assistant,
-                                                               client_msg_id=req.client_msg_id))
-        return {"user": user, "assistant": assistant}
+                                                               client_msg_id=req.client_msg_id,
+                                                               meta=req.meta))
+        return {"session_id": sid, "message_ids": [user["id"], assistant["id"]]}

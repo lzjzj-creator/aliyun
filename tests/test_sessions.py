@@ -194,10 +194,35 @@ class SessionRoutesTest(unittest.TestCase):
     def test_input_limits_and_untrusted_fields_rejected(self):
         for changes in ({'client_msg_id': ' '}, {'user': ' '}, {'assistant': ''},
                         {'user': 'x' * 12001}, {'assistant': 'x' * 30001},
-                        {'role': 'system'}, {'meta': {'anything': True}}):
+                        {'role': 'system'}, {'meta': {'x': 'y' * 4001}}):
             with self.subTest(fields=tuple(changes)):
                 self.assertEqual(self.send(**changes).status_code, 422)
         self.assertEqual(self.store.messages, [])
+
+    def test_null_session_id_creates_session_returns_token_once(self):
+        # fixture messages.json 契约：首轮 session_id=null → 服务端建会话
+        meta = {'route': {'intent': 'kb_qa'}, 'sources': [{'title': 't', 'url': 'https://m/x'}]}
+        response = self.client.post('/api/v2/messages', headers={'X-Anon-Id': ANON},
+                                    json={k: v for k, v in {**self.body, 'meta': meta}.items()
+                                          if k != 'session_id'})
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['session_id'], SID)
+        self.assertTrue(data['session_token'])
+        self.assertEqual(data['message_ids'], [1, 2])
+        self.assertEqual(len(self.store.messages), 2)
+        self.assertEqual(self.store.messages[1]['meta'], meta)
+        self.assertEqual(len(self.limiter._anon[ANON]), 1)
+        # 重试必须复用 session_id + token（幂等返回原 pair，不再发令牌/计费）
+        headers = {'X-Anon-Id': ANON, 'X-Session-Token': data['session_token']}
+        retry = self.client.post('/api/v2/messages', headers=headers, json=self.body)
+        self.assertEqual(retry.status_code, 200)
+        self.assertEqual(retry.json(), {'session_id': SID, 'message_ids': [1, 2]})
+        self.assertNotIn('session_token', retry.json())
+        self.assertEqual(len(self.store.messages), 2)
+        self.assertEqual(len(self.limiter._anon[ANON]), 1)
+        no_token = self.client.post('/api/v2/messages', headers={'X-Anon-Id': ANON}, json=self.body)
+        self.assertEqual(no_token.status_code, 404)
 
     def test_canonical_ids_share_ownership_and_lease(self):
         self.headers['X-Anon-Id'] = ANON.replace('-', '')

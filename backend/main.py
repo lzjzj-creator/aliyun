@@ -19,7 +19,10 @@ from pydantic import BaseModel
 import decision
 import kb
 from admin import router as admin_router
-from routers.sessions import router as sessions_router
+try:
+    from routers.sessions import router as sessions_router
+except ImportError:  # 以 backend.main 包形式导入（测试）
+    from .routers.sessions import router as sessions_router
 from llm import llm, QWEN_CHAT
 
 app = FastAPI(title="zhimai-api", version="0.1.0")
