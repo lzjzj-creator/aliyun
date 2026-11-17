@@ -55,13 +55,13 @@ class SessionRoutesTest(unittest.TestCase):
         self.send()
         response = self.client.get('/api/v2/sessions', headers=self.headers)
         self.assertEqual(response.status_code, 200)
-        items = response.json()['items']
+        items = response.json()          # 契约=裸数组（demo/v2/sessions.json 形状）
         self.assertEqual(len(items), 1)
         self.assertEqual(set(items[0]), {'id', 'title', 'stage'})
         for key in ('session_token_hash', 'token', 'messages', 'profile', 'content', 'anon_id'):
             self.assertNotIn(key, items[0])
         self.assertEqual(self.client.get('/api/v2/sessions',
-                         headers={'X-Anon-Id': OTHER_ANON}).json(), {'items': []})
+                         headers={'X-Anon-Id': OTHER_ANON}).json(), [])
 
     def test_read_write_delete_uniform_ownership_failure(self):
         cases = [{}, {'X-Anon-Id': ANON},

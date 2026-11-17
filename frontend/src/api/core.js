@@ -39,8 +39,11 @@ export async function sse(path, { body, sessionId, headers, handlers } = {}) {
     body: JSON.stringify(body || {}),
   });
   if (!res.ok) {
-    const err = new Error(`HTTP ${res.status}`);
+    // 非 2xx 也尽量带 detail（与 req() 一致），区分"未开放"与"预算耗尽"等 503
+    const data = await res.json().catch(() => ({}));
+    const err = new Error(data.detail || data.message || `HTTP ${res.status}`);
     err.status = res.status;
+    err.data = data;
     throw err;
   }
   const reader = res.body.getReader();
@@ -49,7 +52,7 @@ export async function sse(path, { body, sessionId, headers, handlers } = {}) {
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
-    buf += decoder.decode(value, { stream: true });
+    buf += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
     const parts = buf.split("\n\n");
     buf = parts.pop();
     for (const part of parts) {

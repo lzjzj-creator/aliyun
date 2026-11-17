@@ -32,6 +32,8 @@ const deadFallbackV1 = ref(false);  // dead 时是否提供 v1 问答回退入�
 const box = ref(null);
 const sessionId = ref(getCurrentSessionId());
 const MSG_ENGINE_OFF = "访谈引擎暂未开放（服务端 COACH_ENABLED 未开启）。可先用问答模式。";
+const deadCanRetry = ref(false);  // dead 为瞬时故障（非 404/503）时可重试
+let itemKey = 0;                  // items 稳定 key（index key 在 splice 后错位）
 let slowTimer = null;
 
 function newClientMsgId() {
@@ -54,10 +56,10 @@ function restoreMessages(bundle) {
   const restored = [];
   for (const m of bundle.messages || []) {
     if (m.role === "user") {
-      restored.push({ role: "user", text: m.content });
+      restored.push({ role: "user", text: m.content, _k: ++itemKey });
     } else if (m.role === "assistant") {
       restored.push({
-        role: "assistant", text: m.content || "",
+        role: "assistant", text: m.content || "", _k: ++itemKey,
         steps: m.steps || [], sources: m.sources || [],
         cards: (m.meta && m.meta.cards) || [],
         reasoning: (m.meta && m.meta.reasoning) || "",
@@ -71,6 +73,7 @@ function restoreMessages(bundle) {
   }
   const prof = bundle.profile || {};
   profile.coverage = typeof prof.coverage === "number" ? prof.coverage : null;
+  profile.gaps = [];            // 重置旧缺口，等下一轮 profile 事件重填
   const filled = (prof.coverage_detail && prof.coverage_detail.filled) || {};
   profile.updates = Object.entries(filled).map(([slot, v]) => ({
     slot, value: typeof v === "object" && v !== null ? v.value : v,
@@ -147,6 +150,7 @@ async function stream({ sessionId: sid, message, clientMsgId, userText }) {
   const turn = reactive({
     role: "assistant", text: "", steps: [], reasoning: "",
     sources: [], cards: [], done: false, error: "", retryable: false, retryText: "",
+    _k: ++itemKey,
     clientMsgId,    // 重试沿用同一幂等键，服务端可识别已完成的轮次
   });
   items.value.push(turn);
@@ -180,17 +184,23 @@ async function stream({ sessionId: sid, message, clientMsgId, userText }) {
 
 function send(text) {
   const query = (text ?? input.value).trim();
-  if (!query || busy.value || dead.value) return;
+  if (!query || busy.value || dead.value || demoLoading.value) return;
   input.value = "";
-  items.value.push({ role: "user", text: query });
+  items.value.push({ role: "user", text: query, _k: ++itemKey });
   stream({ sessionId: sessionId.value || null, message: query,
            clientMsgId: newClientMsgId(), userText: query });
   scroll();
 }
 
 function retry(turn) {
-  if (busy.value || !turn.retryText) return;
+  if (busy.value) return;
   const idx = items.value.indexOf(turn);
+  if (turn.greetingRetry) {          // 招呼轮无用户消息：重试=重走 boot 建会话
+    if (idx >= 0) items.value.splice(idx, 1);
+    boot();
+    return;
+  }
+  if (!turn.retryText) return;
   if (idx >= 0) items.value.splice(idx, 1);
   stream({ sessionId: sessionId.value || null, message: turn.retryText,
            clientMsgId: turn.clientMsgId || newClientMsgId(), userText: turn.retryText });
@@ -218,10 +228,11 @@ async function loadDemo() {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
       });
-      items.value.push({ role: "user", text: round.user });
+      items.value.push({ role: "user", text: round.user, _k: ++itemKey });
       const turn = reactive({
         role: "assistant", text: "", steps: [], reasoning: "",
         sources: [], cards: [], done: false, error: "", retryable: false,
+        _k: ++itemKey,
       });
       items.value.push(turn);
       const wired = wireTurn(turn, round.user, true);
@@ -249,7 +260,8 @@ async function boot() {
     busy.value = true;
     startSlow();
     const turn = reactive({ role: "assistant", text: "", steps: [], reasoning: "",
-                            sources: [], cards: [], done: false, error: "", retryable: false });
+                            sources: [], cards: [], done: false, error: "",
+                            retryable: false, _k: ++itemKey, greetingRetry: true });
     items.value.push(turn);
     const wired = wireTurn(turn, "");
     try {
@@ -257,8 +269,9 @@ async function boot() {
     } catch (e) {
       items.value.pop();
       deadFallbackV1.value = e.status === 503;
+      deadCanRetry.value = !deadFallbackV1.value;
       dead.value = deadFallbackV1.value
-        ? MSG_ENGINE_OFF
+        ? ((e.data && e.data.detail) || MSG_ENGINE_OFF)
         : `无法连接访谈服务：${e.message}`;
     } finally {
       wired.finish();
@@ -273,6 +286,7 @@ async function boot() {
     restoreMessages(bundle);
     scroll();
   } catch (e) {
+    deadCanRetry.value = e.status !== 404;   // 瞬时故障给重试入口
     dead.value = e.status === 404
       ? "会话不存在或已过期，点上方「会话」新建一个。"
       : `会话加载失败：${e.message}`;
@@ -289,6 +303,7 @@ onMounted(boot);
     <div v-if="dead" class="dead-banner">
       {{ dead }}
       <a v-if="deadFallbackV1" href="#/chat-v1">去问答模式 →</a>
+      <button v-if="deadCanRetry && !busy" class="demo-link" @click="boot">重试</button>
       <button v-if="!busy" class="demo-link" :disabled="demoLoading" @click="loadDemo">
         ▶ 演示访谈（离线回放）
       </button>
@@ -303,7 +318,7 @@ onMounted(boot);
     </div>
 
     <div ref="box" class="stream">
-      <div v-for="(m, i) in items" :key="i" :class="['msg', m.role]">
+      <div v-for="(m, i) in items" :key="m._k ?? i" :class="['msg', m.role]">
         <div class="bubble" :class="{ pending: busy && i === items.length - 1 && !m.text }">
           <ThinkingSteps v-if="m.role === 'assistant'"
                          :steps="m.steps" :reasoning="m.reasoning"

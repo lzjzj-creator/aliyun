@@ -210,15 +210,26 @@ def run_persona(name, turns):
     # 注：经历 title/标签是模型归纳词，红线约束在 quote 证据上（合并时已强制校验），
     # 此处只核查"写进画像的声明值"能否在用户原话中找到。
 
+    # 画像准确率断言：filled 每条必须有 quote 证据或 denied/derived 标记（≥90% 合格线按 100% 执行）
+    sourced = 0
+    total_filled = len(filled)
+    for slot, entry in filled.items():
+        if isinstance(entry, dict) and (
+                entry.get("quote") or entry.get("denied") or entry.get("derived")):
+            sourced += 1
+    accuracy = sourced / total_filled if total_filled else 1.0
+
     final_cov = final_row.get("coverage", coverages[-1] if coverages else 0)
     monotone = all(b >= a for a, b in zip(coverages, coverages[1:]))
     return {
         "name": name, "turns": len([m for m in messages if m["role"] == "user"]),
         "acts": acts, "coverages": coverages, "final_cov": final_cov,
-        "gaps": [s.id for s in coach._load_tpl().interview_slots
-                 if s.required and not coach._slot_filled(
+        "gaps": [s.id for s in coach.required_slots(
+                     coach._load_tpl(), final_row["profile"])
+                 if not coach._slot_filled(
                      s, final_row["profile"], final_row["coverage_detail"])],
         "monotone": monotone, "fabricated": fabricated, "errors": errors,
+        "accuracy": accuracy,
         "updates": updates_total, "stage": session["stage"],
         "profile": final_row["profile"],
     }
@@ -242,6 +253,9 @@ def evaluate():
         checks.append(("事件配对/有序", not r["errors"]))
         checks.append(("覆盖率单调不减", r["monotone"]))
         checks.append(("零编造", not r["fabricated"]))
+        checks.append(("画像全有出处", r["accuracy"] >= 0.9))
+        checks.append(("act 序列合法", all(
+            a in ("ask", "answer", "ack", "wrap_up") for a in r["acts"])))
         checks.append(("≤12 轮", r["turns"] <= 12))
         checks.append(("终态 done", r["stage"] == "done"))
         if exp["min_cov"] is not None:

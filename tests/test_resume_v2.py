@@ -137,26 +137,28 @@ class EndpointShapeTest(unittest.TestCase):
         cls.c = TestClient(app)
         cls.ver = cls.c.get("/api/v2/resume/template").json()["template_version"]
 
+    H = {"X-Anon-Id": "11111111-1111-4111-8111-111111111111"}   # §5 三端点均需 anon
+
     def test_template_endpoint(self):
         r = self.c.get("/api/v2/resume/template")
         self.assertEqual(r.status_code, 200)
         self.assertIn("sections", r.json())
 
     def test_version_mismatch_409(self):
-        r = self.c.post("/api/v2/resume/autofill",
+        r = self.c.post("/api/v2/resume/autofill", headers=self.H,
                         json={"template_version": "0.0.0", "messages": [{"role": "user", "content": "hi"}]})
         self.assertEqual(r.status_code, 409)
-        r = self.c.post("/api/v2/resume/optimize/plan",
+        r = self.c.post("/api/v2/resume/optimize/plan", headers=self.H,
                         json={"template_version": "0.0.0", "fields": {}})
         self.assertEqual(r.status_code, 409)
 
     def test_autofill_requires_conversation(self):
-        r = self.c.post("/api/v2/resume/autofill",
+        r = self.c.post("/api/v2/resume/autofill", headers=self.H,
                         json={"template_version": self.ver})
         self.assertEqual(r.status_code, 400)
 
     def test_autofill_empty_conversation_gaps(self):
-        r = self.c.post("/api/v2/resume/autofill",
+        r = self.c.post("/api/v2/resume/autofill", headers=self.H,
                         json={"template_version": self.ver,
                               "messages": [{"role": "assistant", "content": "你好"}]})
         self.assertEqual(r.status_code, 200)
@@ -165,7 +167,7 @@ class EndpointShapeTest(unittest.TestCase):
 
     def test_plan_shape_and_order(self):
         fields = json.loads((FIXTURE / "autofill.json").read_text(encoding="utf-8"))["fields"]
-        r = self.c.post("/api/v2/resume/optimize/plan",
+        r = self.c.post("/api/v2/resume/optimize/plan", headers=self.H,
                         json={"template_version": self.ver, "fields": fields})
         self.assertEqual(r.status_code, 200)
         secs = r.json()["sections"]
@@ -178,7 +180,7 @@ class EndpointShapeTest(unittest.TestCase):
 
     def test_section_rejects_non_optimizable(self):
         fields = json.loads((FIXTURE / "autofill.json").read_text(encoding="utf-8"))["fields"]
-        r = self.c.post("/api/v2/resume/optimize/section",
+        r = self.c.post("/api/v2/resume/optimize/section", headers=self.H,
                         json={"template_version": self.ver, "section": "basics", "fields": fields})
         self.assertEqual(r.status_code, 400)
 

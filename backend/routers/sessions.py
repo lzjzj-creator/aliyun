@@ -58,7 +58,7 @@ def list_sessions(request: Request, x_anon_id: str | None = Header(default=None)
     anon = security.require_anon(x_anon_id)
     rows = _storage(lambda: memory.list_sessions(anon))
     fields = {"id", "title", "stage", "created_at", "updated_at", "last_message_at"}
-    return {"items": [{k: v for k, v in row.items() if k in fields} for row in rows]}
+    return [{k: v for k, v in row.items() if k in fields} for row in rows]
 
 
 @router.get("/sessions/{session_id}")

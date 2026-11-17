@@ -390,7 +390,7 @@ def apply_extraction(profile, detail, data, messages, valid_slots):
             skills.append(grp)
         grp["items"] = list(dict.fromkeys(grp.get("items", []) + items))
         profile["skills"] = skills
-        filled["skills"] = {"value": "、".join(grp["items"][:8])}
+        filled["skills"] = {"value": "、".join(grp["items"][:8]), "derived": True}
         updates.append({"slot": "skills", "value": "、".join(items[:4])})
 
     for a in data.get("awards") or []:
@@ -399,11 +399,12 @@ def apply_extraction(profile, detail, data, messages, valid_slots):
             awards = profile.setdefault("awards", [])
             if not any(x.get("text") == a["text"] for x in awards):
                 awards.append({"text": str(a["text"]), "period": str(a.get("period", ""))})
-                filled["awards"] = {"value": str(a["text"])}
+                filled["awards"] = {"value": str(a["text"]), "quote": str(a["text"])}
                 updates.append({"slot": "awards", "value": str(a["text"])[:20]})
 
     if profile.get("summary_material"):
-        filled.setdefault("summary", {"value": profile["summary_material"][:20]})
+        filled.setdefault("summary",
+                          {"value": profile["summary_material"][:20], "derived": True})
     detail["filled"] = filled
     return profile, detail, updates
 
@@ -525,7 +526,7 @@ def turn_events(session, profile_row, messages, user_text):
         + (" · 规则兜底" if plan.get("degraded") else "")
     yield ("step_end", {"id": "s2", "seq": seq, "status": "done", "detail": plan_detail})
 
-    hits = []
+    hits, ok = [], False
     if plan["act"] != "ack" and plan.get("need_kb") and user_text:
         seq += 1
         yield ("step_start", {"id": "s3", "seq": seq, "kind": "retrieve", "title": "检索知识库"})
@@ -546,7 +547,8 @@ def turn_events(session, profile_row, messages, user_text):
     yield ("reasoning_summary", _reasoning(plan, profile, detail))
 
     tpl = _load_tpl()
-    kb_ctx = "\n\n---\n\n".join(h.get("text", "") for h in hits[:4]) if hits else ""
+    # 低分命中不进 answer 上下文（grade 校验否则形同虚设），sources 同步不出
+    kb_ctx = "\n\n---\n\n".join(h.get("text", "") for h in hits[:4]) if ok and hits else ""
     llm_msgs = [{"role": "system", "content": _sys_for(plan, profile, detail, kb_ctx, tpl)}]
     llm_msgs += [{"role": m.get("role", "user"), "content": m.get("content", "")}
                  for m in messages[-RECENT_MSGS:] if m.get("role") in ("user", "assistant")]

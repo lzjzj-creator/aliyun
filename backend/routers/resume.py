@@ -8,7 +8,7 @@ import re
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import BaseModel
 
 try:
@@ -17,12 +17,14 @@ try:
         load, check_version, TemplateError, get_section,
         validate_fields, empty_fields, iter_field_paths, valid_path_syntax,
     )
+    from .. import session_security as security
 except ImportError:  # FC 以 backend 目录为根启动
     from llm import llm, QWEN_CHAT
     from resume_template import (
         load, check_version, TemplateError, get_section,
         validate_fields, empty_fields, iter_field_paths, valid_path_syntax,
     )
+    import session_security as security
 
 router = APIRouter(prefix="/api/v2/resume", tags=["resume-v2"])
 
@@ -70,9 +72,12 @@ def _resolve_conversation(req: AutofillReq, anon_id: str, token: str):
         return req.messages, req.profile or {}
     if req.session_id:
         try:
-            import memory  # A 域 #2 交付后生效（FC 冷启动后动态可用）
+            from . import memory   # A 域 #2 交付后生效
         except ImportError:
-            memory = None
+            try:
+                import memory      # FC 以 backend 为根启动的裸模块形态
+            except ImportError:
+                memory = None
         if memory is None:
             raise HTTPException(status_code=501, detail={
                 "code": "SESSION_STORE_NOT_READY",
@@ -227,28 +232,33 @@ def _normalize_fields(tpl, raw: dict) -> dict:
 
 
 @router.post("/autofill")
-def autofill(req: AutofillReq,
+def autofill(req: AutofillReq, request: Request,
              x_anon_id: str = Header(default=""),
              x_session_token: str = Header(default="")):
+    # §5/§10：IP+anon 校验+配额（messages 直传路径同样要求 X-Anon-Id）
+    security.enforce_ip(request)
+    anon = security.require_anon(x_anon_id)
+    security.charge_turn(anon)
     tpl = _tpl()
     _require_version(tpl, req.template_version)
-    messages, _profile = _resolve_conversation(req, x_anon_id, x_session_token)
+    messages, profile = _resolve_conversation(req, anon, x_session_token)
     if not any(m.get("role") == "user" and m.get("content") for m in messages):
         return {"template_version": tpl.template_version,
                 "fields": empty_fields(tpl), "evidence_map": {},
                 "gaps": [{"field_path": k, "label": k, "reason": "对话为空，请手动填写"}
                          for k in ("basics", "education", "projects", "skills")]}
 
+    profile_txt = (f"\n已确认画像（可作为事实依据）："
+                   f"{json.dumps(profile, ensure_ascii=False)[:800]}\n") if profile else ""
     prompt = _prompt("autofill.md") + (
-        f"\n契约结构（*为必填）：\n{_contract_brief(tpl)}\n\n"
+        f"\n契约结构（*为必填）：\n{_contract_brief(tpl)}\n{profile_txt}\n"
         f"会话：\n{_conversation_text(messages)}\n")
     try:
-        raw = llm.chat([{"role": "system", "content": prompt}],
-                       model=QWEN_CHAT, json_mode=True, temperature=0.2)
-        data = json.loads(raw)
-    except Exception as e:
+        data = llm.chat_json([{"role": "system", "content": prompt}],
+                             model=QWEN_CHAT, temperature=0.2)
+    except Exception:
         raise HTTPException(status_code=502, detail={
-            "code": "AUTOFILL_MODEL_FAILED", "message": str(e)[:200]})
+            "code": "AUTOFILL_MODEL_FAILED", "message": "填写生成服务暂时不可用"})
 
     fields = _normalize_fields(tpl, data.get("fields"))
     gaps = list(data.get("gaps") or [])
@@ -348,7 +358,10 @@ def _sec_counts(sec, data) -> tuple[int, int]:
 
 
 @router.post("/optimize/plan")
-def optimize_plan(req: OptimizePlanReq):
+def optimize_plan(req: OptimizePlanReq, request: Request,
+                  x_anon_id: str = Header(default=None)):
+    security.enforce_ip(request)
+    security.charge_turn(security.require_anon(x_anon_id))
     tpl = _tpl()
     _require_version(tpl, req.template_version)
     errs = validate_fields(tpl, req.fields)
@@ -390,7 +403,10 @@ def _facts_for_section(sec, data, confirmed: str) -> str:
 
 
 @router.post("/optimize/section")
-def optimize_section(req: OptimizeSectionReq):
+def optimize_section(req: OptimizeSectionReq, request: Request,
+                     x_anon_id: str = Header(default=None)):
+    security.enforce_ip(request)
+    security.charge_turn(security.require_anon(x_anon_id))
     try:
         from ..resume_optimizer import rewrite_bullets, extract_placeholder
     except ImportError:
@@ -437,10 +453,10 @@ def optimize_section(req: OptimizeSectionReq):
     originals = [t for _, t in metas]
     facts = _facts_for_section(sec, data, req.confirmed_facts)
     try:
-        result = rewrite_bullets(originals, facts)
-    except Exception as e:
+        result = rewrite_bullets(originals, facts, rubric=sec.rubric or "")
+    except Exception:
         steps.append({"kind": "rewrite", "title": "STAR 改写",
-                      "detail": f"失败：{str(e)[:120]}", "status": "error"})
+                      "detail": "改写失败，请稍后重试", "status": "error"})
         base["status"] = "error"
         return base
     steps.append({"kind": "rewrite", "title": "STAR 改写",
@@ -459,16 +475,22 @@ def optimize_section(req: OptimizeSectionReq):
                 else "改写后仍缺数据，守卫落占位"
             change_log.append({"field_path": path, "before": original,
                                "after": suggested, "reason": reason})
+        write = suggested
         if item and item.get("needs_user_data"):
             blocked += 1
+            ph = extract_placeholder(suggested)
+            if ph:
+                pass                                # 模型已在文内嵌占位，写回即可
+            else:
+                write = f"{original}【待补充】"      # 编造内容不进导出稿（§9）
             placeholders.append({"field_path": path, "label": "待补充",
-                                 "placeholder": extract_placeholder(suggested) or "【待补充】"})
+                                 "placeholder": ph or "【待补充】"})
         # 写回 optimized
         parts = path.split(".")
         if sec.type == "text":
-            optimized["text"] = suggested
+            optimized["text"] = write
         else:
-            optimized[int(parts[1])]["bullets"][int(parts[3])] = suggested
+            optimized[int(parts[1])]["bullets"][int(parts[3])] = write
 
     steps.append({"kind": "guard", "title": "数字与事实守卫",
                   "detail": f"{blocked} 处疑似编造已拦截→占位" if blocked else "全部通过",

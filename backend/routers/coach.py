@@ -98,11 +98,7 @@ def chat_stream(req: ChatReq, request: Request,
                 _storage(lambda: memory.append_message(
                     sid, "user", text, client_msg_id=req.client_msg_id))
                 messages.append({"role": "user", "content": text})
-                if is_new or session.get("title") == "新会话":
-                    try:
-                        memory.touch_title(sid, text)
-                    except memory.MemoryStoreError:
-                        pass
+                # 首轮标题由 v2_message_activity 触发器原子写入，无需 touch_title
         elif not is_new:
             raise HTTPException(422, "message 不能为空")
     except Exception:
@@ -198,6 +194,11 @@ def chat_stream(req: ChatReq, request: Request,
                         pass
                 yield _sse("error", _err("STORAGE", "存储暂时不可用", retryable=True))
             except HTTPException as he:
+                if done_id is not None:   # _storage 包装后的存储失败同样要收尾
+                    try:
+                        memory.update_message_status(done_id, "error")
+                    except memory.MemoryStoreError:
+                        pass
                 yield _sse("error", _err("HTTP", str(he.detail)[:120],
                                          retryable=he.status_code == 429
                                          or he.status_code >= 500))

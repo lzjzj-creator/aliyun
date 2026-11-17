@@ -144,7 +144,9 @@ def resume_rewrite(req: RewriteReq):
     if not req.bullets:
         return {"ok": False, "error": {"code": "BULLETS_REQUIRED", "message": "请先提供要改写的条目。"}}
     raw = llm.chat(
-        [{"role": "system", "content": STAR_PROMPT.format(facts=req.confirmed_facts or "（无）")},
+        [{"role": "system", "content": STAR_PROMPT.format(
+            facts=req.confirmed_facts or "（无）",
+            rubric="STAR：动词开头、突出行动与结果、尽量量化")},
          {"role": "user", "content": "\n".join(f"{i+1}. {b}" for i, b in enumerate(req.bullets[:20]))}],
         model=QWEN_CHAT, json_mode=True, temperature=0.4)
     try:

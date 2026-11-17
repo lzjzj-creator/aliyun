@@ -5,19 +5,13 @@
 
 ## A. 编排 JSON：schema 合法率
 
-5 条固定输入走 `coach._orchestrate`（`QWEN_MODEL_ROUTER`，当前 .env 配置为 qwen-plus + `response_format=json_object`）：
+**30 条覆盖输入**（身份×5 / 提问×5 / 经历×5 / 否认×3 / 含糊×5 / 跑偏×3 / 收尾×4，见 `tests/spike_orchestrate.py`）走 `coach._orchestrate`（`QWEN_MODEL_ROUTER`，当前 .env 配置为 qwen-plus + `response_format=json_object`）：
 
-| 输入（截断） | 结果 | 延迟 |
-|---|---|---|
-| 我是大一新生… | act=ask · focus=basics.target_role | 3.9s |
-| 实习怎么找啊… | act=answer · need_kb | 3.0s |
-| 做过一个二手书小程序… | act=ask · focus=projects · deep | 2.6s |
-| 嗯嗯 | act=ask · focus=basics.target_role | 3.0s |
-| 差不多就这样吧… | act=wrap_up | 3.4s |
-
-- **schema 合法率 5/5**（含字段类型/act 枚举/focus_slot 白名单校验），未触发修复重试
-- act 语义全对：提问→answer、经历陈述→ask+deep、收尾意图→wrap_up
-- turbo vs plus 对比（同一 prompt，各 2 次）：turbo 2.7–3.3s，plus 2.3–3.8s，**均合法**，延迟同档
+- **schema 合法率 30/30**（含字段类型/act 枚举/focus_slot 白名单校验），未触发修复重试，全部命中"模型"路径零降级
+- **act 语义 29/30**：提问→answer（KB 类问题均 need_kb=True）、经历陈述→ask+deep、否认/含糊→继续 ask、跑偏→answer（模型自行拒答）、收尾→wrap_up×3/4
+- 唯一偏差："没什么补充的了"判成 ask 而非 wrap_up（保守追问，安全方向）
+- 延迟 2.0–3.3s，p50≈2.4s
+- turbo vs plus 对比（早期 5 样本各 2 次）：turbo 2.7–3.3s，plus 2.3–3.8s，**均合法**，延迟同档
 - 结论：**编排用 turbo（`QWEN_MODEL_ROUTER`）即可**，plus 无质量刚需；连续失败 3 次熔断降级规则已在 `_orchestrate` 实现
 
 ## B. enable_thinking（qwen-plus 流式）
@@ -26,10 +20,10 @@
 
 | 模式 | 首 token | 总时延 | 输出长度 |
 |---|---|---|---|
-| thinking=false | 1.6s | 5.3s | 250 字 |
-| thinking=true | 10.7s | 12.1s | 209 字 |
+| thinking=false | 1.1s | 4.5s | 241 字 |
+| thinking=true | 13.5s | 15.0s | 189 字 |
 
-- thinking 首 token 慢 ~9s、总时延 +128%，输出反而更短
+- thinking 首 token 慢 ~12s、总时延 +233%，输出反而更短
 - `reasoning_content` 在 `llm.chat_stream` 内被丢弃，不出服务端（符合"原始 CoT 不透出"契约）
 - 结论：**deep 轮默认不开 thinking**。`enable_thinking` 已参数化保留，仅作预留；若启用需接受 ~10s 首 token
 

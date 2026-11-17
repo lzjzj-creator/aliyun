@@ -43,7 +43,10 @@ const recent = computed(() => props.updates.slice(-6));
           <span v-for="g in gaps" :key="g" class="chip miss">{{ slotCn(g) }}</span>
         </div>
       </div>
-      <p v-if="pct === 100 || (pct !== null && pct >= 80)" class="pp-hint">
+      <p v-if="pct === 0" class="pp-hint">
+        还没收集到素材，先聊聊你的经历吧——实习、项目、比赛都算。
+      </p>
+      <p v-else-if="pct === 100 || (pct !== null && pct >= 80)" class="pp-hint">
         素材够写一份简历了，可以点下方卡片去一键填写。
       </p>
     </details>

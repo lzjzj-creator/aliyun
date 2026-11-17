@@ -3,7 +3,6 @@
 v1 `/api/resume/rewrite` 与 v2 `optimize/section` 共用（§9）。
 红线：无人可问时，编造数字/无依据表述一律拦成【待补充】占位，绝不静默编造。
 """
-import json
 import re
 
 try:
@@ -18,6 +17,7 @@ STAR_PROMPT = """你是简历改写助手。把下面的简历条目逐条改成
 2. 缺量化数据时，在 suggested 里写【待补充：需要的数据】占位符，严禁编造具体数字；
 3. 同时把需要用户确认的数据列入 questions 反问。
 用户已确认的事实：{facts}
+本节写作规范：{rubric}
 输出 JSON：{{"rewritten":[{{"original":"...","suggested":"...","needs_user_data":false}}],"questions":["..."]}}
 只输出 JSON。"""
 
@@ -92,13 +92,13 @@ def guard_new_claims(data: dict, originals: list[str], facts: str) -> dict:
     return data
 
 
-def rewrite_bullets(bullets: list[str], facts: str = "") -> dict:
+def rewrite_bullets(bullets: list[str], facts: str = "", rubric: str = "") -> dict:
     """一次 STAR 改写（≤12 条）。返回模型 JSON（已过两道守卫），失败抛异常。"""
-    raw = llm.chat(
-        [{"role": "system", "content": STAR_PROMPT.format(facts=facts or "（无）")},
+    data = llm.chat_json(
+        [{"role": "system", "content": STAR_PROMPT.format(
+            facts=facts or "（无）", rubric=rubric or "STAR：动词开头、量化结果")},
          {"role": "user", "content": "\n".join(f"{i + 1}. {b}" for i, b in enumerate(bullets[:12]))}],
-        model=QWEN_CHAT, json_mode=True, temperature=0.4)
-    data = json.loads(raw)
+        model=QWEN_CHAT, temperature=0.4)
     data = guard_fabricated_numbers(data, bullets, facts)
     data = guard_new_claims(data, bullets, facts)
     return data
