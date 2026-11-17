@@ -2,6 +2,7 @@
 import json
 import os
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 import httpx
@@ -334,6 +335,62 @@ class CoachRouteTest(unittest.TestCase):
     def test_message_size_limit(self):
         res = self._post({"message": "x" * 2001})
         self.assertEqual(res.status_code, 422)
+
+
+def _assert_stream_order(self, evs, label=""):
+    """SSE 事件序契约（demo/v2 stream-*.json 形状）：
+    session 首 done 尾；step_start/end 按 id 配对且 start 在前、seq 单调；
+    reasoning_summary/sources 不出现在首个 token 之后；step_* 可跨 token 两侧
+    （后置抽取步骤在 token 之后属正常）；card/profile 在 done 前。"""
+    kinds = [e for e, _ in evs]
+    self.assertEqual(kinds[0], "session", label)
+    self.assertEqual(kinds[-1], "done", label)
+    sess, done = evs[0][1], evs[-1][1]
+    for k in ("protocol", "session_id", "stage", "is_new"):
+        self.assertIn(k, sess, f"{label}: session 缺 {k}")
+    for k in ("session_id", "message_id", "stage"):
+        self.assertIn(k, done, f"{label}: done 缺 {k}")
+
+    first_tok = kinds.index("token") if "token" in kinds else len(kinds)
+    opened = {}
+    seqs = []
+    for i, (e, d) in enumerate(evs):
+        if e == "step_start":
+            self.assertNotIn(d["id"], opened, f"{label}: step {d['id']} 重复开")
+            opened[d["id"]] = i
+            seqs.append(d.get("seq", 0))
+        elif e == "step_end":
+            self.assertIn(d["id"], opened, f"{label}: step_end 无配对 start")
+            self.assertGreater(i, opened[d["id"]], f"{label}: end 在 start 前")
+        elif e in ("reasoning_summary", "sources"):
+            self.assertLess(i, first_tok, f"{label}: token 后出 {e}")
+        elif e in ("card", "profile", "done"):
+            pass
+    self.assertEqual(seqs, sorted(seqs), f"{label}: step seq 非单调")
+
+
+class StreamContractTest(CoachRouteTest):
+    """真实路由 SSE ↔ demo/v2 fixture 事件序契约对拍（#11/§4）。"""
+
+    FIXTURE_DIR = Path(__file__).resolve().parent.parent / "frontend" / "public" / "demo" / "v2"
+
+    def test_fixture_files_keep_order_contract(self):
+        for name in ("stream-interview.json", "stream-kbqa.json", "stream-wrapup.json"):
+            events = json.loads((self.FIXTURE_DIR / name).read_text(encoding="utf-8"))
+            evs = [(e["event"], e.get("data", {})) for e in events]
+            _assert_stream_order(self, evs, label=name)
+
+    def test_live_greeting_turn_keeps_order_contract(self):
+        evs = _parse_sse(self._post({"message": ""}).text)
+        _assert_stream_order(self, evs, label="greeting")
+
+    def test_live_ask_turn_keeps_order_contract(self):
+        first = _parse_sse(self._post({"message": ""}).text)
+        sess = dict(first)["session"]
+        res = self._post({"session_id": sess["session_id"], "client_msg_id": "oc1",
+                          "message": "我做过二手书小程序"},
+                         {"X-Session-Token": sess["session_token"]})
+        _assert_stream_order(self, _parse_sse(res.text), label="ask-turn")
 
 
 if __name__ == "__main__":
