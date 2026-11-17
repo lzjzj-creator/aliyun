@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
-import { adminDocuments, adminLogin, adminOverview } from "../api.js";
+import { adminDocuments, adminLogin, adminOverview } from "../api";
 import { toMirrorHref } from "../kbSource.mjs";
 
 const TOKEN_KEY = "zhimai_admin_token";

@@ -1,0 +1,15 @@
+{
+  "_comment": "POST /api/v2/messages（P0 过渡接口）请求/响应形状草案——session API 归 A 监护，此形状需 A 在 issue #7 下 ack；不一致处以 A 最终实现为准。",
+  "request": {
+    "session_id": "demo-sess-0001 或 null（无则由服务端创建新会话）",
+    "client_msg_id": "前端生成的幂等键（uuid）",
+    "user": "本轮用户消息文本",
+    "assistant": "本轮 AI 完整回复文本",
+    "meta": {"route": {"intent": "kb_qa"}, "sources": []}
+  },
+  "response": {
+    "session_id": "demo-sess-0001",
+    "session_token": "仅新建会话时返回一次，此后客户端用 X-Session-Token 头携带",
+    "message_ids": [43, 44]
+  }
+}

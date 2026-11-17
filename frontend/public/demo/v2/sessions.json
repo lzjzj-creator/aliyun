@@ -1,0 +1,4 @@
+[
+  {"id": "demo-sess-0001", "title": "后端实习访谈", "stage": "done", "last_message_at": "2026-11-17T09:20:00+00:00", "message_count": 14},
+  {"id": "demo-sess-0002", "title": "新会话", "stage": "greeting", "last_message_at": "2026-11-17T08:10:00+00:00", "message_count": 1}
+]

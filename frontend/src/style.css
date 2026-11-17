@@ -13,6 +13,7 @@ body { margin: 0; background: var(--paper); color: var(--ink); }
 h1 { font-size: 1.4rem; margin: 0; color: var(--teal); }
 .tagline { margin: 4px 0 0; font-size: .82rem; color: #7a6f63; }
 .tabs { display: flex; gap: 8px; }
+.tabs .hamburger { padding: 8px 12px; }
 .tabs button, .composer button, .pane button {
   border: 1px solid var(--teal); background: #fff; color: var(--teal);
   padding: 8px 18px; border-radius: 999px; cursor: pointer; font-size: .9rem;
@@ -221,6 +222,11 @@ textarea { width: 100%; border: 1px solid var(--line); border-radius: 10px; padd
   body { background: #fff; }
   .shell { max-width: none; padding: 0; }
   .top, .intro, .privacy, .row, .demo-badge, .slow-hint, .composer { display: none !important; }
+  /* v2 向导：打印只出预览稿，隐藏步骤条/表单栏/优化面板 */
+  .wiz-steps, .wz-left, .opt-panel, .session-drawer { display: none !important; }
+  .wiz-grid { display: block !important; }
+  .wz-right { position: static !important; }
+  .resume-doc { border: none !important; box-shadow: none !important; }
   .pane { font-size: 10.5pt; }
   .pane h2 { margin: 0 0 10px; font-size: 18pt; }
   .pane h3 { font-size: 12pt; }

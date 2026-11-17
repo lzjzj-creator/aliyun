@@ -1,0 +1,132 @@
+{
+  "template_version": "1.0.0",
+  "name": "知脉·单栏校招简历模板",
+  "locale": "zh-CN",
+  "page_rule": "单栏一页；求职意向紧跟姓名；经历按含金量不按时间排",
+  "render": {
+    "page": "A4",
+    "style": "single-column",
+    "font": "\"PingFang SC\",\"Microsoft YaHei\",system-ui,sans-serif"
+  },
+  "sections": [
+    {
+      "key": "basics", "title": "基本信息", "type": "kv", "order": 1,
+      "fields": [
+        {"key": "name", "label": "姓名", "input": "text", "required": true},
+        {"key": "phone", "label": "电话", "input": "text", "required": true},
+        {"key": "email", "label": "邮箱", "input": "text", "required": true},
+        {"key": "target_role", "label": "求职意向", "input": "text", "required": true,
+         "rules": "一句话岗位名，紧跟姓名展示"},
+        {"key": "city", "label": "意向城市", "input": "text", "required": false},
+        {"key": "github", "label": "GitHub", "input": "url", "required": false},
+        {"key": "blog", "label": "博客/作品集", "input": "url", "required": false}
+      ],
+      "rules": "不写籍贯/政治面貌/年龄（国企岗位除外）"
+    },
+    {
+      "key": "education", "title": "教育背景", "type": "entries", "order": 2,
+      "min": 1, "max": 1, "priority": 3,
+      "entry_fields": [
+        {"key": "school", "label": "学校", "input": "text", "required": true},
+        {"key": "major", "label": "专业", "input": "text", "required": true},
+        {"key": "degree", "label": "学历", "input": "text", "required": true,
+         "rules": "本科/硕士/博士"},
+        {"key": "period", "label": "就读时间", "input": "text", "required": true,
+         "rules": "格式 20XX.09–20XX.06"},
+        {"key": "gpa_or_rank", "label": "GPA/排名", "input": "text", "required": false,
+         "rules": "GPA≥3.5 或前 20% 才写，否则留空"},
+        {"key": "courses", "label": "主修课程", "input": "tags", "required": false,
+         "rules": "≤6 门，与目标岗位相关优先"}
+      ]
+    },
+    {
+      "key": "internships", "title": "实习经历", "type": "entries", "order": 3,
+      "min": 0, "max": 3, "priority": 1,
+      "entry_fields": [
+        {"key": "company", "label": "公司", "input": "text", "required": true},
+        {"key": "role", "label": "岗位", "input": "text", "required": true},
+        {"key": "period", "label": "时间", "input": "text", "required": true,
+         "rules": "格式 20XX.0X–20XX.0X"},
+        {"key": "bullets", "label": "工作内容", "input": "bullets", "required": true,
+         "min_items": 2, "max_items": 4,
+         "rubric": "STAR：情境→行动→量化结果；动词开头；每条≥1 个硬数据；体现个人贡献而非团队罗列"}
+      ],
+      "rules": "含金量最高的排最前，不按时间倒序"
+    },
+    {
+      "key": "projects", "title": "项目经历", "type": "entries", "order": 4,
+      "min": 2, "max": 3, "priority": 2,
+      "adaptive_min": {"when_no_experience_type": "internship", "then": 3,
+        "equivalents": ["competition", "opensource", "research", "campus"]},
+      "entry_fields": [
+        {"key": "name", "label": "项目名", "input": "text", "required": true},
+        {"key": "role", "label": "你的角色", "input": "text", "required": true},
+        {"key": "period", "label": "时间", "input": "text", "required": true},
+        {"key": "tech", "label": "技术栈", "input": "tags", "required": true,
+         "rules": "标签化，≤6 个"},
+        {"key": "bullets", "label": "项目要点", "input": "bullets", "required": true,
+         "min_items": 2, "max_items": 4,
+         "rubric": "STAR：情境→行动→量化结果；动词开头；每条≥1 个硬数据；体现个人贡献而非团队罗列"}
+      ],
+      "rules": "优先开源/竞赛/自研项目，避免课程大作业"
+    },
+    {
+      "key": "skills", "title": "专业技能", "type": "skillgroups", "order": 5, "priority": 4,
+      "entry_fields": [
+        {"key": "groups", "label": "技能分组", "input": "skillgroups",
+         "required": true, "min_groups": 1, "max_groups": 4,
+         "group_name_examples": ["语言", "框架", "工具", "其他"],
+         "rubric": "'熟悉/了解'分档，不写'精通'；与目标岗位相关的组放前"}
+      ]
+    },
+    {
+      "key": "awards", "title": "荣誉奖项", "type": "lines", "order": 6,
+      "required": false,
+      "entry_fields": [
+        {"key": "items", "label": "奖项", "input": "lines", "required": false,
+         "line_fields": ["text", "period"],
+         "rubric": "写清奖项全称与级别；无则不展示本节"}
+      ]
+    },
+    {
+      "key": "summary", "title": "自我评价", "type": "text", "order": 7,
+      "required": false,
+      "entry_fields": [
+        {"key": "text", "label": "自我评价", "input": "textarea", "required": false,
+         "max_chars": 60, "rules": "30–60 字，对齐目标岗位，不写空话套话"}
+      ]
+    }
+  ],
+  "interview_slots": [
+    {"id": "identity.grade", "label": "年级", "required": true, "required_when": "always",
+     "maps_to": "profile.identity.grade", "ask": "现在大几？"},
+    {"id": "identity.school", "label": "学校", "required": true, "required_when": "always",
+     "maps_to": "education.0.school", "ask": "在哪个学校读书？"},
+    {"id": "identity.major", "label": "专业", "required": true, "required_when": "always",
+     "maps_to": "education.0.major", "ask": "什么专业？"},
+    {"id": "basics.target_role", "label": "目标岗位/方向", "required": true, "required_when": "always",
+     "maps_to": "basics.target_role", "ask": "想找什么方向的工作或实习？"},
+    {"id": "internships", "label": "实习经历", "required": true, "required_when": "exp:internship",
+     "kind": "entry_group", "min_entries": 1,
+     "entry_slots": ["company", "role", "period", "situation", "actions", "result_metrics"],
+     "ask": "有没有实习过？做过什么、结果怎么样？"},
+    {"id": "projects", "label": "项目/等价经历", "required": true, "required_when": "always",
+     "kind": "entry_group", "min_entries": 2,
+     "equivalents": ["competition", "opensource", "research", "campus"],
+     "entry_slots": ["name", "role", "period", "tech", "situation", "actions", "result_metrics"],
+     "ask": "做过哪些项目（含竞赛/开源/科研）？你在里面负责什么，有什么可量化的结果？"},
+    {"id": "skills", "label": "专业技能", "required": true, "required_when": "always",
+     "kind": "entry_group", "min_entries": 1,
+     "entry_slots": ["group", "items"],
+     "ask": "会哪些与目标岗位相关的技能？"},
+    {"id": "awards", "label": "荣誉奖项", "required": false, "required_when": "always",
+     "ask": "有没有拿得出手的奖项或证书？"},
+    {"id": "summary", "label": "自我评价素材", "required": false, "required_when": "always",
+     "ask": "你觉得自己区别于其他人的最大特点是什么？"}
+  ],
+  "optimize": {
+    "order_rule": "按 priority 从小到大（实习>项目>教育>技能>奖项>自我评价>基本信息）",
+    "rewrite_sections": ["internships", "projects", "summary"],
+    "check_sections": ["education", "skills", "awards", "basics"]
+  }
+}
