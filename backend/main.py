@@ -19,16 +19,25 @@ from pydantic import BaseModel
 import decision
 import kb
 from admin import router as admin_router
+try:
+    from routers.sessions import router as sessions_router
+except ImportError:  # 以 backend.main 包形式导入（测试）
+    from .routers.sessions import router as sessions_router
 from llm import llm, QWEN_CHAT
 
 app = FastAPI(title="zhimai-api", version="0.1.0")
 app.include_router(admin_router)
+# Off by default until isolated DB validation and the shared contract Gate pass.
+if os.getenv("V2_MEMORY_ENABLED", "0") == "1":
+    app.include_router(sessions_router)
 
 origins = [o.strip() for o in os.getenv("ALLOWED_ORIGINS",
            "http://localhost:5173,http://127.0.0.1:5173").split(",") if o.strip()]
 app.add_middleware(CORSMiddleware, allow_origins=origins,
-                   allow_methods=["POST", "GET", "OPTIONS"],
-                   allow_headers=["Content-Type", "X-File-Name", "Authorization"])
+                   allow_methods=["POST", "GET", "DELETE", "OPTIONS"],
+                   allow_headers=["Content-Type", "X-File-Name", "Authorization",
+                                  "X-Anon-Id", "X-Session-Token"],
+                   expose_headers=["Retry-After"])
 
 MIN_SCORE = float(os.getenv("MIN_RETRIEVE_SCORE", "0.25"))
 
