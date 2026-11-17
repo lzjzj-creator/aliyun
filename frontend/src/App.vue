@@ -2,6 +2,7 @@
 import { onMounted, onUnmounted, ref } from "vue";
 import AdminView from "./views/AdminView.vue";
 import ChatView from "./views/ChatView.vue";
+import ContractDemoView from "./views/ContractDemoView.vue";
 import ResumeView from "./views/ResumeView.vue";
 import SessionList from "./components/SessionList.vue";
 import { setCurrentSessionId } from "./storage";
@@ -78,6 +79,7 @@ onUnmounted(() => window.removeEventListener("hashchange", syncRoute));
 
     <main>
       <ChatView v-if="view === 'chat'" @goto-resume="nav('#/resume')" />
+      <ContractDemoView v-else-if="view === 'contractDemo'" />
       <ResumeView v-else-if="view === 'resume' || view === 'resumeV1'" />
     </main>
   </div>
