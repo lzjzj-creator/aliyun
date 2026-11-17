@@ -1,4 +1,12 @@
-// A 域（访谈引擎）接口文件 —— 由 owner A 扩展（issue #11/#14）。
-// 本文件只放 chat 域调用；公共底座用 ./core（authHeaders/req/sse/replayEvents）。
-// B 侧勿在此加函数，避免两域同改同一文件互踩（§12.1 文件分片）。
-export {};
+// v2 访谈接口（A 监护契约：POST /api/v2/chat/stream，事件协议见 §4 与 demo/v2 fixture）
+// session_id=null 时服务端建会话，session 事件一次性带回 session_token；
+// 之后所有请求由 core.authHeaders 自动注入 X-Anon-Id / X-Session-Token。
+import { sse } from "./core";
+
+export function chatStreamV2({ sessionId = null, clientMsgId = null, message = "", handlers = {} } = {}) {
+  return sse("/api/v2/chat/stream", {
+    sessionId: sessionId || undefined,
+    body: { session_id: sessionId || null, client_msg_id: clientMsgId, message },
+    handlers,
+  });
+}

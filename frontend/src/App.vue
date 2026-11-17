@@ -3,12 +3,13 @@ import { onMounted, onUnmounted, ref } from "vue";
 import AdminView from "./views/AdminView.vue";
 import ChatView from "./views/ChatView.vue";
 import ContractDemoView from "./views/ContractDemoView.vue";
+import InterviewView from "./views/InterviewView.vue";
 import ResumeView from "./views/ResumeView.vue";
 import ResumeWizardView from "./views/ResumeWizardView.vue";
 import SessionList from "./components/SessionList.vue";
 import { setCurrentSessionId } from "./storage";
 
-// hash 路由：#chat | #chat/:id | #resume | #resume-v1 | #demo | #admin（不引 vue-router）
+// hash 路由：#chat | #chat/:id | #chat-v1 | #resume | #resume-v1 | #demo | #admin（不引 vue-router）
 const view = ref("chat");
 const sidebar = ref(false);
 
@@ -18,6 +19,7 @@ function syncRoute() {
   if (/^#\/?demo/.test(h)) { view.value = "contractDemo"; return; }
   if (/^#\/?resume-v1/.test(h)) { view.value = "resumeV1"; return; }
   if (/^#\/?resume/.test(h)) { view.value = "resume"; return; }
+  if (/^#\/?chat-v1/.test(h)) { view.value = "chatV1"; return; }
   const m = h.match(/^#\/?chat\/?([0-9a-zA-Z-]+)?/);
   view.value = "chat";
   setCurrentSessionId(m?.[1] || "");
@@ -80,7 +82,8 @@ onUnmounted(() => window.removeEventListener("hashchange", syncRoute));
     <SessionList v-if="sidebar" @close="sidebar = false" @select="onSelectSession" @new="onNewSession" />
 
     <main>
-      <ChatView v-if="view === 'chat'" @goto-resume="nav('#/resume')" />
+      <InterviewView v-if="view === 'chat'" @goto-resume="nav('#/resume')" />
+      <ChatView v-else-if="view === 'chatV1'" @goto-resume="nav('#/resume')" />
       <ContractDemoView v-else-if="view === 'contractDemo'" />
       <ResumeWizardView v-else-if="view === 'resume'" />
       <ResumeView v-else-if="view === 'resumeV1'" />
