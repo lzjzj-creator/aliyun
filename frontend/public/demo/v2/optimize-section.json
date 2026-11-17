@@ -1,0 +1,28 @@
+{
+  "template_version": "1.0.0",
+  "section": "projects",
+  "status": "done",
+  "steps": [
+    {"kind": "diagnose", "title": "字段诊断", "detail": "2 段项目 · 4 条 bullet · 2 条缺量化结果", "status": "done"},
+    {"kind": "rewrite", "title": "STAR 改写", "detail": "改写 4 条 bullet（不动事实）", "status": "done"},
+    {"kind": "guard", "title": "数字与事实守卫", "detail": "1 处疑似编造数字已拦截→占位", "status": "done"}
+  ],
+  "optimized": [
+    {"name": "校园二手交易小程序", "role": "后端负责人", "period": "2025.03–2025.06",
+     "tech": ["Java", "Spring Boot", "MySQL", "Redis"],
+     "bullets": ["设计商品搜索接口并用 Redis 缓存热门查询，将接口平均耗时从 800ms 降至 120ms", "独立完成 12 个 REST 接口的开发与部署，支撑 3 人小组项目按期上线"]},
+    {"name": "课程推荐系统（课程设计）", "role": "算法与后端", "period": "2024.10–2024.12",
+     "tech": ["Python", "Flask", "MySQL"],
+     "bullets": ["实现基于协同过滤的课程推荐算法，Top-5 命中率 62%（自测集）", "编写数据采集脚本清洗 2000+ 条课程评价数据，【待补充：清洗后数据用于训练的效果或提升幅度】"]}
+  ],
+  "change_log": [
+    {"field_path": "projects.0.bullets.0", "before": "设计并实现商品搜索接口，用 Redis 缓存热门查询，接口平均耗时从 800ms 降到 120ms", "after": "设计商品搜索接口并用 Redis 缓存热门查询，将接口平均耗时从 800ms 降至 120ms", "reason": "动词开头，行动→结果顺序更紧凑"},
+    {"field_path": "projects.1.bullets.0", "before": "基于协同过滤实现课程推荐，Top-5 推荐命中率在自测集上达 62%", "after": "实现基于协同过滤的课程推荐算法，Top-5 命中率 62%（自测集）", "reason": "压缩冗余表述，保留原数据"},
+    {"field_path": "projects.1.bullets.1", "before": "编写数据采集脚本，清洗 2000+ 条课程评价数据供训练使用", "after": "编写数据采集脚本清洗 2000+ 条课程评价数据，【待补充：清洗后数据用于训练的效果或提升幅度】", "reason": "原句有行动缺结果；模型补写的效果数字无原文依据，被守卫拦截改占位"}
+  ],
+  "placeholders": [
+    {"field_path": "projects.1.bullets.1", "label": "量化结果缺失", "placeholder": "【待补充：清洗后数据用于训练的效果或提升幅度】"}
+  ],
+  "pending_questions": ["课程推荐系统除了命中率，还有实际上线使用人数或用户反馈吗？"],
+  "needs_input": true
+}
