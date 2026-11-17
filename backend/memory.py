@@ -219,13 +219,17 @@ def append_message(session_id: str, role: str, content: str, *,
 
 
 def update_message_status(id: int, status: str, *, content: str | None = None,
-                          steps: list | None = None, sources: list | None = None) -> dict:
+                          steps: list | None = None, sources: list | None = None,
+                          meta: dict | None = None) -> dict:
     if type(id) is not int or id <= 0 or status not in STATUSES:
         raise ValueError("invalid message id or status")
+    if meta is not None and not isinstance(meta, dict):
+        raise ValueError("meta must be an object")
+    payload = {"status": status, **_message_fields(content, steps, sources)}
+    if meta is not None:
+        payload["meta"] = copy.deepcopy(meta)
     rows = _json(_request("PATCH", "/chat_messages", params={"id": f"eq.{id}"},
-                         headers={"Prefer": "return=representation"}, json={
-        "status": status, **_message_fields(content, steps, sources),
-    }))
+                         headers={"Prefer": "return=representation"}, json=payload))
     if not rows:
         raise SessionNotFound("Message not found")
     return rows[0]

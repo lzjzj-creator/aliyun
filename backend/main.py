@@ -28,6 +28,10 @@ try:
     from routers.resume import router as resume_v2_router
 except ImportError:  # 以 backend.main 包形式导入（测试）
     from .routers.resume import router as resume_v2_router
+try:
+    from routers.coach import router as coach_router
+except ImportError:  # 以 backend.main 包形式导入（测试）
+    from .routers.coach import router as coach_router
 
 app = FastAPI(title="zhimai-api", version="0.1.0")
 app.include_router(admin_router)
@@ -35,6 +39,7 @@ app.include_router(resume_v2_router)
 # Off by default until isolated DB validation and the shared contract Gate pass.
 if os.getenv("V2_MEMORY_ENABLED", "0") == "1":
     app.include_router(sessions_router)
+    app.include_router(coach_router)
 
 origins = [o.strip() for o in os.getenv("ALLOWED_ORIGINS",
            "http://localhost:5173,http://127.0.0.1:5173").split(",") if o.strip()]
