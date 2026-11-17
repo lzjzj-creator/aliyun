@@ -11,11 +11,18 @@ from typing import Optional
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 
-from llm import llm, QWEN_CHAT, QWEN_ROUTER
-from resume_template import (
-    load, check_version, TemplateError, get_section,
-    validate_fields, empty_fields, iter_field_paths, valid_path_syntax,
-)
+try:
+    from ..llm import llm, QWEN_CHAT
+    from ..resume_template import (
+        load, check_version, TemplateError, get_section,
+        validate_fields, empty_fields, iter_field_paths, valid_path_syntax,
+    )
+except ImportError:  # FC 以 backend 目录为根启动
+    from llm import llm, QWEN_CHAT
+    from resume_template import (
+        load, check_version, TemplateError, get_section,
+        validate_fields, empty_fields, iter_field_paths, valid_path_syntax,
+    )
 
 router = APIRouter(prefix="/api/v2/resume", tags=["resume-v2"])
 
@@ -312,3 +319,162 @@ def autofill(req: AutofillReq,
 
     return {"template_version": tpl.template_version,
             "fields": fields, "evidence_map": evidence_map, "gaps": gaps}
+
+
+# ---------------- optimize：分段黑箱优化（§9） ----------------
+
+class OptimizePlanReq(BaseModel):
+    template_version: str = ""
+    fields: dict = {}
+
+
+class OptimizeSectionReq(BaseModel):
+    template_version: str = ""
+    section: str = ""
+    fields: dict = {}
+    confirmed_facts: str = ""
+
+
+def _sec_counts(sec, data) -> tuple[int, int]:
+    """(条目数, bullet 总数)；text 型按 1/1 计。"""
+    if sec.type == "entries":
+        entries = data or []
+        return len(entries), sum(len(e.get("bullets") or []) for e in entries if isinstance(e, dict))
+    if sec.type == "text":
+        return (1, 1) if str((data or {}).get("text", "")).strip() else (0, 0)
+    if sec.type == "kv":
+        return 0, 0
+    return 0, 0
+
+
+@router.post("/optimize/plan")
+def optimize_plan(req: OptimizePlanReq):
+    tpl = _tpl()
+    _require_version(tpl, req.template_version)
+    errs = validate_fields(tpl, req.fields)
+    if errs:
+        raise HTTPException(status_code=400, detail={"code": "FIELDS_INVALID", "message": "; ".join(errs)})
+
+    rewrite_keys = set((tpl.optimize or {}).get("rewrite_sections", []))
+    out = []
+    for sec in sorted(tpl.sections, key=lambda s: (s.priority or 99, s.order)):
+        data = req.fields.get(sec.key)
+        ec, bc = _sec_counts(sec, data)
+        optimizable = sec.key in rewrite_keys
+        if not optimizable:
+            status, reason = ("check", "与目标岗位相关性人工确认即可") if sec.key == "skills" else ("ok", "静态字段，无需改写")
+        elif ec == 0:
+            status, reason = "skipped", "本节为空，跳过"
+        else:
+            status, reason = "pending", ""
+        out.append({"key": sec.key, "title": sec.title,
+                    "priority": sec.priority or 99, "optimizable": optimizable,
+                    "status": status, "reason": reason,
+                    "entry_count": ec, "bullet_count": bc})
+    return {"template_version": tpl.template_version, "sections": out}
+
+
+def _facts_for_section(sec, data, confirmed: str) -> str:
+    """守卫语料 = 确认事实 + 本区块非 bullet 字段（公司/角色/技术栈名都可被引用）。"""
+    parts = [confirmed] if confirmed else []
+    if sec.type == "entries":
+        for e in data or []:
+            for f in sec.entry_fields:
+                if f.input == "bullets":
+                    continue
+                v = e.get(f.key)
+                parts.append("、".join(v) if isinstance(v, list) else str(v or ""))
+    elif sec.type == "text":
+        pass
+    return "\n".join(p for p in parts if p)
+
+
+@router.post("/optimize/section")
+def optimize_section(req: OptimizeSectionReq):
+    try:
+        from ..resume_optimizer import rewrite_bullets, extract_placeholder
+    except ImportError:
+        from resume_optimizer import rewrite_bullets, extract_placeholder
+
+    tpl = _tpl()
+    _require_version(tpl, req.template_version)
+    sec = get_section(tpl, req.section)
+    if not sec:
+        raise HTTPException(status_code=400, detail={"code": "SECTION_UNKNOWN", "message": f"未知区块 {req.section}"})
+    if sec.key not in set((tpl.optimize or {}).get("rewrite_sections", [])):
+        raise HTTPException(status_code=400, detail={"code": "SECTION_NOT_OPTIMIZABLE", "message": f"{sec.title} 不在可改写区块内"})
+
+    data = req.fields.get(sec.key)
+    steps = []
+
+    # metas: [(field_path, original_text)] —— text 型当一条 bullet 处理
+    if sec.type == "entries":
+        metas = [(f"{sec.key}.{i}.bullets.{j}", b)
+                 for i, e in enumerate(data or [])
+                 for j, b in enumerate(e.get("bullets") or []) if str(b).strip()]
+    elif sec.type == "text":
+        metas = [(f"{sec.key}.text", (data or {}).get("text", ""))]
+        metas = [(p, t) for p, t in metas if str(t).strip()]
+    else:
+        metas = []
+
+    ec, bc = _sec_counts(sec, data)
+    no_num = sum(1 for _, t in metas if not re.search(r"\d", t))
+    too_long = sum(1 for _, t in metas if len(t) > 60)
+    issues = ([f"{no_num} 条缺量化结果"] if no_num else []) + \
+             ([f"{too_long} 条过长(>60字)"] if too_long else [])
+    steps.append({"kind": "diagnose", "title": "字段诊断",
+                  "detail": f"{ec} 段 · {bc} 条 bullet · {'；'.join(issues) or '未发现明显问题'}",
+                  "status": "done"})
+
+    base = {"template_version": tpl.template_version, "section": sec.key,
+            "steps": steps, "optimized": data, "change_log": [],
+            "placeholders": [], "pending_questions": [], "needs_input": False}
+    if not metas:
+        base["status"] = "skipped"
+        return base
+
+    originals = [t for _, t in metas]
+    facts = _facts_for_section(sec, data, req.confirmed_facts)
+    try:
+        result = rewrite_bullets(originals, facts)
+    except Exception as e:
+        steps.append({"kind": "rewrite", "title": "STAR 改写",
+                      "detail": f"失败：{str(e)[:120]}", "status": "error"})
+        base["status"] = "error"
+        return base
+    steps.append({"kind": "rewrite", "title": "STAR 改写",
+                  "detail": f"改写 {len(metas)} 条（不动事实）", "status": "done"})
+
+    rewritten = result.get("rewritten") or []
+    blocked = 0
+    optimized = json.loads(json.dumps(data, ensure_ascii=False)) if data is not None else data
+    change_log, placeholders = [], []
+
+    for idx, (path, original) in enumerate(metas):
+        item = rewritten[idx] if idx < len(rewritten) else None
+        suggested = (item or {}).get("suggested") or original
+        if suggested != original:
+            reason = "STAR 改写：动词开头+量化结果" if not item.get("needs_user_data") \
+                else "改写后仍缺数据，守卫落占位"
+            change_log.append({"field_path": path, "before": original,
+                               "after": suggested, "reason": reason})
+        if item and item.get("needs_user_data"):
+            blocked += 1
+            placeholders.append({"field_path": path, "label": "待补充",
+                                 "placeholder": extract_placeholder(suggested) or "【待补充】"})
+        # 写回 optimized
+        parts = path.split(".")
+        if sec.type == "text":
+            optimized["text"] = suggested
+        else:
+            optimized[int(parts[1])]["bullets"][int(parts[3])] = suggested
+
+    steps.append({"kind": "guard", "title": "数字与事实守卫",
+                  "detail": f"{blocked} 处疑似编造已拦截→占位" if blocked else "全部通过",
+                  "status": "done"})
+    base.update({"status": "done", "optimized": optimized, "change_log": change_log,
+                 "placeholders": placeholders,
+                 "pending_questions": result.get("questions") or [],
+                 "needs_input": bool(placeholders or result.get("questions"))})
+    return base
