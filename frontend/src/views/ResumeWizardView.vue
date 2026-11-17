@@ -330,7 +330,7 @@ function exportPrint() {
 
 
 <style scoped>
-.wiz-steps { display: flex; gap: 8px; margin-bottom: 14px; }
+.wiz-steps { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
 .wiz-steps button {
   border: 1px solid var(--line); background: #fff; color: #7a6f63;
   border-radius: 999px; padding: 6px 14px; font-size: .82rem; cursor: pointer;
