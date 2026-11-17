@@ -83,7 +83,8 @@ async function writeback(query, ai) {
   try {
     const r = await writebackRound({
       session_id: sessionId.value || null,
-      client_msg_id: crypto.randomUUID(),
+      client_msg_id: (crypto.randomUUID?.() ||
+        `cm-${Date.now()}-${Math.random().toString(36).slice(2)}`),
       user: query,
       assistant: ai.text,
       meta: { route: ai.route, sources: ai.sources },
