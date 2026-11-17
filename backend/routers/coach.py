@@ -36,8 +36,8 @@ class ChatReq(BaseModel):
 
 
 def _sse(event, data):
-    payload = data if isinstance(data, str) else json.dumps(data, ensure_ascii=False)
-    return f"event: {event}\ndata: {payload}\n\n"
+    # 统一 JSON 编码：裸字符串里的 \n\n 会截断 SSE 帧丢数据（§4 协议安全）
+    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
 def _storage(call):
@@ -61,11 +61,13 @@ def chat_stream(req: ChatReq, request: Request,
         raise HTTPException(503, "访谈引擎暂未开放")
     security.enforce_ip(request)
     anon = security.require_anon(x_anon_id)
+    if not coach.budget_ok():      # §10 日 token 预算触顶 → 停新访谈
+        raise HTTPException(503, "今日访谈额度已用完，请明天再来")
 
     is_new = req.session_id is None
     lease = None
     if is_new:
-        security.charge_turn(anon)   # 与 /messages 建会话同口径，防刷会话
+        security.charge_turn(anon)   # 建会话+首轮计一次配额（与 /messages 同口径）
         created = _storage(lambda: memory.create_session(anon))
         session, token, sid = created["session"], created["token"], created["session"]["id"]
     else:
@@ -78,6 +80,8 @@ def chat_stream(req: ChatReq, request: Request,
 
     try:
         bundle = _storage(lambda: memory.get_session_bundle(sid))
+        if bundle is None or bundle.get("session") is None:
+            raise security.not_found()     # verify→删除竞态下统一 404（同 sessions.py）
         session = bundle["session"]
         profile_row = bundle.get("profile") or {}
         messages = bundle.get("messages") or []
@@ -89,7 +93,8 @@ def chat_stream(req: ChatReq, request: Request,
                 dup = next((m for m in messages if m.get("role") == "user"
                             and m.get("client_msg_id") == req.client_msg_id), None)
             if dup is None:
-                security.charge_turn(anon)
+                if not is_new:          # is_new 已在建会话处计费，首轮不重复扣
+                    security.charge_turn(anon)
                 _storage(lambda: memory.append_message(
                     sid, "user", text, client_msg_id=req.client_msg_id))
                 messages.append({"role": "user", "content": text})
@@ -182,6 +187,7 @@ def chat_stream(req: ChatReq, request: Request,
                     _storage(lambda: memory.update_message_status(
                         done_id, "done", content=content, steps=steps,
                         sources=sources, meta=meta))
+                coach.charge_tokens(len(text or "") + len(content))
                 yield _sse("done", {"session_id": sid, "message_id": done_id,
                                     "stage": stage, "coverage": coverage})
             except memory.MemoryStoreError:
@@ -192,7 +198,9 @@ def chat_stream(req: ChatReq, request: Request,
                         pass
                 yield _sse("error", _err("STORAGE", "存储暂时不可用", retryable=True))
             except HTTPException as he:
-                yield _sse("error", _err("HTTP", str(he.detail)[:120], retryable=True))
+                yield _sse("error", _err("HTTP", str(he.detail)[:120],
+                                         retryable=he.status_code == 429
+                                         or he.status_code >= 500))
             except Exception:
                 if done_id is not None:
                     try:

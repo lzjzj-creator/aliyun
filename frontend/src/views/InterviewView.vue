@@ -28,8 +28,10 @@ const input = ref("");
 const busy = ref(false);
 const slow = ref(false);
 const dead = ref("");         // 致命错误提示（引擎未开放/会话丢失）
+const deadFallbackV1 = ref(false);  // dead 时是否提供 v1 问答回退入口
 const box = ref(null);
 const sessionId = ref(getCurrentSessionId());
+const MSG_ENGINE_OFF = "访谈引擎暂未开放（服务端 COACH_ENABLED 未开启）。可先用问答模式。";
 let slowTimer = null;
 
 function newClientMsgId() {
@@ -61,6 +63,10 @@ function restoreMessages(bundle) {
         reasoning: (m.meta && m.meta.reasoning) || "",
         failed: m.status === "error",
       });
+      // 服务端幂等墙不支持"重生成同一轮"：失败轮给明示，不造假重试按钮
+      if (m.status === "error") {
+        restored[restored.length - 1].error = "该轮回复生成失败，可重新发送同样的问题。";
+      }
     }
   }
   const prof = bundle.profile || {};
@@ -151,7 +157,8 @@ async function stream({ sessionId: sid, message, clientMsgId, userText }) {
     await chatStreamV2({ sessionId: sid, clientMsgId, message, handlers: wired.handlers });
   } catch (e) {
     if (e.status === 503) {
-      dead.value = "访谈引擎暂未开放（服务端 COACH_ENABLED 未开启）。可先用问答模式。";
+      dead.value = MSG_ENGINE_OFF;
+      deadFallbackV1.value = true;
       items.value.pop();
       return;
     }
@@ -249,8 +256,9 @@ async function boot() {
       await chatStreamV2({ sessionId: null, message: "", handlers: wired.handlers });
     } catch (e) {
       items.value.pop();
-      dead.value = e.status === 503
-        ? "访谈引擎暂未开放（服务端 COACH_ENABLED 未开启）。可先用问答模式。"
+      deadFallbackV1.value = e.status === 503;
+      dead.value = deadFallbackV1.value
+        ? MSG_ENGINE_OFF
         : `无法连接访谈服务：${e.message}`;
     } finally {
       wired.finish();
@@ -280,7 +288,7 @@ onMounted(boot);
 
     <div v-if="dead" class="dead-banner">
       {{ dead }}
-      <a v-if="dead.includes('问答模式')" href="#/chat-v1">去问答模式 →</a>
+      <a v-if="deadFallbackV1" href="#/chat-v1">去问答模式 →</a>
       <button v-if="!busy" class="demo-link" :disabled="demoLoading" @click="loadDemo">
         ▶ 演示访谈（离线回放）
       </button>

@@ -35,6 +35,26 @@ ORCH_FAIL_WINDOW = 600          # 编排连续失败统计窗口（秒）
 ORCH_FAIL_LIMIT = 3             # 窗口内失败次数上限 → 降级规则编排
 _orch_failures = []             # 模块级失败时间戳（单实例 FC 够用）
 
+_EXP_GROUPS = ("internships", "projects")   # 经历承载类槽位（skills 属条目组但非经历）
+
+# §10 全局日 token 预算：进程内近似计数（token≈字/3）。单实例近似闸门，
+# 多实例下为每实例口径——精确全局预算需共享计数器，部署清单已注明。
+DAILY_TOKEN_BUDGET = int(os.getenv("COACH_DAILY_TOKEN_BUDGET", "200000"))
+_day_budget = {"date": "", "used": 0}
+
+
+def budget_ok() -> bool:
+    today = time.strftime("%Y-%m-%d")
+    return _day_budget["date"] != today or _day_budget["used"] < DAILY_TOKEN_BUDGET
+
+
+def charge_tokens(approx_chars: int) -> None:
+    today = time.strftime("%Y-%m-%d")
+    if _day_budget["date"] != today:
+        _day_budget["date"] = today
+        _day_budget["used"] = 0
+    _day_budget["used"] += max(0, approx_chars // 3)
+
 
 def _prompt(name: str) -> str:
     return (PROMPT_DIR / name).read_text(encoding="utf-8")
@@ -114,11 +134,11 @@ def _no_exp_possible(profile, detail) -> bool:
     tpl = _load_tpl()
     filled = (detail or {}).get("filled") or {}
     for s in required_slots(tpl, profile):
-        if s.id not in ("internships", "projects"):
+        if s.id not in _EXP_GROUPS:
             continue
         if not (filled.get(s.id) or {}).get("denied"):
             return False
-    return any(s.id in ("internships", "projects") for s in tpl.interview_slots)
+    return any(s.id in _EXP_GROUPS for s in tpl.interview_slots)
 
 
 def should_wrap(profile, detail, turn_no: int) -> bool:
@@ -314,8 +334,9 @@ def apply_extraction(profile, detail, data, messages, valid_slots):
         slot, value, quote = su.get("slot"), su.get("value"), su.get("quote", "")
         if slot not in valid_slots or value in (None, "") or not _user_quote_ok(quote, messages):
             continue
-        if slot in filled:
-            continue            # 已确认字段不被覆盖（§6）
+        ent = filled.get(slot)
+        if ent and not (isinstance(ent, dict) and ent.get("denied")):
+            continue            # 已确认字段不被覆盖（§6）；否认过的可被新值更正
         filled[slot] = {"value": value, "quote": quote}
         if slot in SCALAR_SLOT_PATH:
             _path_set(profile, SCALAR_SLOT_PATH[slot], value)
@@ -341,15 +362,17 @@ def apply_extraction(profile, detail, data, messages, valid_slots):
     # 经历可推翻"已确认无"：按当前经历内容重算经历类槽位 filled（用户原话写的值不覆盖）
     tpl = _load_tpl()
     for s in tpl.interview_slots:
-        if s.id not in ("internships", "projects"):
+        if s.id not in _EXP_GROUPS:
             continue
         types = _exp_types_for(s)
         n = sum(1 for e in profile.get("experiences", []) if e.get("type") in types)
-        ent = filled.get(s.id) or {}
-        stale_counter = "quote" not in ent and ent.get("value") != f"{n}段经历"
+        ent = filled.get(s.id)
+        ent = ent if isinstance(ent, dict) else {}
+        label = f"{n}段经历"
+        stale_counter = "quote" not in ent and ent.get("value") != label
         if n and (ent.get("denied") or stale_counter):
-            filled[s.id] = {"value": f"{n}段经历", "derived": True}
-            updates.append({"slot": s.id, "value": f"{n}段经历"})
+            filled[s.id] = {"value": label, "derived": True}
+            updates.append({"slot": s.id, "value": label})
 
     for g in data.get("skills") or []:
         if not isinstance(g, dict) or not g.get("items"):
@@ -474,7 +497,7 @@ def _persist_merge(session_id, new_profile, new_detail, version):
     cov = coverage_of(new_profile, new_detail)[0]
     merged = memory.merge_profile(
         session_id, new_profile, version, coverage=cov,
-        coverage_detail={k: v for k, v in new_detail.items() if k != "_version"})
+        coverage_detail=new_detail)
     return merged
 
 
@@ -574,7 +597,6 @@ def turn_events(session, profile_row, messages, user_text):
             yield ("step_start", {"id": "s6", "seq": seq, "kind": "guide", "title": "收尾引导"})
             yield ("step_end", {"id": "s6", "seq": seq, "status": "done",
                                 "detail": f"coverage={cov} · turn={turn_no}"})
-            yield ("stage", "wrapping")
             yield ("token", "\n\n")
             for tok in llm.chat_stream(
                     [{"role": "system", "content": _sys_for(plan, profile, detail, "", tpl)},
