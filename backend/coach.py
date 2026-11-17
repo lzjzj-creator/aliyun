@@ -25,15 +25,15 @@ except ImportError:  # FC 以 backend 目录为根启动
 PROMPT_DIR = Path(__file__).resolve().parent / "prompts"
 MIN_SCORE = float(os.getenv("MIN_RETRIEVE_SCORE", "0.25"))
 MAX_TURNS = int(os.getenv("COACH_MAX_TURNS", "12"))
-RECENT_MSGS = int(os.getenv("COACH_RECENT_MSGS", "8"))
+RECENT_ROUNDS = int(os.getenv("COACH_RECENT_ROUNDS", "8"))
+RECENT_MSGS = RECENT_ROUNDS * 2   # "最近8轮"=8 个用户+助手对 = 16 条消息
 MAX_OUTPUT_TOKENS = int(os.getenv("COACH_MAX_TOKENS", "800"))
 WRAP_COVERAGE = float(os.getenv("COACH_WRAP_COVERAGE", "0.8"))
 WRAP_STAR = float(os.getenv("COACH_WRAP_STAR", "0.6"))
+THINKING_ENABLED = os.getenv("COACH_THINKING", "0") == "1"
 ORCH_FAIL_WINDOW = 600          # 编排连续失败统计窗口（秒）
 ORCH_FAIL_LIMIT = 3             # 窗口内失败次数上限 → 降级规则编排
 _orch_failures = []             # 模块级失败时间戳（单实例 FC 够用）
-
-ACT_CN = {"ask": "继续追问", "answer": "回答用户", "wrap_up": "收尾", "ack": "回应"}
 
 
 def _prompt(name: str) -> str:
@@ -63,11 +63,11 @@ def _path_set(obj, path, value):
 
 # ---------------- 覆盖度与画像（§6：单一事实源 = coverage_detail.filled + profile） ----------------
 
-def _exp_types_for(slot_id, tpl_slot):
-    if slot_id == "internships":
+def _exp_types_for(slot):
+    if slot.id == "internships":
         return {"internship"}
-    if slot_id == "projects":
-        return {"project"} | set(tpl_slot.equivalents or [])
+    if slot.id == "projects":
+        return {"project"} | set(slot.equivalents or [])
     return set()
 
 
@@ -84,7 +84,7 @@ def _slot_filled(slot, profile, detail) -> bool:
     if slot.kind == "entry_group":
         if slot.id == "skills":
             return bool(profile.get("skills"))
-        types = _exp_types_for(slot.id, slot)
+        types = _exp_types_for(slot)
         exps = [e for e in profile.get("experiences", []) if e.get("type") in types]
         need = slot.min_entries or 1
         if slot.id == "projects":
@@ -109,11 +109,23 @@ def _best_star(profile) -> float:
     return max((_star_score(e) for e in profile.get("experiences", [])), default=0)
 
 
+def _no_exp_possible(profile, detail) -> bool:
+    """经历类必填槽位全部"已确认无"或不适用 → star 深挖无从谈起，豁免 star 门槛。"""
+    tpl = _load_tpl()
+    filled = (detail or {}).get("filled") or {}
+    for s in required_slots(tpl, profile):
+        if s.id not in ("internships", "projects"):
+            continue
+        if not (filled.get(s.id) or {}).get("denied"):
+            return False
+    return any(s.id in ("internships", "projects") for s in tpl.interview_slots)
+
+
 def should_wrap(profile, detail, turn_no: int) -> bool:
+    """§6：coverage≥0.8 且（star≥0.6 或经历槽位全否认豁免），或 12 轮上限。"""
     cov, gaps, _, _ = coverage_of(profile, detail)
-    if cov >= 1.0:
-        return True                      # 必填全部确认（含"没有"），无需等经历深挖
-    if cov >= WRAP_COVERAGE and _best_star(profile) >= WRAP_STAR:
+    if cov >= WRAP_COVERAGE and (_best_star(profile) >= WRAP_STAR
+                               or _no_exp_possible(profile, detail)):
         return True
     return turn_no >= MAX_TURNS
 
@@ -276,8 +288,11 @@ def _merge_experience(exps, item):
                 if item.get(k):
                     e[k] = e.get(k) or item[k]
             for k in ("actions", "results", "metrics"):
-                if item.get(k):
-                    e[k] = list(dict.fromkeys((e.get(k) or []) + list(item[k])))
+                v = item.get(k)
+                if isinstance(v, list):
+                    e[k] = list(dict.fromkeys((e.get(k) or []) + [str(x) for x in v]))
+                elif isinstance(v, str) and v.strip():
+                    e[k] = list(dict.fromkeys((e.get(k) or []) + [v]))
             e["star_score"] = _star_score(e)
             return exps, False
     exp = {k: item.get(k) for k in
@@ -299,10 +314,21 @@ def apply_extraction(profile, detail, data, messages, valid_slots):
         slot, value, quote = su.get("slot"), su.get("value"), su.get("quote", "")
         if slot not in valid_slots or value in (None, "") or not _user_quote_ok(quote, messages):
             continue
+        if slot in filled:
+            continue            # 已确认字段不被覆盖（§6）
         filled[slot] = {"value": value, "quote": quote}
         if slot in SCALAR_SLOT_PATH:
             _path_set(profile, SCALAR_SLOT_PATH[slot], value)
         updates.append({"slot": slot, "value": value})
+
+    for d_ in data.get("denials") or []:
+        # denials 也要 quote 证据（用户明确说过"没有"），防模型虚构缺口抬覆盖率
+        if not isinstance(d_, dict):
+            continue
+        slot, quote = d_.get("slot"), d_.get("quote", "")
+        if slot in valid_slots and slot not in filled and _user_quote_ok(quote, messages):
+            filled[slot] = {"value": "无", "denied": True, "quote": quote}
+            updates.append({"slot": slot, "value": "（已确认无）"})
 
     for item in data.get("experiences") or []:
         if not isinstance(item, dict) or not _user_quote_ok(item.get("quote", ""), messages):
@@ -312,6 +338,18 @@ def apply_extraction(profile, detail, data, messages, valid_slots):
         profile["experiences"] = exps
         updates.append({"slot": "experiences",
                         "value": ("新增" if is_new else "补充") + f"经历:{item.get('title', '')[:20]}"})
+    # 经历可推翻"已确认无"：按当前经历内容重算经历类槽位 filled（用户原话写的值不覆盖）
+    tpl = _load_tpl()
+    for s in tpl.interview_slots:
+        if s.id not in ("internships", "projects"):
+            continue
+        types = _exp_types_for(s)
+        n = sum(1 for e in profile.get("experiences", []) if e.get("type") in types)
+        ent = filled.get(s.id) or {}
+        stale_counter = "quote" not in ent and ent.get("value") != f"{n}段经历"
+        if n and (ent.get("denied") or stale_counter):
+            filled[s.id] = {"value": f"{n}段经历", "derived": True}
+            updates.append({"slot": s.id, "value": f"{n}段经历"})
 
     for g in data.get("skills") or []:
         if not isinstance(g, dict) or not g.get("items"):
@@ -340,11 +378,6 @@ def apply_extraction(profile, detail, data, messages, valid_slots):
                 awards.append({"text": str(a["text"]), "period": str(a.get("period", ""))})
                 filled["awards"] = {"value": str(a["text"])}
                 updates.append({"slot": "awards", "value": str(a["text"])[:20]})
-
-    for slot in data.get("denials") or []:
-        if slot in valid_slots and slot not in filled:
-            filled[slot] = {"value": "无", "denied": True}
-            updates.append({"slot": slot, "value": "（已确认无）"})
 
     if profile.get("summary_material"):
         filled.setdefault("summary", {"value": profile["summary_material"][:20]})
@@ -403,8 +436,8 @@ def _sys_for(plan, profile, detail, kb_ctx, tpl):
     slot = next((s for s in tpl.interview_slots if s.id == focus), None)
     focus_txt = f"\n本轮重点：围绕「{slot.label}」追问（参考问法：{slot.ask}）。一次只问一个点。" if slot else ""
     kb_txt = f"\n可用知识钩子（自然带出，不要硬背）：\n{kb_ctx}" if kb_ctx else ""
-    gaps = [s.label for s in tpl.interview_slots
-            if s.required and not _slot_filled(s, profile, detail)]
+    gaps = [s.label for s in required_slots(tpl, profile)
+            if not _slot_filled(s, profile, detail)]
     return (_prompt("coach_system.md") +
             f"\n\n当前用户画像：{json.dumps(profile, ensure_ascii=False)[:1200]}"
             f"\n还缺的信息：{'、'.join(gaps) or '基本齐了'}"
@@ -499,9 +532,10 @@ def turn_events(session, profile_row, messages, user_text):
     elif plan["act"] == "ack":
         yield ("token", "在呢。想继续聊经历，还是问点什么？")
     else:
-        for tok in llm.chat_stream(llm_msgs, model=QWEN_CHAT,
-                                   max_tokens=MAX_OUTPUT_TOKENS,
-                                   enable_thinking=bool(plan.get("deep"))):
+        # thinking 实测首 token +9s（spike-编排.md）——默认关，COACH_THINKING=1 才在深轮开
+        for tok in llm.chat_stream(
+                llm_msgs, model=QWEN_CHAT, max_tokens=MAX_OUTPUT_TOKENS,
+                enable_thinking=THINKING_ENABLED and bool(plan.get("deep"))):
             yield ("token", tok)
 
     # 抽取与画像合并（流后跑；ack 轮跳过省 token）
@@ -540,6 +574,8 @@ def turn_events(session, profile_row, messages, user_text):
             yield ("step_start", {"id": "s6", "seq": seq, "kind": "guide", "title": "收尾引导"})
             yield ("step_end", {"id": "s6", "seq": seq, "status": "done",
                                 "detail": f"coverage={cov} · turn={turn_no}"})
+            yield ("stage", "wrapping")
+            yield ("token", "\n\n")
             for tok in llm.chat_stream(
                     [{"role": "system", "content": _sys_for(plan, profile, detail, "", tpl)},
                      {"role": "user", "content": "访谈到这里，帮我做个收尾总结。"}],
@@ -547,6 +583,7 @@ def turn_events(session, profile_row, messages, user_text):
                 yield ("token", tok)
 
     if plan["act"] == "wrap_up":
+        yield ("stage", "wrapping")
         yield ("card", {"type": "goto_resume",
                         "payload": {"label": "去一键填写简历", "session_id": session["id"]}})
         yield ("stage", "done")

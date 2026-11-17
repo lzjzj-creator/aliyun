@@ -7,14 +7,11 @@ const props = defineProps({
   gaps: { type: Array, default: () => [] },    // 缺口 slot_id
   updates: { type: Array, default: () => [] }, // 累计 {slot, value}
   collapsed: { type: Boolean, default: false },
+  labels: { type: Object, default: () => ({}) }, // slot→label，契约唯一来源（resume_template）
 });
 
-const SLOT_CN = {
-  "identity.grade": "年级", "identity.school": "学校", "identity.major": "专业",
-  "basics.target_role": "目标岗位", internships: "实习经历", projects: "项目/等价经历",
-  skills: "技能盘点", awards: "奖项荣誉", summary: "个人总结", experiences: "经历",
-};
-const slotCn = (id) => SLOT_CN[id] || id;
+const EXTRA_CN = { experiences: "经历" };   // experiences 是事件名非模板槽位
+const slotCn = (id) => props.labels[id] || EXTRA_CN[id] || id;
 
 const pct = computed(() =>
   props.coverage == null ? null : Math.round(props.coverage * 100));

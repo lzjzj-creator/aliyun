@@ -8,11 +8,9 @@
 
 运行：python tests/coach_sim.py   → 控制台摘要 + 重写 docs/评测报告-v2.md
 """
-import json
 import os
 import re
 import sys
-import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -114,7 +112,7 @@ def _build_extractor(user_text, spec):
             for s, v in spec["slots"].items() if v
         ]
     if spec.get("deny"):
-        data["denials"] = list(spec["deny"])
+        data["denials"] = [{"slot": s, "quote": user_text} for s in spec["deny"]]
     if spec.get("exp"):
         data["experiences"] = [{**e, "quote": user_text} for e in spec["exp"]]
     if spec.get("skills"):
@@ -202,8 +200,8 @@ def run_persona(name, turns):
         client2.close()
     filled = (final_row.get("coverage_detail") or {}).get("filled") or {}
     for slot, entry in filled.items():
-        if isinstance(entry, dict) and entry.get("denied"):
-            continue
+        if isinstance(entry, dict) and (entry.get("denied") or entry.get("derived")):
+            continue    # denied=用户否认；derived=系统按经历数推导，均非声明值
         raw = str(entry.get("value", "") if isinstance(entry, dict) else entry)
         parts = [coach._norm(p) for p in re.split(r"[、，,/\s]+", raw) if p.strip()]
         for v in parts:

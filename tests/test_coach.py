@@ -106,19 +106,28 @@ class ExtractionTest(unittest.TestCase):
         self.assertEqual(len(u), 1)
 
     def test_denials_and_experience_merge(self):
-        data = {"denials": ["projects"],
-                "experiences": [{"type": "project", "title": "二手书小程序",
-                                 "actions": ["写后端"], "metrics": ["30%"],
-                                 "quote": "二手书小程序"}]}
-        p, d, u = coach.apply_extraction({}, {}, data, self.MSGS, self.SLOTS)
+        msgs = [{"role": "user", "content": "我没做过任何项目，只做过二手书小程序"}]
+        # 无 quote 的否认被丢弃（防虚构缺口抬覆盖率）
+        d0 = coach.apply_extraction({}, {}, {"denials": ["projects"]},
+                                  msgs, self.SLOTS)[1]
+        self.assertNotIn("projects", d0["filled"])
+        p, d, _ = coach.apply_extraction({}, {}, {
+            "denials": [{"slot": "projects", "quote": "没做过任何项目"}]},
+            msgs, self.SLOTS)
         self.assertTrue(d["filled"]["projects"]["denied"])
-        self.assertEqual(p["experiences"][0]["star_score"], 0.5)
+        # 后来补真实经历 → 推翻旧的"已确认无"
+        p2, d2, _ = coach.apply_extraction(p, d, {
+            "experiences": [{"type": "project", "title": "二手书小程序",
+                             "actions": ["写后端"], "metrics": ["30%"],
+                             "quote": "二手书小程序"}]}, msgs, self.SLOTS)
+        self.assertFalse(d2["filled"]["projects"].get("denied"))
+        self.assertEqual(p2["experiences"][0]["star_score"], 0.5)
         # 同题二次合并补字段，不重复追加
-        p2, _, _ = coach.apply_extraction(p, d, {
+        p3, _, _ = coach.apply_extraction(p2, d2, {
             "experiences": [{"title": "二手书小程序", "results": ["用户翻倍"],
-                             "quote": "二手书小程序"}]}, self.MSGS, self.SLOTS)
-        self.assertEqual(len(p2["experiences"]), 1)
-        self.assertEqual(p2["experiences"][0]["star_score"], 0.75)
+                             "quote": "二手书小程序"}]}, msgs, self.SLOTS)
+        self.assertEqual(len(p3["experiences"]), 1)
+        self.assertEqual(p3["experiences"][0]["star_score"], 0.75)
 
 
 class CoverageTest(unittest.TestCase):
@@ -298,6 +307,15 @@ class CoachRouteTest(unittest.TestCase):
         self.assertIn("error", [e for e, _ in evs])
         users = [m for m in self.store.messages if m["role"] == "user"]
         self.assertEqual(len(users), 1)
+
+    def test_concurrent_stream_lease_returns_429(self):
+        # 租约在响应前获取：竞争 → 标准 429（而非断头 SSE 流）
+        first = _parse_sse(self._post({"message": ""}).text)
+        sess = dict(first)["session"]
+        with security.limiter.stream(sess["session_id"]):
+            res = self._post({"session_id": sess["session_id"], "client_msg_id": "c2",
+                              "message": "hi"}, {"X-Session-Token": sess["session_token"]})
+        self.assertEqual(res.status_code, 429)
 
     def test_auth_failures_are_uniform_404(self):
         for headers in [{}, {"X-Anon-Id": ANON},

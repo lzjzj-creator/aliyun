@@ -4,6 +4,7 @@ import { ref, reactive, nextTick, onMounted, onUnmounted } from "vue";
 import MarkdownIt from "markdown-it";
 import { chatStreamV2 } from "../api/chat";
 import { getSession } from "../api/sessions";
+import { getTemplate } from "../api/resume";
 import { replayEvents } from "../api/core";
 import ThinkingSteps from "../components/ThinkingSteps.vue";
 import ProfilePanel from "../components/ProfilePanel.vue";
@@ -21,6 +22,7 @@ const sourceHref = (url) => toMirrorHref(url, KB_BASE);
 
 const items = ref([]);        // {role, text, steps?, reasoning?, sources?, cards?, error?, pending?}
 const profile = reactive({ coverage: null, gaps: [], updates: [] });
+const slotLabels = reactive({});   // 模板契约 slot→label（ProfilePanel 展示用）
 const stage = ref("greeting");
 const input = ref("");
 const busy = ref(false);
@@ -56,7 +58,7 @@ function restoreMessages(bundle) {
         role: "assistant", text: m.content || "",
         steps: m.steps || [], sources: m.sources || [],
         cards: (m.meta && m.meta.cards) || [],
-        reasoning: "",
+        reasoning: (m.meta && m.meta.reasoning) || "",
         failed: m.status === "error",
       });
     }
@@ -117,8 +119,9 @@ function wireTurn(turn, lastUserText, demo = false) {
       error(d) {
         finished = true;
         turn.done = true;
+        turn.dupError = d.code === "DUPLICATE";   // 服务端已完成本轮 → 对账恢复
         turn.error = d.message || "出错了";
-        turn.retryable = d.retryable !== false;
+        turn.retryable = d.retryable !== false && !turn.dupError;
         turn.retryText = lastUserText;
         scroll();
       },
@@ -138,6 +141,7 @@ async function stream({ sessionId: sid, message, clientMsgId, userText }) {
   const turn = reactive({
     role: "assistant", text: "", steps: [], reasoning: "",
     sources: [], cards: [], done: false, error: "", retryable: false, retryText: "",
+    clientMsgId,    // 重试沿用同一幂等键，服务端可识别已完成的轮次
   });
   items.value.push(turn);
   busy.value = true;
@@ -157,6 +161,10 @@ async function stream({ sessionId: sid, message, clientMsgId, userText }) {
     turn.done = true;
   } finally {
     wired.finish();
+    if (turn.dupError && sessionId.value) {
+      // 原请求其实已完成 → 拉取服务端权威状态替换本地视图
+      try { restoreMessages(await getSession(sessionId.value)); } catch { /* 保持现状 */ }
+    }
     stopSlow();
     busy.value = false;
     scroll();
@@ -178,7 +186,7 @@ function retry(turn) {
   const idx = items.value.indexOf(turn);
   if (idx >= 0) items.value.splice(idx, 1);
   stream({ sessionId: sessionId.value || null, message: turn.retryText,
-           clientMsgId: newClientMsgId(), userText: turn.retryText });
+           clientMsgId: turn.clientMsgId || newClientMsgId(), userText: turn.retryText });
 }
 
 function onCard(card) {
@@ -224,6 +232,10 @@ async function loadDemo() {
 }
 
 async function boot() {
+  // 模板契约拉取：slot→label 展示映射，失败不阻塞（面板退化为原始 id）
+  getTemplate().then((t) => {
+    for (const s of t.interview_slots || []) slotLabels[s.id] = s.label;
+  }).catch(() => {});
   const sid = sessionId.value;
   if (!sid) {
     // 新会话：打招呼流建会话，session 事件带回 token
@@ -264,7 +276,7 @@ onMounted(boot);
 <template>
   <section class="chat interview">
     <ProfilePanel :coverage="profile.coverage" :gaps="profile.gaps"
-                  :updates="profile.updates" />
+                  :updates="profile.updates" :labels="slotLabels" />
 
     <div v-if="dead" class="dead-banner">
       {{ dead }}

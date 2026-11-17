@@ -12,6 +12,7 @@ import { setCurrentSessionId } from "./storage";
 // hash 路由：#chat | #chat/:id | #chat-v1 | #resume | #resume-v1 | #demo | #admin（不引 vue-router）
 const view = ref("chat");
 const sidebar = ref(false);
+const chatSid = ref("");   // 作为 InterviewView 的 key：切会话即重挂载走 boot()
 
 function syncRoute() {
   const h = location.hash || "#/chat";
@@ -22,7 +23,8 @@ function syncRoute() {
   if (/^#\/?chat-v1/.test(h)) { view.value = "chatV1"; return; }
   const m = h.match(/^#\/?chat\/?([0-9a-zA-Z-]+)?/);
   view.value = "chat";
-  setCurrentSessionId(m?.[1] || "");
+  chatSid.value = m?.[1] || "";
+  setCurrentSessionId(chatSid.value);
 }
 
 function nav(target) {
@@ -82,7 +84,7 @@ onUnmounted(() => window.removeEventListener("hashchange", syncRoute));
     <SessionList v-if="sidebar" @close="sidebar = false" @select="onSelectSession" @new="onNewSession" />
 
     <main>
-      <InterviewView v-if="view === 'chat'" @goto-resume="nav('#/resume')" />
+      <InterviewView v-if="view === 'chat'" :key="chatSid" @goto-resume="nav('#/resume')" />
       <ChatView v-else-if="view === 'chatV1'" @goto-resume="nav('#/resume')" />
       <ContractDemoView v-else-if="view === 'contractDemo'" />
       <ResumeWizardView v-else-if="view === 'resume'" />
