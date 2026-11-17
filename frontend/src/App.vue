@@ -8,13 +8,14 @@ import ResumeWizardView from "./views/ResumeWizardView.vue";
 import SessionList from "./components/SessionList.vue";
 import { setCurrentSessionId } from "./storage";
 
-// hash 路由：#chat | #chat/:id | #resume | #resume-v1 | #admin（不引 vue-router）
+// hash 路由：#chat | #chat/:id | #resume | #resume-v1 | #demo | #admin（不引 vue-router）
 const view = ref("chat");
 const sidebar = ref(false);
 
 function syncRoute() {
   const h = location.hash || "#/chat";
   if (/^#\/?admin\/?$/.test(h)) { view.value = "admin"; return; }
+  if (/^#\/?demo/.test(h)) { view.value = "contractDemo"; return; }
   if (/^#\/?resume-v1/.test(h)) { view.value = "resumeV1"; return; }
   if (/^#\/?resume/.test(h)) { view.value = "resume"; return; }
   const m = h.match(/^#\/?chat\/?([0-9a-zA-Z-]+)?/);

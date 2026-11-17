@@ -44,7 +44,6 @@ const pendingQuestions = computed(() =>
   Object.values(results.value).flatMap((r) => r.pending_questions || []));
 
 const STEP_CN = { 1: "① 一键填写", 2: "② 修改预览", 3: "③ 一键优化" };
-const isDev = import.meta.env.DEV;
 
 onMounted(() => { loadTemplate(); loadSessions(); });
 
@@ -231,7 +230,7 @@ function exportPrint() {
           </select>
         </label>
         <button class="ghost" :disabled="busy || !pickedSession" @click="readConvo">读取会话</button>
-        <button v-if="isDev" class="ghost" @click="useDemoConvo">演示素材</button>
+        <button class="ghost" @click="useDemoConvo">演示素材</button>
         <button :disabled="busy || (!convo.length && !pickedSession)" @click="doAutofill">
           {{ busy ? "填写中…" : "✨ 一键填写" }}
         </button>
@@ -239,7 +238,7 @@ function exportPrint() {
       <p v-if="convo.length" class="wiz-hint">已载入 {{ convo.length }} 条对话素材</p>
       <p v-if="tpl" class="wiz-hint">模板：{{ tpl.name }} · v{{ tpl.template_version }} · {{ tpl.page_rule }}</p>
 
-      <ResumeFieldsForm v-if="filled" v-model="fields" :template="tpl" :gaps="gaps" />
+      <ResumeFieldsForm v-if="filled && tpl" v-model="fields" :template="tpl" :gaps="gaps" />
       <div v-if="filled" class="row">
         <span />
         <button @click="step = 2">下一步：预览导出 →</button>
