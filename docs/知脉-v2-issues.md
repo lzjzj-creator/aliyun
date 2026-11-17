@@ -114,7 +114,7 @@ Labels: `p0` `backend` `frontend` `shared` ｜ Blocked by: #3, #5 ｜ 估 1 人�
 
 **背景**：平滑过渡——v1 问答链路不动，但消息先落新库，P1 切换无缝。
 
-**任务**：旧 ChatView 每轮流结束后调 `POST /api/v2/messages` 回写 `{session_id, client_msg_id, user, assistant}`；首次自动先建会话。历史可回看、可删除。
+**任务**：旧 ChatView 每轮流结束后调 `POST /api/v2/messages` 回写 `{session_id, client_msg_id, user, assistant, meta?}`；`session_id` 为空时由服务端建会话并一次性返回 `session_token`（响应 `{session_id, message_ids[, session_token]}`，见 `demo/v2/messages.json`），此后客户端须复用 `session_id`+`X-Session-Token`。历史可回看、可删除。
 
 **验收（Gate P0）**：旧问答在新存储下可用；刷新可回看；删除生效；伪造 token/越权 404；90 天清理 dry-run 命中；隐私文案与删除入口在线；`npm run build` 通过。
 
