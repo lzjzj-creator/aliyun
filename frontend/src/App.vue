@@ -3,23 +3,48 @@ import { onMounted, onUnmounted, ref } from "vue";
 import AdminView from "./views/AdminView.vue";
 import ChatView from "./views/ChatView.vue";
 import ResumeView from "./views/ResumeView.vue";
+import SessionList from "./components/SessionList.vue";
+import { setCurrentSessionId } from "./storage";
 
-const tab = ref("chat");
-const admin = ref(false);
+// hash 路由：#chat | #chat/:id | #resume | #resume-v1 | #admin（不引 vue-router）
+const view = ref("chat");
+const sidebar = ref(false);
 
-function syncAdminRoute() {
-  admin.value = /^#\/?admin\/?$/.test(location.hash);
+function syncRoute() {
+  const h = location.hash || "#/chat";
+  if (/^#\/?admin\/?$/.test(h)) { view.value = "admin"; return; }
+  if (/^#\/?resume-v1/.test(h)) { view.value = "resumeV1"; return; }
+  if (/^#\/?resume/.test(h)) { view.value = "resume"; return; }
+  const m = h.match(/^#\/?chat\/?([0-9a-zA-Z-]+)?/);
+  view.value = "chat";
+  setCurrentSessionId(m?.[1] || "");
+}
+
+function nav(target) {
+  location.hash = target;
+}
+
+function onSelectSession(id) {
+  sidebar.value = false;
+  nav(id ? `#/chat/${id}` : "#/chat");
+}
+
+function onNewSession() {
+  sidebar.value = false;
+  setCurrentSessionId("");
+  nav("#/chat");
 }
 
 onMounted(() => {
-  syncAdminRoute();
-  window.addEventListener("hashchange", syncAdminRoute);
+  if (!location.hash) location.hash = "#/chat";
+  syncRoute();
+  window.addEventListener("hashchange", syncRoute);
 });
-onUnmounted(() => window.removeEventListener("hashchange", syncAdminRoute));
+onUnmounted(() => window.removeEventListener("hashchange", syncRoute));
 </script>
 
 <template>
-  <div v-if="admin" class="shell admin-shell">
+  <div v-if="view === 'admin'" class="shell admin-shell">
     <AdminView />
   </div>
 
@@ -27,30 +52,33 @@ onUnmounted(() => window.removeEventListener("hashchange", syncAdminRoute));
     <header class="top">
       <div class="brand">
         <h1>知脉 · 简历成长助手</h1>
-        <p class="tagline">先查资料，再改简历——所有建议都要有出处。</p>
+        <p class="tagline">先聊出你的经历，再长出一份简历——所有内容都要有出处。</p>
       </div>
       <nav class="tabs">
-        <button :class="{ on: tab === 'chat' }" @click="tab = 'chat'">知识问答</button>
-        <button :class="{ on: tab === 'resume' }" @click="tab = 'resume'">简历助手</button>
+        <button class="hamburger" title="会话" @click="sidebar = true">☰</button>
+        <button :class="{ on: view === 'chat' }" @click="nav('#/chat')">访谈</button>
+        <button :class="{ on: view === 'resume' }" @click="nav('#/resume')">建简历</button>
       </nav>
     </header>
 
     <section class="intro">
       <p class="slogan">证据优先的大学规划与简历助手</p>
       <div class="intro-entries">
-        <span><b>知识问答</b>：检索知脉知识库 2790 篇规划/求职笔记，回答附真实来源，没有依据就明说不知道。</span>
-        <span><b>简历助手</b>：证据诊断 → 不虚构事实的安全改写，粘贴 JD 可看岗位匹配与缺失关键词。</span>
+        <span><b>访谈</b>：AI 主动追问你的经历与目标，顺带可问知识库里的规划/求职问题，全程可见思考过程。</span>
+        <span><b>建简历</b>：一键把访谈素材填进优秀模板，人工修改后可预览导出，还能逐段安全优化。</span>
       </div>
     </section>
 
     <p class="privacy">
-      简历只在浏览器内存读取、提交分析才出网；不存储简历内容，不同会话互相隔离。
-      建议先删除姓名、电话等敏感信息。
+      对话将保存用于历史记录，可随时在会话列表删除；简历成稿只存本机浏览器，不上传服务器。
+      建议不要在对话中发送姓名、电话等敏感信息。
     </p>
 
+    <SessionList v-if="sidebar" @close="sidebar = false" @select="onSelectSession" @new="onNewSession" />
+
     <main>
-      <ChatView v-if="tab === 'chat'" @goto-resume="tab = 'resume'" />
-      <ResumeView v-else />
+      <ChatView v-if="view === 'chat'" @goto-resume="nav('#/resume')" />
+      <ResumeView v-else-if="view === 'resume' || view === 'resumeV1'" />
     </main>
   </div>
 </template>
