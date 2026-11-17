@@ -97,6 +97,26 @@ class GuardTest(unittest.TestCase):
             [self.ORIG], "")
         self.assertTrue(d["rewritten"][0]["needs_user_data"])
 
+    def test_claim_guard_blocks_novel_cjk_enum(self):
+        """顿号列举扩写（购物车/商品详情类）是纯中文编造，token 正则拦不住。"""
+        orig = "用 Spring Boot 写了 12 个接口，主要是商品搜索和下单"
+        d = guard_new_claims(
+            {"rewritten": [{"original": orig,
+                            "suggested": "实现商品搜索与下单全流程，覆盖用户端查询、商品详情、"
+                                         "购物车、订单创建等关键链路"}]},
+            [orig], "校园二手交易小程序 Spring Boot")
+        self.assertTrue(d["rewritten"][0]["needs_user_data"])
+        self.assertTrue(d["questions"])
+
+    def test_claim_guard_allows_enum_in_corpus(self):
+        """并列项都在语料里时不误报。"""
+        orig = "用 Spring Boot 写了商品搜索和下单接口"
+        d = guard_new_claims(
+            {"rewritten": [{"original": orig,
+                            "suggested": "支撑商品搜索、下单等核心链路"}]},
+            [orig], "商品搜索 下单")
+        self.assertFalse(d["rewritten"][0].get("needs_user_data"))
+
     def test_placeholder_extract(self):
         self.assertEqual(extract_placeholder("做了很多事【待补充：量化结果】"),
                          "【待补充：量化结果】")

@@ -25,6 +25,27 @@ _NUM_RE = re.compile(r"\d+(?:\.\d+)?")
 # 英文技术/公司类 token：REST、Spring Boot、K8s、C++、v2 等
 _CLAIM_RE = re.compile(r"[A-Za-z][A-Za-z0-9+#.\-]{1,19}")
 _PLACEHOLDER_RE = re.compile(r"【待补充：[^】]+】")
+# 并列列举项：「覆盖/支撑 A、B、C 等」式扩写是编造职责范围的高发区
+_ENUM_RE = re.compile(r"([^、，。；\s【】]{2,12})(?=、)|(?<=、)([^、，。；\s【】]{2,12})")
+_ENUM_TAIL_RE = re.compile(r"(?:等|以及|与|和).*")
+
+
+def _enum_items(text: str) -> list[str]:
+    """提取顿号并列项的核心词（剥掉「等…」尾巴），用于语料外新表述检查。"""
+    items = []
+    for m in _ENUM_RE.finditer(text):
+        it = _ENUM_TAIL_RE.sub("", m.group(1) or m.group(2) or "")
+        if len(it) >= 2:
+            items.append(it)
+    return items
+
+
+def _enum_novel(item: str, corpus: str) -> bool:
+    """并列项是否与语料脱节：≥4 字时要求至少一个 4-gram 命中语料
+    （容忍「覆盖商品搜索」里的动词前缀），<4 字直接做包含判断。"""
+    if len(item) < 4:
+        return item not in corpus
+    return all(item[i:i + 4] not in corpus for i in range(len(item) - 3))
 
 
 def guard_fabricated_numbers(data: dict, originals: list[str], facts: str) -> dict:
@@ -48,14 +69,19 @@ def guard_fabricated_numbers(data: dict, originals: list[str], facts: str) -> di
 
 def guard_new_claims(data: dict, originals: list[str], facts: str) -> dict:
     """claim-evidence 校验：改写新增的技术/公司类 token 必须有原文依据（§9）。
-    覆盖数字守卫拦不住的"用了 K8s""为美团做了 X"型事实性新增。"""
-    corpus_set = set(_CLAIM_RE.findall(" ".join(originals) + " " + facts))
+    覆盖数字守卫拦不住的"用了 K8s""为美团做了 X"型事实性新增；
+    另查顿号列举项（如把"搜索和下单"扩写成"搜索、详情、购物车、订单创建"），
+    纯中文编造不含英文字母，token 正则拦不住，靠语料包含性判断。"""
+    corpus = " ".join(originals) + " " + facts
+    corpus_set = set(_CLAIM_RE.findall(corpus))
     questions = list(data.get("questions") or [])
     for item in data.get("rewritten") or []:
         # 占位符内部说明文字不校验
         sug = _PLACEHOLDER_RE.sub(" ", item.get("suggested", ""))
         novel = [t for t in dict.fromkeys(_CLAIM_RE.findall(sug))
                  if t not in corpus_set and len(t) >= 2]
+        novel += [t for t in dict.fromkeys(_enum_items(sug))
+                  if _enum_novel(t, corpus) and t not in novel]
         if novel:
             item["needs_user_data"] = True
             questions.append(

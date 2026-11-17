@@ -1,11 +1,76 @@
 {
   "template_version": "1.0.0",
   "sections": [
-    {"key": "internships", "title": "实习经历", "priority": 1, "optimizable": true, "status": "skipped", "reason": "本节为空，跳过"},
-    {"key": "projects", "title": "项目经历", "priority": 2, "optimizable": true, "status": "pending", "entry_count": 2, "bullet_count": 4},
-    {"key": "education", "title": "教育背景", "priority": 3, "optimizable": false, "status": "ok", "reason": "静态字段，无需改写"},
-    {"key": "skills", "title": "专业技能", "priority": 4, "optimizable": false, "status": "check", "reason": "与目标岗位相关性人工确认即可"},
-    {"key": "awards", "title": "荣誉奖项", "priority": 5, "optimizable": false, "status": "ok"},
-    {"key": "summary", "title": "自我评价", "priority": 6, "optimizable": true, "status": "skipped", "reason": "本节为空，跳过"}
-  ]
+    {
+      "key": "internships",
+      "title": "实习经历",
+      "priority": 1,
+      "optimizable": true,
+      "status": "skipped",
+      "reason": "本节为空，跳过",
+      "entry_count": 0,
+      "bullet_count": 0
+    },
+    {
+      "key": "projects",
+      "title": "项目经历",
+      "priority": 2,
+      "optimizable": true,
+      "status": "pending",
+      "reason": "",
+      "entry_count": 2,
+      "bullet_count": 4
+    },
+    {
+      "key": "education",
+      "title": "教育背景",
+      "priority": 3,
+      "optimizable": false,
+      "status": "ok",
+      "reason": "静态字段，无需改写",
+      "entry_count": 1,
+      "bullet_count": 0
+    },
+    {
+      "key": "skills",
+      "title": "专业技能",
+      "priority": 4,
+      "optimizable": false,
+      "status": "check",
+      "reason": "与目标岗位相关性人工确认即可",
+      "entry_count": 0,
+      "bullet_count": 0
+    },
+    {
+      "key": "basics",
+      "title": "基本信息",
+      "priority": 99,
+      "optimizable": false,
+      "status": "ok",
+      "reason": "静态字段，无需改写",
+      "entry_count": 0,
+      "bullet_count": 0
+    },
+    {
+      "key": "awards",
+      "title": "荣誉奖项",
+      "priority": 99,
+      "optimizable": false,
+      "status": "ok",
+      "reason": "静态字段，无需改写",
+      "entry_count": 0,
+      "bullet_count": 0
+    },
+    {
+      "key": "summary",
+      "title": "自我评价",
+      "priority": 99,
+      "optimizable": true,
+      "status": "pending",
+      "reason": "",
+      "entry_count": 1,
+      "bullet_count": 1
+    }
+  ],
+  "_comment": "POST /api/v2/resume/optimize/plan 真实链路快照"
 }

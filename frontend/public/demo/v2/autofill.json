@@ -1,43 +1,310 @@
 {
+  "_comment": "POST /api/v2/resume/autofill 真实链路快照（input=demo session.json 的 messages+profile）",
   "template_version": "1.0.0",
   "fields": {
-    "basics": {"name": "", "phone": "", "email": "", "target_role": "后端开发实习生", "city": "杭州", "github": "", "blog": ""},
+    "basics": {
+      "name": "",
+      "phone": "",
+      "email": "",
+      "target_role": "后端开发实习",
+      "city": "杭州",
+      "github": "",
+      "blog": ""
+    },
     "education": [
-      {"school": "浙江大学", "major": "计算机科学与技术", "degree": "本科", "period": "2023.09–2027.06", "gpa_or_rank": "GPA 3.7/4.0", "courses": ["数据结构", "操作系统", "数据库系统"]}
+      {
+        "school": "浙江大学",
+        "major": "计算机专业",
+        "degree": "本科",
+        "period": "大二",
+        "gpa_or_rank": "",
+        "courses": []
+      }
     ],
     "internships": [],
     "projects": [
-      {"name": "校园二手交易小程序", "role": "后端负责人", "period": "2025.03–2025.06",
-       "tech": ["Java", "Spring Boot", "MySQL", "Redis"],
-       "bullets": ["设计并实现商品搜索接口，用 Redis 缓存热门查询，接口平均耗时从 800ms 降到 120ms", "独立完成后端 12 个 REST 接口开发与部署，支撑 3 人小组项目按期上线"]},
-      {"name": "课程推荐系统（课程设计）", "role": "算法与后端", "period": "2024.10–2024.12",
-       "tech": ["Python", "Flask", "MySQL"],
-       "bullets": ["基于协同过滤实现课程推荐，Top-5 推荐命中率在自测集上达 62%", "编写数据采集脚本，清洗 2000+ 条课程评价数据供训练使用"]}
+      {
+        "name": "校园二手交易小程序",
+        "role": "后端负责人",
+        "period": "",
+        "tech": [
+          "Spring Boot",
+          "Redis"
+        ],
+        "bullets": [
+          "用 Spring Boot 开发 12 个接口，聚焦商品搜索与下单功能。",
+          "优化搜索接口：通过 Redis 缓存热门查询，平均耗时从 800ms 降至 120ms。"
+        ]
+      },
+      {
+        "name": "课程推荐系统",
+        "role": "算法和后端负责人",
+        "period": "",
+        "tech": [
+          "协同过滤",
+          "Python",
+          "SQL"
+        ],
+        "bullets": [
+          "清洗 2000 多条课程评价数据，实现协同过滤推荐算法。",
+          "达成 Top-5 推荐命中率 62%。"
+        ]
+      }
     ],
-    "skills": {"groups": [
-      {"name": "语言", "items": ["Java", "Python", "SQL"]},
-      {"name": "框架/工具", "items": ["Spring Boot", "Flask", "Redis", "Git"]}
-    ]},
-    "awards": {"items": [{"text": "校级优秀学生奖学金二等奖", "period": "2025"}]},
-    "summary": {"text": ""}
+    "skills": {
+      "groups": [
+        {
+          "name": "编程语言",
+          "items": [
+            "Java",
+            "Python",
+            "SQL"
+          ]
+        },
+        {
+          "name": "框架与工具",
+          "items": [
+            "Spring Boot",
+            "Redis",
+            "Git"
+          ]
+        }
+      ]
+    },
+    "awards": {
+      "items": [
+        {
+          "text": "校级二等奖学金",
+          "period": ""
+        },
+        {
+          "text": "蓝桥杯省赛三等奖",
+          "period": ""
+        }
+      ]
+    },
+    "summary": {
+      "text": "动手快、肯钻研，能把学到的东西很快落地成能跑的东西。"
+    }
   },
   "evidence_map": {
-    "basics.target_role": [{"msg_id": 42, "quote": "想找后端开发实习"}],
-    "basics.city": [{"msg_id": 75, "quote": "最好是杭州"}],
-    "education.0.school": [{"msg_id": 44, "quote": "我在浙大读书"}],
-    "education.0.major": [{"msg_id": 42, "quote": "计算机专业"}],
-    "education.0.gpa_or_rank": [{"msg_id": 57, "quote": "我 GPA 3.7"}],
-    "projects.0.name": [{"msg_id": 61, "quote": "校园二手交易小程序"}],
-    "projects.0.bullets.0": [{"msg_id": 63, "quote": "用 Redis 缓存热门查询，接口耗时从 800ms 降到 120ms"}],
-    "projects.1.bullets.0": [{"msg_id": 66, "quote": "Top-5 命中率 62%"}],
-    "skills.groups.0.items.0": [{"msg_id": 70, "quote": "主要用 Java"}],
-    "awards.items.0.text": [{"msg_id": 79, "quote": "拿过校二等奖学金"}]
+    "basics.target_role": [
+      {
+        "msg_id": "m42",
+        "quote": "想找后端开发实习"
+      }
+    ],
+    "basics.city": [
+      {
+        "msg_id": "m48",
+        "quote": "想明年暑期在杭州找第一段"
+      }
+    ],
+    "education.0.school": [
+      {
+        "msg_id": "m42",
+        "quote": "我在浙大读大二"
+      }
+    ],
+    "education.0.major": [
+      {
+        "msg_id": "m42",
+        "quote": "计算机专业"
+      }
+    ],
+    "education.0.degree": [
+      {
+        "msg_id": "m42",
+        "quote": "我在浙大读大二"
+      }
+    ],
+    "education.0.period": [
+      {
+        "msg_id": "m42",
+        "quote": "大二"
+      }
+    ],
+    "projects.0.name": [
+      {
+        "msg_id": "m44",
+        "quote": "我做过一个校园二手交易小程序"
+      }
+    ],
+    "projects.0.role": [
+      {
+        "msg_id": "m44",
+        "quote": "是后端负责人"
+      }
+    ],
+    "projects.0.tech": [
+      {
+        "msg_id": "m44",
+        "quote": "用 Spring Boot 写了 12 个接口"
+      },
+      {
+        "msg_id": "m44",
+        "quote": "我用 Redis 缓存了热门查询"
+      }
+    ],
+    "projects.0.bullets.0": [
+      {
+        "msg_id": "m44",
+        "quote": "用 Spring Boot 写了 12 个接口，主要是商品搜索和下单。"
+      }
+    ],
+    "projects.0.bullets.1": [
+      {
+        "msg_id": "m44",
+        "quote": "上线前搜索接口平均耗时 800ms，我用 Redis 缓存了热门查询，压测下来降到 120ms。"
+      }
+    ],
+    "projects.1.name": [
+      {
+        "msg_id": "m46",
+        "quote": "课设做过课程推荐系统"
+      }
+    ],
+    "projects.1.role": [
+      {
+        "msg_id": "m46",
+        "quote": "我负责算法和后端"
+      }
+    ],
+    "projects.1.tech": [
+      {
+        "msg_id": "m46",
+        "quote": "用协同过滤做推荐"
+      },
+      {
+        "msg_id": "m46",
+        "quote": "清洗了 2000 多条课程评价数据"
+      },
+      {
+        "msg_id": "m48",
+        "quote": "技术栈主要是 Java、Python、SQL"
+      }
+    ],
+    "projects.1.bullets.0": [
+      {
+        "msg_id": "m46",
+        "quote": "用协同过滤做推荐，先清洗了 2000 多条课程评价数据"
+      }
+    ],
+    "projects.1.bullets.1": [
+      {
+        "msg_id": "m46",
+        "quote": "最后 Top-5 命中率做到 62%。"
+      }
+    ],
+    "skills.groups.0.name": [
+      {
+        "msg_id": "m48",
+        "quote": "技术栈主要是 Java、Python、SQL"
+      }
+    ],
+    "skills.groups.0.items": [
+      {
+        "msg_id": "m48",
+        "quote": "Java"
+      },
+      {
+        "msg_id": "m48",
+        "quote": "Python"
+      },
+      {
+        "msg_id": "m48",
+        "quote": "SQL"
+      }
+    ],
+    "skills.groups.1.name": [
+      {
+        "msg_id": "m48",
+        "quote": "Spring Boot 和 Redis 都实战用过，版本管理用 Git"
+      }
+    ],
+    "skills.groups.1.items": [
+      {
+        "msg_id": "m48",
+        "quote": "Spring Boot"
+      },
+      {
+        "msg_id": "m48",
+        "quote": "Redis"
+      },
+      {
+        "msg_id": "m48",
+        "quote": "Git"
+      }
+    ],
+    "awards.items.0": [
+      {
+        "msg_id": "m50",
+        "quote": "拿过校级二等奖学金"
+      }
+    ],
+    "awards.items.1": [
+      {
+        "msg_id": "m50",
+        "quote": "蓝桥杯省赛三等奖"
+      }
+    ],
+    "summary.text": [
+      {
+        "msg_id": "m52",
+        "quote": "我动手快、肯钻研，能把学到的东西很快落地成能跑的东西。"
+      }
+    ]
   },
   "gaps": [
-    {"field_path": "basics.name", "label": "姓名", "reason": "对话中未提及，请手动填写"},
-    {"field_path": "basics.phone", "label": "电话", "reason": "对话中未提及，请手动填写"},
-    {"field_path": "basics.email", "label": "邮箱", "reason": "对话中未提及，请手动填写"},
-    {"field_path": "internships", "label": "实习经历", "reason": "暂无实习经历素材；无实习不强制，可留空"},
-    {"field_path": "summary.text", "label": "自我评价", "reason": "素材不足，建议手动补充 30–60 字"}
+    {
+      "field_path": "basics.name",
+      "label": "姓名",
+      "reason": "用户未提供姓名"
+    },
+    {
+      "field_path": "basics.phone",
+      "label": "电话",
+      "reason": "用户未提供电话"
+    },
+    {
+      "field_path": "basics.email",
+      "label": "邮箱",
+      "reason": "用户未提供邮箱"
+    },
+    {
+      "field_path": "basics.github",
+      "label": "GitHub",
+      "reason": "用户未提供 GitHub"
+    },
+    {
+      "field_path": "basics.blog",
+      "label": "个人博客",
+      "reason": "用户未提供博客"
+    },
+    {
+      "field_path": "education.0.gpa_or_rank",
+      "label": "GPA 或排名",
+      "reason": "用户未提供 GPA 或排名信息"
+    },
+    {
+      "field_path": "education.0.courses",
+      "label": "相关课程",
+      "reason": "用户未列举具体课程"
+    },
+    {
+      "field_path": "internships",
+      "label": "实习经历",
+      "reason": "用户明确表示‘还没实习过’（m48）"
+    },
+    {
+      "field_path": "projects.0.period",
+      "label": "项目时间",
+      "reason": "用户未说明校园二手交易小程序的时间段"
+    },
+    {
+      "field_path": "projects.1.period",
+      "label": "项目时间",
+      "reason": "用户未说明课程推荐系统的时间段"
+    }
   ]
 }
