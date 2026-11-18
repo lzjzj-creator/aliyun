@@ -1,0 +1,135 @@
+{
+  "base": "https://zhimai-api-hiwijfvopw.cn-beijing.fcapp.run",
+  "ran_at": 1795023275,
+  "checks": [
+    {
+      "name": "GET /health",
+      "ok": true,
+      "detail": "200"
+    },
+    {
+      "name": "建会话",
+      "ok": true,
+      "detail": "200"
+    },
+    {
+      "name": "拿到会话令牌",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "访谈轮 我大二，在浙大读…",
+      "ok": true,
+      "detail": "12.56s"
+    },
+    {
+      "name": "访谈轮 想找后端开发实习…",
+      "ok": true,
+      "detail": "10.75s"
+    },
+    {
+      "name": "访谈轮 做过二手书小程序…",
+      "ok": true,
+      "detail": "17.44s"
+    },
+    {
+      "name": "读回会话包",
+      "ok": true,
+      "detail": "200"
+    },
+    {
+      "name": "会话含 3 轮用户消息",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "GET template",
+      "ok": true,
+      "detail": "200"
+    },
+    {
+      "name": "模板版本非空",
+      "ok": true,
+      "detail": "1.0.0"
+    },
+    {
+      "name": "POST autofill",
+      "ok": true,
+      "detail": "HTTP 200 / 28.9s"
+    },
+    {
+      "name": "autofill 产出非空",
+      "ok": true,
+      "detail": "8"
+    },
+    {
+      "name": "非证据字段已清空（0 无据填写）",
+      "ok": true,
+      "detail": "[]"
+    },
+    {
+      "name": "evidence quote 逐字可溯源",
+      "ok": true,
+      "detail": "[]"
+    },
+    {
+      "name": "gaps 有输出",
+      "ok": true,
+      "detail": "18"
+    },
+    {
+      "name": "POST optimize/plan",
+      "ok": true,
+      "detail": "200"
+    },
+    {
+      "name": "plan 含可优化区块",
+      "ok": true,
+      "detail": "7"
+    },
+    {
+      "name": "有可优化目标区块",
+      "ok": true,
+      "detail": "projects"
+    },
+    {
+      "name": "POST optimize/section",
+      "ok": true,
+      "detail": "HTTP 200 / 4.82s"
+    },
+    {
+      "name": "section 返回终态",
+      "ok": true,
+      "detail": "done"
+    },
+    {
+      "name": "optimize 无编造数字",
+      "ok": true,
+      "detail": "[]"
+    },
+    {
+      "name": "缺证据输出去占位",
+      "ok": true,
+      "detail": "1"
+    },
+    {
+      "name": "DELETE 会话",
+      "ok": true,
+      "detail": "200"
+    }
+  ],
+  "timings": {
+    "访谈轮": [
+      12.56,
+      10.75,
+      17.44
+    ],
+    "autofill": [
+      28.9
+    ],
+    "optimize/section": [
+      4.82
+    ]
+  },
+  "failed": []
+}

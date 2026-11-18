@@ -134,8 +134,9 @@ class LLM:
         """decision-model-preview 结构化决策（systemone 专用端点）。
         返回 answers 字典：choice→{choice,confidence,probabilities}，noul→{noul}，score→{score,confidence}"""
         if budget.ENABLED:
-            # systemone has no reviewed hard output/reasoning bound.
-            raise budget.BudgetUnavailable("预算模式暂不支持决策模型")
+            # systemone 无公开 max_tokens 契约，按五问结构化回答的安全上限固定预留；
+            # 不预留会让 v1 路由在 v2 开关打开后整体降级为 kb_qa 兜底。
+            budget.reserve({"content": content, "questions": questions}, 512)
         r = self._client.post(
             "https://cn-beijing.maas.qianwenaiapi.com/compatible-mode/v1/systemone",
             json={"model": "decision-model-preview",

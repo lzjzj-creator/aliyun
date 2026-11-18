@@ -1,0 +1,267 @@
+{
+  "base": "https://zhimai-api-hiwijfvopw.cn-beijing.fcapp.run",
+  "checks": [
+    {
+      "name": "GET /health",
+      "ok": true,
+      "detail": "HTTP 200"
+    },
+    {
+      "name": "v2 路由已挂载",
+      "ok": true,
+      "detail": "HTTP 200/503"
+    },
+    {
+      "name": "访谈引擎已开启",
+      "ok": true,
+      "detail": "HTTP 200"
+    },
+    {
+      "name": "session 事件一次性下发令牌",
+      "ok": true,
+      "detail": "session_id=f580e638…"
+    },
+    {
+      "name": "问候轮以 done 终结",
+      "ok": true,
+      "detail": "['session', 'token', 'card', 'done']"
+    },
+    {
+      "name": "本人可列出会话",
+      "ok": true,
+      "detail": "HTTP 200"
+    },
+    {
+      "name": "列表项不含令牌哈希",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "列表含刚建的会话",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "缺令牌读回被拒",
+      "ok": true,
+      "detail": "HTTP 404"
+    },
+    {
+      "name": "伪造令牌被拒",
+      "ok": true,
+      "detail": "HTTP 404"
+    },
+    {
+      "name": "他人身份被拒",
+      "ok": true,
+      "detail": "HTTP 404"
+    },
+    {
+      "name": "非法会话 ID 不返工数据",
+      "ok": true,
+      "detail": "HTTP 404"
+    },
+    {
+      "name": "非法匿名 ID 被拒",
+      "ok": true,
+      "detail": "HTTP 404"
+    },
+    {
+      "name": "同幂等键重发返回原消息",
+      "ok": true,
+      "detail": "200/200"
+    },
+    {
+      "name": "幂等键改内容 → 409",
+      "ok": true,
+      "detail": "HTTP 409"
+    },
+    {
+      "name": "409 响应不含上游原文",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "并发双流被互斥收敛",
+      "ok": true,
+      "detail": "[404, 404]"
+    },
+    {
+      "name": "访谈轮以 done 终结",
+      "ok": true,
+      "detail": "['step_start', 'step_end', 'profile', 'done']"
+    },
+    {
+      "name": "访谈轮以 done 终结",
+      "ok": true,
+      "detail": "['step_start', 'step_end', 'profile', 'done']"
+    },
+    {
+      "name": "访谈轮以 done 终结",
+      "ok": true,
+      "detail": "['step_start', 'step_end', 'profile', 'done']"
+    },
+    {
+      "name": "访谈轮以 done 终结",
+      "ok": true,
+      "detail": "['step_start', 'step_end', 'profile', 'done']"
+    },
+    {
+      "name": "访谈轮以 done 终结",
+      "ok": true,
+      "detail": "['step_start', 'step_end', 'profile', 'done']"
+    },
+    {
+      "name": "访谈轮以 done 终结",
+      "ok": true,
+      "detail": "['step_start', 'step_end', 'profile', 'done']"
+    },
+    {
+      "name": "访谈轮以 done 终结",
+      "ok": true,
+      "detail": "['step_start', 'step_end', 'profile', 'done']"
+    },
+    {
+      "name": "访谈轮以 done 终结",
+      "ok": true,
+      "detail": "['step_start', 'step_end', 'profile', 'done']"
+    },
+    {
+      "name": "访谈轮以 done 终结",
+      "ok": true,
+      "detail": "['step_start', 'step_end', 'profile', 'done']"
+    },
+    {
+      "name": "访谈轮以 done 终结",
+      "ok": true,
+      "detail": "['step_start', 'step_end', 'profile', 'done']"
+    },
+    {
+      "name": "访谈轮以 done 终结",
+      "ok": true,
+      "detail": "['token', 'token', 'card', 'done']"
+    },
+    {
+      "name": "访谈轮以 done 终结",
+      "ok": true,
+      "detail": "['token', 'token', 'card', 'done']"
+    },
+    {
+      "name": "访谈轮以 done 终结",
+      "ok": true,
+      "detail": "['token', 'token', 'card', 'done']"
+    },
+    {
+      "name": "访谈轮以 done 终结",
+      "ok": true,
+      "detail": "['token', 'token', 'card', 'done']"
+    },
+    {
+      "name": "访谈轮以 done 终结",
+      "ok": true,
+      "detail": "['token', 'token', 'card', 'done']"
+    },
+    {
+      "name": "访谈轮以 done 终结",
+      "ok": true,
+      "detail": "['token', 'token', 'card', 'done']"
+    },
+    {
+      "name": "访谈轮以 done 终结",
+      "ok": true,
+      "detail": "['token', 'token', 'card', 'done']"
+    },
+    {
+      "name": "访谈轮以 done 终结",
+      "ok": true,
+      "detail": "['token', 'token', 'card', 'done']"
+    },
+    {
+      "name": "访谈轮以 done 终结",
+      "ok": true,
+      "detail": "['token', 'token', 'card', 'done']"
+    },
+    {
+      "name": "访谈轮以 done 终结",
+      "ok": true,
+      "detail": "['token', 'token', 'card', 'done']"
+    },
+    {
+      "name": "访谈轮以 done 终结",
+      "ok": true,
+      "detail": "['token', 'token', 'card', 'done']"
+    },
+    {
+      "name": "访谈轮以 done 终结",
+      "ok": true,
+      "detail": "['token', 'token', 'card', 'done']"
+    },
+    {
+      "name": "访谈轮以 done 终结",
+      "ok": true,
+      "detail": "['token', 'token', 'card', 'done']"
+    },
+    {
+      "name": "访谈轮以 done 终结",
+      "ok": true,
+      "detail": "['token', 'token', 'card', 'done']"
+    },
+    {
+      "name": "访谈轮以 done 终结",
+      "ok": true,
+      "detail": "['token', 'token', 'card', 'done']"
+    },
+    {
+      "name": "访谈轮以 done 终结",
+      "ok": true,
+      "detail": "['token', 'token', 'card', 'done']"
+    },
+    {
+      "name": "访谈轮以 done 终结",
+      "ok": true,
+      "detail": "['token', 'token', 'card', 'done']"
+    },
+    {
+      "name": "访谈轮以 done 终结",
+      "ok": false,
+      "detail": "['token', 'token', 'token', 'error']"
+    },
+    {
+      "name": "访谈轮以 done 终结",
+      "ok": true,
+      "detail": "['token', 'token', 'card', 'done']"
+    },
+    {
+      "name": "访谈轮以 done 终结",
+      "ok": false,
+      "detail": "['token', 'token', 'token', 'error']"
+    },
+    {
+      "name": "响应与事件流无令牌哈希/上游密钥",
+      "ok": true,
+      "detail": "0 处异常"
+    }
+  ],
+  "timings": {
+    "首 step": {
+      "n": 30,
+      "median": 0.33,
+      "max": 0.98,
+      "p95": 0.57
+    },
+    "首 token": {
+      "n": 30,
+      "median": 0.38,
+      "max": 2.87,
+      "p95": 2.8
+    },
+    "整轮": {
+      "n": 30,
+      "median": 15.81,
+      "max": 26.04,
+      "p95": 23.07
+    }
+  },
+  "leaks": [],
+  "ran_at": 1795022559
+}

@@ -1,0 +1,17 @@
+{
+  "login": 200,
+  "overview": 200,
+  "cleanup_dry_run": {
+    "ok": true,
+    "data": {
+      "days": 90,
+      "dry_run": true,
+      "expired_sessions": 0,
+      "quota": {
+        "quota_buckets": 0,
+        "stream_leases": 0
+      }
+    }
+  },
+  "at": "2026-11-19"
+}

@@ -1,0 +1,529 @@
+{
+  "generated_at": "2026-11-18T17:37:18.881988+00:00",
+  "base": "https://zhimai-api-hiwijfvopw.cn-beijing.fcapp.run",
+  "min_score": 0.25,
+  "total": 10,
+  "passed": 10,
+  "results": [
+    {
+      "query": "大三找实习该怎么准备？",
+      "route": {
+        "intent": "kb_qa",
+        "kb_scope": "all",
+        "confidence": 0.5,
+        "route_layer": "llm",
+        "action": "answer",
+        "clarify_question": null
+      },
+      "sources": [
+        {
+          "title": "低年级也能找到好实习：大一到大三的实习时间规划",
+          "url": "https://lzjzj-creator.github.io/0003%E5%A4%A7%E5%9B%9B%E6%A0%B8%E5%BF%83%E4%BF%A1%E6%81%AF%E5%B7%AE/2.%E3%80%90%E5%AE%9E%E4%B9%A0%E3%80%91%E9%AB%98%E4%BB%B7%E5%80%BC%E4%BF%A1%E6%81%AF%E5%B7%AE/%E4%BD%8E%E5%B9%B4%E7%BA%A7%E4%B9%9F%E8%83%BD%E6%89%BE%E5%88%B0%E5%A5%BD%E5%AE%9E%E4%B9%A0%EF%BC%9A%E5%A4%A7%E4%B8%80%E5%88%B0%E5%A4%A7%E4%B8%89%E7%9A%84%E5%AE%9E%E4%B9%A0%E6%97%B6%E9%97%B4%E8%A7%84%E5%88%92/index.html",
+          "seq": 1,
+          "score": 0.495
+        },
+        {
+          "title": "0000大学实习的12个信息差",
+          "url": "https://lzjzj-creator.github.io/0003%E5%A4%A7%E5%9B%9B%E6%A0%B8%E5%BF%83%E4%BF%A1%E6%81%AF%E5%B7%AE/2.%E3%80%90%E5%AE%9E%E4%B9%A0%E3%80%91%E9%AB%98%E4%BB%B7%E5%80%BC%E4%BF%A1%E6%81%AF%E5%B7%AE/0000%E5%A4%A7%E5%AD%A6%E5%AE%9E%E4%B9%A0%E7%9A%8412%E4%B8%AA%E4%BF%A1%E6%81%AF%E5%B7%AE/index.html",
+          "seq": 0,
+          "score": 0.493
+        },
+        {
+          "title": "低年级也能找到好实习：大一到大三的实习时间规划",
+          "url": "https://lzjzj-creator.github.io/0003%E5%A4%A7%E5%9B%9B%E6%A0%B8%E5%BF%83%E4%BF%A1%E6%81%AF%E5%B7%AE/2.%E3%80%90%E5%AE%9E%E4%B9%A0%E3%80%91%E9%AB%98%E4%BB%B7%E5%80%BC%E4%BF%A1%E6%81%AF%E5%B7%AE/%E4%BD%8E%E5%B9%B4%E7%BA%A7%E4%B9%9F%E8%83%BD%E6%89%BE%E5%88%B0%E5%A5%BD%E5%AE%9E%E4%B9%A0%EF%BC%9A%E5%A4%A7%E4%B8%80%E5%88%B0%E5%A4%A7%E4%B8%89%E7%9A%84%E5%AE%9E%E4%B9%A0%E6%97%B6%E9%97%B4%E8%A7%84%E5%88%92/index.html",
+          "seq": 0,
+          "score": 0.475
+        },
+        {
+          "title": "0000大学实习的12个信息差",
+          "url": "https://lzjzj-creator.github.io/0003%E5%A4%A7%E5%9B%9B%E6%A0%B8%E5%BF%83%E4%BF%A1%E6%81%AF%E5%B7%AE/2.%E3%80%90%E5%AE%9E%E4%B9%A0%E3%80%91%E9%AB%98%E4%BB%B7%E5%80%BC%E4%BF%A1%E6%81%AF%E5%B7%AE/0000%E5%A4%A7%E5%AD%A6%E5%AE%9E%E4%B9%A0%E7%9A%8412%E4%B8%AA%E4%BF%A1%E6%81%AF%E5%B7%AE/index.html",
+          "seq": 1,
+          "score": 0.451
+        },
+        {
+          "title": "20260513+暑期实习简历优化与精准投递",
+          "url": "https://lzjzj-creator.github.io/1003%E7%B2%BE%E4%BF%AE%E7%89%88%E8%A7%86%E9%A2%91%E6%80%BB%E7%BB%93/20260513%2B%E6%9A%91%E6%9C%9F%E5%AE%9E%E4%B9%A0%E7%AE%80%E5%8E%86%E4%BC%98%E5%8C%96%E4%B8%8E%E7%B2%BE%E5%87%86%E6%8A%95%E9%80%92/index.html",
+          "seq": 0,
+          "score": 0.449
+        }
+      ],
+      "source_count": 5,
+      "top_score": 0.495,
+      "hosts": [
+        "lzjzj-creator.github.io"
+      ],
+      "answer_chars": 575,
+      "answer_head": "根据提供的资料，大三找实习的准备要点如下（资料中明确提及大三的内容有限，以下仅基于原文信息整理）：\n\n**1. 时间上：已进入“冲刺期”，但需弥补前期差距**  \n- 大三才开始实习属于“晚启动”，可能少3个实习机会，竞争力差距可达十倍； ",
+      "errors": [],
+      "ok": true
+    },
+    {
+      "query": "大一应该重点补什么信息差？",
+      "route": {
+        "intent": "kb_qa",
+        "kb_scope": "all",
+        "confidence": 0.5,
+        "route_layer": "llm",
+        "action": "answer",
+        "clarify_question": null
+      },
+      "sources": [
+        {
+          "title": "小鼎的知识库",
+          "url": "https://lzjzj-creator.github.io/index.html",
+          "seq": 0,
+          "score": 0.513
+        },
+        {
+          "title": "如何弥补信息差：这些资源你还不知道",
+          "url": "https://lzjzj-creator.github.io/0001%E5%A4%A7%E4%B8%80%E6%A0%B8%E5%BF%83%E4%BF%A1%E6%81%AF%E5%B7%AE/15.%E7%AC%AC%E4%B8%80%E4%BB%A3%E5%A4%A7%E5%AD%A6%E7%94%9F%E7%94%9F%E5%AD%98%E6%8C%87%E5%8D%97/%E5%A6%82%E4%BD%95%E5%BC%A5%E8%A1%A5%E4%BF%A1%E6%81%AF%E5%B7%AE%EF%BC%9A%E8%BF%99%E4%BA%9B%E8%B5%84%E6%BA%90%E4%BD%A0%E8%BF%98%E4%B8%8D%E7%9F%A5%E9%81%93/index.html",
+          "seq": 0,
+          "score": 0.502
+        },
+        {
+          "title": "大学四年Timeline规划：从大一到毕业的逆袭路线图",
+          "url": "https://lzjzj-creator.github.io/0001%E5%A4%A7%E4%B8%80%E6%A0%B8%E5%BF%83%E4%BF%A1%E6%81%AF%E5%B7%AE/14.%E5%87%86%E5%A4%A7%E4%B8%80%E6%9A%91%E5%81%87%E9%80%86%E8%A2%AD%E8%AE%A1%E5%88%92/%E5%A4%A7%E5%AD%A6%E5%9B%9B%E5%B9%B4timeline%E8%A7%84%E5%88%92%EF%BC%9A%E4%BB%8E%E5%A4%A7%E4%B8%80%E5%88%B0%E6%AF%95%E4%B8%9A%E7%9A%84%E9%80%86%E8%A2%AD%E8%B7%AF%E7%BA%BF%E5%9B%BE/index.html",
+          "seq": 1,
+          "score": 0.482
+        },
+        {
+          "title": "20250806+大学规划与信息差实践",
+          "url": "https://lzjzj-creator.github.io/1003%E7%B2%BE%E4%BF%AE%E7%89%88%E8%A7%86%E9%A2%91%E6%80%BB%E7%BB%93/20250806%2B%E5%A4%A7%E5%AD%A6%E8%A7%84%E5%88%92%E4%B8%8E%E4%BF%A1%E6%81%AF%E5%B7%AE%E5%AE%9E%E8%B7%B5/index.html",
+          "seq": 0,
+          "score": 0.478
+        },
+        {
+          "title": "怎么缩小绩点信息差",
+          "url": "https://lzjzj-creator.github.io/0001%E5%A4%A7%E4%B8%80%E6%A0%B8%E5%BF%83%E4%BF%A1%E6%81%AF%E5%B7%AE/6.%E5%8D%B7%E7%BB%A9%E7%82%B9%E6%8A%80%E5%B7%A7/%E6%80%8E%E4%B9%88%E7%BC%A9%E5%B0%8F%E7%BB%A9%E7%82%B9%E4%BF%A1%E6%81%AF%E5%B7%AE/index.html",
+          "seq": 0,
+          "score": 0.474
+        }
+      ],
+      "source_count": 5,
+      "top_score": 0.513,
+      "hosts": [
+        "lzjzj-creator.github.io"
+      ],
+      "answer_chars": 629,
+      "answer_head": "大一应重点补以下五类信息差，依据资料归纳如下：\n\n**1. 学业规则类**  \n- 教务系统操作（选课、查成绩、缓考流程、考试时间查询）  \n- 专业培养方案（毕业学分要求、必修/选修课分布、课程权重）  \n- 成绩计算逻辑（GPA算法、平",
+      "errors": [],
+      "ok": true
+    },
+    {
+      "query": "大四秋招什么时候开始准备？",
+      "route": {
+        "intent": "kb_qa",
+        "kb_scope": "all",
+        "confidence": 0.5,
+        "route_layer": "llm",
+        "action": "answer",
+        "clarify_question": null
+      },
+      "sources": [
+        {
+          "title": "大四毕业前必须完成的事项清单：从开学到离校的完整攻略",
+          "url": "https://lzjzj-creator.github.io/0003%E5%A4%A7%E5%9B%9B%E6%A0%B8%E5%BF%83%E4%BF%A1%E6%81%AF%E5%B7%AE/4.%E3%80%90%E7%9B%B4%E6%8E%A5%E5%B0%B1%E4%B8%9A%E3%80%91%E9%AB%98%E4%BB%B7%E5%80%BC%E4%BF%A1%E6%81%AF%E5%B7%AE/%E5%A4%A7%E5%9B%9B%E6%AF%95%E4%B8%9A%E5%89%8D%E5%BF%85%E9%A1%BB%E5%AE%8C%E6%88%90%E7%9A%84%E4%BA%8B%E9%A1%B9%E6%B8%85%E5%8D%95%EF%BC%9A%E4%BB%8E%E5%BC%80%E5%AD%A6%E5%88%B0%E7%A6%BB%E6%A0%A1%E7%9A%84%E5%AE%8C%E6%95%B4%E6%94%BB%E7%95%A5/index.html",
+          "seq": 0,
+          "score": 0.535
+        },
+        {
+          "title": "大四最后一学期每月任务清单：毕业倒计时",
+          "url": "https://lzjzj-creator.github.io/0003%E5%A4%A7%E5%9B%9B%E6%A0%B8%E5%BF%83%E4%BF%A1%E6%81%AF%E5%B7%AE/4.%E3%80%90%E7%9B%B4%E6%8E%A5%E5%B0%B1%E4%B8%9A%E3%80%91%E9%AB%98%E4%BB%B7%E5%80%BC%E4%BF%A1%E6%81%AF%E5%B7%AE/%E5%A4%A7%E5%9B%9B%E6%9C%80%E5%90%8E%E4%B8%80%E5%AD%A6%E6%9C%9F%E6%AF%8F%E6%9C%88%E4%BB%BB%E5%8A%A1%E6%B8%85%E5%8D%95%EF%BC%9A%E6%AF%95%E4%B8%9A%E5%80%92%E8%AE%A1%E6%97%B6/index.html",
+          "seq": 0,
+          "score": 0.52
+        },
+        {
+          "title": "大四毕业前必须完成的事项清单：从开学到离校的完整攻略",
+          "url": "https://lzjzj-creator.github.io/0003%E5%A4%A7%E5%9B%9B%E6%A0%B8%E5%BF%83%E4%BF%A1%E6%81%AF%E5%B7%AE/4.%E3%80%90%E7%9B%B4%E6%8E%A5%E5%B0%B1%E4%B8%9A%E3%80%91%E9%AB%98%E4%BB%B7%E5%80%BC%E4%BF%A1%E6%81%AF%E5%B7%AE/%E5%A4%A7%E5%9B%9B%E6%AF%95%E4%B8%9A%E5%89%8D%E5%BF%85%E9%A1%BB%E5%AE%8C%E6%88%90%E7%9A%84%E4%BA%8B%E9%A1%B9%E6%B8%85%E5%8D%95%EF%BC%9A%E4%BB%8E%E5%BC%80%E5%AD%A6%E5%88%B0%E7%A6%BB%E6%A0%A1%E7%9A%84%E5%AE%8C%E6%95%B4%E6%94%BB%E7%95%A5/index.html",
+          "seq": 1,
+          "score": 0.507
+        },
+        {
+          "title": "秋招vs春招：两次校招的正确打开方式",
+          "url": "https://lzjzj-creator.github.io/0003%E5%A4%A7%E5%9B%9B%E6%A0%B8%E5%BF%83%E4%BF%A1%E6%81%AF%E5%B7%AE/4.%E3%80%90%E7%9B%B4%E6%8E%A5%E5%B0%B1%E4%B8%9A%E3%80%91%E9%AB%98%E4%BB%B7%E5%80%BC%E4%BF%A1%E6%81%AF%E5%B7%AE/%E7%A7%8B%E6%8B%9Bvs%E6%98%A5%E6%8B%9B%EF%BC%9A%E4%B8%A4%E6%AC%A1%E6%A0%A1%E6%8B%9B%E7%9A%84%E6%AD%A3%E7%A1%AE%E6%89%93%E5%BC%80%E6%96%B9%E5%BC%8F/index.html",
+          "seq": 0,
+          "score": 0.497
+        },
+        {
+          "title": "秋招vs春招：两次校招的正确打开方式",
+          "url": "https://lzjzj-creator.github.io/0003%E5%A4%A7%E5%9B%9B%E6%A0%B8%E5%BF%83%E4%BF%A1%E6%81%AF%E5%B7%AE/4.%E3%80%90%E7%9B%B4%E6%8E%A5%E5%B0%B1%E4%B8%9A%E3%80%91%E9%AB%98%E4%BB%B7%E5%80%BC%E4%BF%A1%E6%81%AF%E5%B7%AE/%E7%A7%8B%E6%8B%9Bvs%E6%98%A5%E6%8B%9B%EF%BC%9A%E4%B8%A4%E6%AC%A1%E6%A0%A1%E6%8B%9B%E7%9A%84%E6%AD%A3%E7%A1%AE%E6%89%93%E5%BC%80%E6%96%B9%E5%BC%8F/index.html",
+          "seq": 1,
+          "score": 0.496
+        }
+      ],
+      "source_count": 5,
+      "top_score": 0.535,
+      "hosts": [
+        "lzjzj-creator.github.io"
+      ],
+      "answer_chars": 297,
+      "answer_head": "根据提供的资料，大四秋招的准备应**从大三暑假（6-8月）就开始**。\n\n具体依据如下：\n\n- 《秋招vs春招》明确指出：“秋招时间轴：**6-8月：准备期**”，并强调“这是最关键的准备阶段，不要等到秋招开始了才开始准备”；  \n- 准备",
+      "errors": [],
+      "ok": true
+    },
+    {
+      "query": "简历上的项目经历怎么写才有说服力？",
+      "route": {
+        "intent": "kb_qa",
+        "kb_scope": "all",
+        "confidence": 0.5,
+        "route_layer": "llm",
+        "action": "answer",
+        "clarify_question": null
+      },
+      "sources": [
+        {
+          "title": "1000「高价值」竞赛成果转化与简历文书撰写技巧",
+          "url": "https://lzjzj-creator.github.io/0002%E5%A4%A7%E4%BA%8C%E5%A4%A7%E4%B8%89%E6%A0%B8%E5%BF%83%E4%BF%A1%E6%81%AF%E5%B7%AE/3.%E3%80%90%E7%AB%9E%E8%B5%9B%E3%80%91%E9%AB%98%E4%BB%B7%E5%80%BC%E4%BF%A1%E6%81%AF%E5%B7%AE/1000%E3%80%8C%E9%AB%98%E4%BB%B7%E5%80%BC%E3%80%8D%E7%AB%9E%E8%B5%9B%E6%88%90%E6%9E%9C%E8%BD%AC%E5%8C%96%E4%B8%8E%E7%AE%80%E5%8E%86%E6%96%87%E4%B9%A6%E6%92%B0%E5%86%99%E6%8A%80%E5%B7%A7/index.html",
+          "seq": 0,
+          "score": 0.508
+        },
+        {
+          "title": "22 大一零经历简历与社团报名表模板",
+          "url": "https://lzjzj-creator.github.io/0001%E5%A4%A7%E4%B8%80%E6%A0%B8%E5%BF%83%E4%BF%A1%E6%81%AF%E5%B7%AE/13.%E9%AB%98%E9%A2%91%E6%9D%90%E6%96%99%E6%A8%A1%E6%9D%BF/22-%E5%A4%A7%E4%B8%80%E9%9B%B6%E7%BB%8F%E5%8E%86%E7%AE%80%E5%8E%86%E4%B8%8E%E7%A4%BE%E5%9B%A2%E6%8A%A5%E5%90%8D%E8%A1%A8%E6%A8%A1%E6%9D%BF/index.html",
+          "seq": 1,
+          "score": 0.502
+        },
+        {
+          "title": "AI在求职就业中的应用：从简历到面试",
+          "url": "https://lzjzj-creator.github.io/0001%E5%A4%A7%E4%B8%80%E6%A0%B8%E5%BF%83%E4%BF%A1%E6%81%AF%E5%B7%AE/10.%E5%86%B7%E9%97%A8%E4%B8%93%E4%B8%9A%E5%AD%A6ai/ai%E5%9C%A8%E6%B1%82%E8%81%8C%E5%B0%B1%E4%B8%9A%E4%B8%AD%E7%9A%84%E5%BA%94%E7%94%A8%EF%BC%9A%E4%BB%8E%E7%AE%80%E5%8E%86%E5%88%B0%E9%9D%A2%E8%AF%95/index.html",
+          "seq": 1,
+          "score": 0.469
+        },
+        {
+          "title": "1000「高价值」竞赛成果转化与简历文书撰写技巧",
+          "url": "https://lzjzj-creator.github.io/0002%E5%A4%A7%E4%BA%8C%E5%A4%A7%E4%B8%89%E6%A0%B8%E5%BF%83%E4%BF%A1%E6%81%AF%E5%B7%AE/3.%E3%80%90%E7%AB%9E%E8%B5%9B%E3%80%91%E9%AB%98%E4%BB%B7%E5%80%BC%E4%BF%A1%E6%81%AF%E5%B7%AE/1000%E3%80%8C%E9%AB%98%E4%BB%B7%E5%80%BC%E3%80%8D%E7%AB%9E%E8%B5%9B%E6%88%90%E6%9E%9C%E8%BD%AC%E5%8C%96%E4%B8%8E%E7%AE%80%E5%8E%86%E6%96%87%E4%B9%A6%E6%92%B0%E5%86%99%E6%8A%80%E5%B7%A7/index.html",
+          "seq": 1,
+          "score": 0.468
+        },
+        {
+          "title": "如何制作一份有竞争力的实习简历",
+          "url": "https://lzjzj-creator.github.io/0003%E5%A4%A7%E5%9B%9B%E6%A0%B8%E5%BF%83%E4%BF%A1%E6%81%AF%E5%B7%AE/2.%E3%80%90%E5%AE%9E%E4%B9%A0%E3%80%91%E9%AB%98%E4%BB%B7%E5%80%BC%E4%BF%A1%E6%81%AF%E5%B7%AE/%E5%A6%82%E4%BD%95%E5%88%B6%E4%BD%9C%E4%B8%80%E4%BB%BD%E6%9C%89%E7%AB%9E%E4%BA%89%E5%8A%9B%E7%9A%84%E5%AE%9E%E4%B9%A0%E7%AE%80%E5%8E%86/index.html",
+          "seq": 1,
+          "score": 0.457
+        }
+      ],
+      "source_count": 5,
+      "top_score": 0.508,
+      "hosts": [
+        "lzjzj-creator.github.io"
+      ],
+      "answer_chars": 616,
+      "answer_head": "要让简历上的项目经历有说服力，关键在于两点：**用STAR法则讲清故事 + 用量化数据支撑结果**。\n\n1. **必须用STAR法则结构化表达**  \n   - **S（情境）**：项目背景、要解决的实际问题（如“城市交通流量预测不准导致调",
+      "errors": [],
+      "ok": true
+    },
+    {
+      "query": "没有实习经历简历怎么写？",
+      "route": {
+        "intent": "kb_qa",
+        "kb_scope": "all",
+        "confidence": 0.5,
+        "route_layer": "llm",
+        "action": "answer",
+        "clarify_question": null
+      },
+      "sources": [
+        {
+          "title": "22 大一零经历简历与社团报名表模板",
+          "url": "https://lzjzj-creator.github.io/0001%E5%A4%A7%E4%B8%80%E6%A0%B8%E5%BF%83%E4%BF%A1%E6%81%AF%E5%B7%AE/13.%E9%AB%98%E9%A2%91%E6%9D%90%E6%96%99%E6%A8%A1%E6%9D%BF/22-%E5%A4%A7%E4%B8%80%E9%9B%B6%E7%BB%8F%E5%8E%86%E7%AE%80%E5%8E%86%E4%B8%8E%E7%A4%BE%E5%9B%A2%E6%8A%A5%E5%90%8D%E8%A1%A8%E6%A8%A1%E6%9D%BF/index.html",
+          "seq": 1,
+          "score": 0.484
+        },
+        {
+          "title": "1000「高价值」第一份简历怎么做",
+          "url": "https://lzjzj-creator.github.io/0001%E5%A4%A7%E4%B8%80%E6%A0%B8%E5%BF%83%E4%BF%A1%E6%81%AF%E5%B7%AE/8.%E5%A4%A7%E5%AD%A6%E5%9B%9B%E5%B9%B4%E7%94%9F%E6%B4%BB%E7%BB%8F%E9%AA%8C%E5%B8%96/1000%E3%80%8C%E9%AB%98%E4%BB%B7%E5%80%BC%E3%80%8D%E7%AC%AC%E4%B8%80%E4%BB%BD%E7%AE%80%E5%8E%86%E6%80%8E%E4%B9%88%E5%81%9A/index.html",
+          "seq": 1,
+          "score": 0.478
+        },
+        {
+          "title": "如何制作一份有竞争力的实习简历",
+          "url": "https://lzjzj-creator.github.io/0003%E5%A4%A7%E5%9B%9B%E6%A0%B8%E5%BF%83%E4%BF%A1%E6%81%AF%E5%B7%AE/2.%E3%80%90%E5%AE%9E%E4%B9%A0%E3%80%91%E9%AB%98%E4%BB%B7%E5%80%BC%E4%BF%A1%E6%81%AF%E5%B7%AE/%E5%A6%82%E4%BD%95%E5%88%B6%E4%BD%9C%E4%B8%80%E4%BB%BD%E6%9C%89%E7%AB%9E%E4%BA%89%E5%8A%9B%E7%9A%84%E5%AE%9E%E4%B9%A0%E7%AE%80%E5%8E%86/index.html",
+          "seq": 0,
+          "score": 0.474
+        },
+        {
+          "title": "22 大一零经历简历与社团报名表模板",
+          "url": "https://lzjzj-creator.github.io/0001%E5%A4%A7%E4%B8%80%E6%A0%B8%E5%BF%83%E4%BF%A1%E6%81%AF%E5%B7%AE/13.%E9%AB%98%E9%A2%91%E6%9D%90%E6%96%99%E6%A8%A1%E6%9D%BF/22-%E5%A4%A7%E4%B8%80%E9%9B%B6%E7%BB%8F%E5%8E%86%E7%AE%80%E5%8E%86%E4%B8%8E%E7%A4%BE%E5%9B%A2%E6%8A%A5%E5%90%8D%E8%A1%A8%E6%A8%A1%E6%9D%BF/index.html",
+          "seq": 0,
+          "score": 0.471
+        },
+        {
+          "title": "如何将实习经历转化为核心竞争力",
+          "url": "https://lzjzj-creator.github.io/0003%E5%A4%A7%E5%9B%9B%E6%A0%B8%E5%BF%83%E4%BF%A1%E6%81%AF%E5%B7%AE/2.%E3%80%90%E5%AE%9E%E4%B9%A0%E3%80%91%E9%AB%98%E4%BB%B7%E5%80%BC%E4%BF%A1%E6%81%AF%E5%B7%AE/%E5%A6%82%E4%BD%95%E5%B0%86%E5%AE%9E%E4%B9%A0%E7%BB%8F%E5%8E%86%E8%BD%AC%E5%8C%96%E4%B8%BA%E6%A0%B8%E5%BF%83%E7%AB%9E%E4%BA%89%E5%8A%9B/index.html",
+          "seq": 0,
+          "score": 0.468
+        }
+      ],
+      "source_count": 5,
+      "top_score": 0.484,
+      "hosts": [
+        "lzjzj-creator.github.io"
+      ],
+      "answer_chars": 787,
+      "answer_head": "没有实习经历时，简历应聚焦“可验证的行动”和“真实的能力表达”，核心是让HR快速相信：你虽无实习，但有潜力、肯投入、能做事。具体做法如下：\n\n**1. 用“零经历模板”结构，突出基本信息与诚意**  \n- 姓名最大字号，联系方式按规范（如1",
+      "errors": [],
+      "ok": true
+    },
+    {
+      "query": "保研需要准备哪些材料？",
+      "route": {
+        "intent": "kb_qa",
+        "kb_scope": "all",
+        "confidence": 0.5,
+        "route_layer": "llm",
+        "action": "answer",
+        "clarify_question": null
+      },
+      "sources": [
+        {
+          "title": "我们该怎样无痛准备保研？_【张学长】",
+          "url": "https://lzjzj-creator.github.io/0001%E5%A4%A7%E4%B8%80%E6%A0%B8%E5%BF%83%E4%BF%A1%E6%81%AF%E5%B7%AE/0.%E5%A4%A7%E5%AD%A6%E5%B0%8F%E7%99%BD%E5%BF%85%E7%9C%8B%E6%A0%B8%E5%BF%83%E7%BB%8F%E9%AA%8C%E6%96%87%E6%A1%A3/%E6%88%91%E4%BB%AC%E8%AF%A5%E6%80%8E%E6%A0%B7%E6%97%A0%E7%97%9B%E5%87%86%E5%A4%87%E4%BF%9D%E7%A0%94%EF%BC%9F_%E3%80%90%E5%BC%A0%E5%AD%A6%E9%95%BF%E3%80%91/index.html",
+          "seq": 0,
+          "score": 0.485
+        },
+        {
+          "title": "1000「高价值」保研都要干一些什么",
+          "url": "https://lzjzj-creator.github.io/0001%E5%A4%A7%E4%B8%80%E6%A0%B8%E5%BF%83%E4%BF%A1%E6%81%AF%E5%B7%AE/3.%E4%BF%9D%E7%A0%94_%E9%AB%98%E4%BB%B7%E5%80%BC%E4%BF%A1%E6%81%AF%E5%B7%AE/1000%E3%80%8C%E9%AB%98%E4%BB%B7%E5%80%BC%E3%80%8D%E4%BF%9D%E7%A0%94%E9%83%BD%E8%A6%81%E5%B9%B2%E4%B8%80%E4%BA%9B%E4%BB%80%E4%B9%88/index.html",
+          "seq": 0,
+          "score": 0.478
+        },
+        {
+          "title": "20260322+大学规划与志愿认知",
+          "url": "https://lzjzj-creator.github.io/1003%E7%B2%BE%E4%BF%AE%E7%89%88%E8%A7%86%E9%A2%91%E6%80%BB%E7%BB%93/20260322%2B%E5%A4%A7%E5%AD%A6%E8%A7%84%E5%88%92%E4%B8%8E%E5%BF%97%E6%84%BF%E8%AE%A4%E7%9F%A5/index.html",
+          "seq": 0,
+          "score": 0.475
+        },
+        {
+          "title": "我们该怎样无痛准备保研？",
+          "url": "https://lzjzj-creator.github.io/0001%E5%A4%A7%E4%B8%80%E6%A0%B8%E5%BF%83%E4%BF%A1%E6%81%AF%E5%B7%AE/0.%E5%A4%A7%E5%AD%A6%E5%B0%8F%E7%99%BD%E5%BF%85%E7%9C%8B%E6%A0%B8%E5%BF%83%E7%BB%8F%E9%AA%8C%E6%96%87%E6%A1%A3/%E6%88%91%E4%BB%AC%E8%AF%A5%E6%80%8E%E6%A0%B7%E6%97%A0%E7%97%9B%E5%87%86%E5%A4%87%E4%BF%9D%E7%A0%94%EF%BC%9F/index.html",
+          "seq": 0,
+          "score": 0.472
+        },
+        {
+          "title": "保研成功率提升",
+          "url": "https://lzjzj-creator.github.io/0001%E5%A4%A7%E4%B8%80%E6%A0%B8%E5%BF%83%E4%BF%A1%E6%81%AF%E5%B7%AE/3.%E4%BF%9D%E7%A0%94_%E9%AB%98%E4%BB%B7%E5%80%BC%E4%BF%A1%E6%81%AF%E5%B7%AE/%E4%BF%9D%E7%A0%94%E6%88%90%E5%8A%9F%E7%8E%87%E6%8F%90%E5%8D%87/index.html",
+          "seq": 0,
+          "score": 0.468
+        }
+      ],
+      "source_count": 5,
+      "top_score": 0.485,
+      "hosts": [
+        "lzjzj-creator.github.io"
+      ],
+      "answer_chars": 602,
+      "answer_head": "根据提供的资料，保研需准备的材料主要包括以下几类，集中在**大三下学期（4月起）至夏令营/预推免阶段**：\n\n---\n\n**1. 基础证明类材料**  \n- 成绩单（加盖教务处公章）  \n- 专业排名证明（学校出具的官方排名说明，如“前X%",
+      "errors": [],
+      "ok": true
+    },
+    {
+      "query": "出国留学怎么规划申请？",
+      "route": {
+        "intent": "kb_qa",
+        "kb_scope": "all",
+        "confidence": 0.5,
+        "route_layer": "llm",
+        "action": "answer",
+        "clarify_question": null
+      },
+      "sources": [
+        {
+          "title": "出国申请流程",
+          "url": "https://lzjzj-creator.github.io/0002%E5%A4%A7%E4%BA%8C%E5%A4%A7%E4%B8%89%E6%A0%B8%E5%BF%83%E4%BF%A1%E6%81%AF%E5%B7%AE/7.%E3%80%90%E5%87%BA%E5%9B%BD%E7%95%99%E5%AD%A6%E3%80%91%E9%AB%98%E4%BB%B7%E5%80%BC%E4%BF%A1%E6%81%AF%E5%B7%AE/%E5%87%BA%E5%9B%BD%E7%94%B3%E8%AF%B7%E6%B5%81%E7%A8%8B/index.html",
+          "seq": 0,
+          "score": 0.494
+        },
+        {
+          "title": "1000「高价值」留学基本认知与四年规划",
+          "url": "https://lzjzj-creator.github.io/0002%E5%A4%A7%E4%BA%8C%E5%A4%A7%E4%B8%89%E6%A0%B8%E5%BF%83%E4%BF%A1%E6%81%AF%E5%B7%AE/7.%E3%80%90%E5%87%BA%E5%9B%BD%E7%95%99%E5%AD%A6%E3%80%91%E9%AB%98%E4%BB%B7%E5%80%BC%E4%BF%A1%E6%81%AF%E5%B7%AE/1000%E3%80%8C%E9%AB%98%E4%BB%B7%E5%80%BC%E3%80%8D%E7%95%99%E5%AD%A6%E5%9F%BA%E6%9C%AC%E8%AE%A4%E7%9F%A5%E4%B8%8E%E5%9B%9B%E5%B9%B4%E8%A7%84%E5%88%92/index.html",
+          "seq": 0,
+          "score": 0.46
+        },
+        {
+          "title": "留学申请流程与时间节点",
+          "url": "https://lzjzj-creator.github.io/0002%E5%A4%A7%E4%BA%8C%E5%A4%A7%E4%B8%89%E6%A0%B8%E5%BF%83%E4%BF%A1%E6%81%AF%E5%B7%AE/7.%E3%80%90%E5%87%BA%E5%9B%BD%E7%95%99%E5%AD%A6%E3%80%91%E9%AB%98%E4%BB%B7%E5%80%BC%E4%BF%A1%E6%81%AF%E5%B7%AE/%E7%95%99%E5%AD%A6%E7%94%B3%E8%AF%B7%E6%B5%81%E7%A8%8B%E4%B8%8E%E6%97%B6%E9%97%B4%E8%8A%82%E7%82%B9/index.html",
+          "seq": 0,
+          "score": 0.458
+        },
+        {
+          "title": "出国留学都有哪些国家",
+          "url": "https://lzjzj-creator.github.io/0002%E5%A4%A7%E4%BA%8C%E5%A4%A7%E4%B8%89%E6%A0%B8%E5%BF%83%E4%BF%A1%E6%81%AF%E5%B7%AE/7.%E3%80%90%E5%87%BA%E5%9B%BD%E7%95%99%E5%AD%A6%E3%80%91%E9%AB%98%E4%BB%B7%E5%80%BC%E4%BF%A1%E6%81%AF%E5%B7%AE/%E5%87%BA%E5%9B%BD%E7%95%99%E5%AD%A6%E9%83%BD%E6%9C%89%E5%93%AA%E4%BA%9B%E5%9B%BD%E5%AE%B6/index.html",
+          "seq": 0,
+          "score": 0.451
+        },
+        {
+          "title": "留学中的常见误区与挑战",
+          "url": "https://lzjzj-creator.github.io/0002%E5%A4%A7%E4%BA%8C%E5%A4%A7%E4%B8%89%E6%A0%B8%E5%BF%83%E4%BF%A1%E6%81%AF%E5%B7%AE/7.%E3%80%90%E5%87%BA%E5%9B%BD%E7%95%99%E5%AD%A6%E3%80%91%E9%AB%98%E4%BB%B7%E5%80%BC%E4%BF%A1%E6%81%AF%E5%B7%AE/%E7%95%99%E5%AD%A6%E4%B8%AD%E7%9A%84%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA%E4%B8%8E%E6%8C%91%E6%88%98/index.html",
+          "seq": 0,
+          "score": 0.439
+        }
+      ],
+      "source_count": 5,
+      "top_score": 0.494,
+      "hosts": [
+        "lzjzj-creator.github.io"
+      ],
+      "answer_chars": 724,
+      "answer_head": "出国留学申请需系统规划，建议按以下时间线和步骤推进（综合多份资料）：\n\n**1. 提前12–18个月：明确目标**  \n- 确定国家、学位类型（本科/硕士/博士）、意向专业；  \n- 结合专业优势（如CS选美国、金融选英国、汽车工程选德国）",
+      "errors": [],
+      "ok": true
+    },
+    {
+      "query": "考公应该从什么时候开始准备？",
+      "route": {
+        "intent": "kb_qa",
+        "kb_scope": "all",
+        "confidence": 0.5,
+        "route_layer": "llm",
+        "action": "answer",
+        "clarify_question": null
+      },
+      "sources": [
+        {
+          "title": "考公的时间规划",
+          "url": "https://lzjzj-creator.github.io/0002%E5%A4%A7%E4%BA%8C%E5%A4%A7%E4%B8%89%E6%A0%B8%E5%BF%83%E4%BF%A1%E6%81%AF%E5%B7%AE/4.%E3%80%90%E8%80%83%E5%85%AC%E3%80%91%E9%AB%98%E4%BB%B7%E5%80%BC%E4%BF%A1%E6%81%AF%E5%B7%AE/%E8%80%83%E5%85%AC%E7%9A%84%E6%97%B6%E9%97%B4%E8%A7%84%E5%88%92/index.html",
+          "seq": 0,
+          "score": 0.538
+        },
+        {
+          "title": "1000「高价值」四年考公时间规划",
+          "url": "https://lzjzj-creator.github.io/0002%E5%A4%A7%E4%BA%8C%E5%A4%A7%E4%B8%89%E6%A0%B8%E5%BF%83%E4%BF%A1%E6%81%AF%E5%B7%AE/4.%E3%80%90%E8%80%83%E5%85%AC%E3%80%91%E9%AB%98%E4%BB%B7%E5%80%BC%E4%BF%A1%E6%81%AF%E5%B7%AE/1000%E3%80%8C%E9%AB%98%E4%BB%B7%E5%80%BC%E3%80%8D%E5%9B%9B%E5%B9%B4%E8%80%83%E5%85%AC%E6%97%B6%E9%97%B4%E8%A7%84%E5%88%92/index.html",
+          "seq": 0,
+          "score": 0.513
+        },
+        {
+          "title": "1000「高价值」考公学习技巧与备考技巧",
+          "url": "https://lzjzj-creator.github.io/0002%E5%A4%A7%E4%BA%8C%E5%A4%A7%E4%B8%89%E6%A0%B8%E5%BF%83%E4%BF%A1%E6%81%AF%E5%B7%AE/4.%E3%80%90%E8%80%83%E5%85%AC%E3%80%91%E9%AB%98%E4%BB%B7%E5%80%BC%E4%BF%A1%E6%81%AF%E5%B7%AE/1000%E3%80%8C%E9%AB%98%E4%BB%B7%E5%80%BC%E3%80%8D%E8%80%83%E5%85%AC%E5%AD%A6%E4%B9%A0%E6%8A%80%E5%B7%A7%E4%B8%8E%E5%A4%87%E8%80%83%E6%8A%80%E5%B7%A7/index.html",
+          "seq": 0,
+          "score": 0.49
+        },
+        {
+          "title": "考公的时间规划",
+          "url": "https://lzjzj-creator.github.io/0002%E5%A4%A7%E4%BA%8C%E5%A4%A7%E4%B8%89%E6%A0%B8%E5%BF%83%E4%BF%A1%E6%81%AF%E5%B7%AE/4.%E3%80%90%E8%80%83%E5%85%AC%E3%80%91%E9%AB%98%E4%BB%B7%E5%80%BC%E4%BF%A1%E6%81%AF%E5%B7%AE/%E8%80%83%E5%85%AC%E7%9A%84%E6%97%B6%E9%97%B4%E8%A7%84%E5%88%92/index.html",
+          "seq": 1,
+          "score": 0.481
+        },
+        {
+          "title": "考公考编全攻略：上岸学长的实战经验",
+          "url": "https://lzjzj-creator.github.io/0003%E5%A4%A7%E5%9B%9B%E6%A0%B8%E5%BF%83%E4%BF%A1%E6%81%AF%E5%B7%AE/4.%E3%80%90%E7%9B%B4%E6%8E%A5%E5%B0%B1%E4%B8%9A%E3%80%91%E9%AB%98%E4%BB%B7%E5%80%BC%E4%BF%A1%E6%81%AF%E5%B7%AE/%E8%80%83%E5%85%AC%E8%80%83%E7%BC%96%E5%85%A8%E6%94%BB%E7%95%A5%EF%BC%9A%E4%B8%8A%E5%B2%B8%E5%AD%A6%E9%95%BF%E7%9A%84%E5%AE%9E%E6%88%98%E7%BB%8F%E9%AA%8C/index.html",
+          "seq": 1,
+          "score": 0.458
+        }
+      ],
+      "source_count": 5,
+      "top_score": 0.538,
+      "hosts": [
+        "lzjzj-creator.github.io"
+      ],
+      "answer_chars": 363,
+      "answer_head": "考公准备时间需根据身份和目标分情况规划：\n\n**在校生（推荐大三下学期启动）**  \n- **大三下（3–6月）**：认知期，每天2–3小时，系统学习行测模块、申论题型，建立知识框架，不急于刷题。  \n- 若想更充分准备，可**从大一开始铺",
+      "errors": [],
+      "ok": true
+    },
+    {
+      "query": "怎么提高大学绩点？",
+      "route": {
+        "intent": "kb_qa",
+        "kb_scope": "all",
+        "confidence": 0.5,
+        "route_layer": "llm",
+        "action": "answer",
+        "clarify_question": null
+      },
+      "sources": [
+        {
+          "title": "保研过程中如何提升绩点？",
+          "url": "https://lzjzj-creator.github.io/0001%E5%A4%A7%E4%B8%80%E6%A0%B8%E5%BF%83%E4%BF%A1%E6%81%AF%E5%B7%AE/3.%E4%BF%9D%E7%A0%94_%E9%AB%98%E4%BB%B7%E5%80%BC%E4%BF%A1%E6%81%AF%E5%B7%AE/%E4%BF%9D%E7%A0%94%E8%BF%87%E7%A8%8B%E4%B8%AD%E5%A6%82%E4%BD%95%E6%8F%90%E5%8D%87%E7%BB%A9%E7%82%B9%EF%BC%9F/index.html",
+          "seq": 0,
+          "score": 0.546
+        },
+        {
+          "title": "如何长期卷绩点",
+          "url": "https://lzjzj-creator.github.io/0001%E5%A4%A7%E4%B8%80%E6%A0%B8%E5%BF%83%E4%BF%A1%E6%81%AF%E5%B7%AE/6.%E5%8D%B7%E7%BB%A9%E7%82%B9%E6%8A%80%E5%B7%A7/%E5%A6%82%E4%BD%95%E9%95%BF%E6%9C%9F%E5%8D%B7%E7%BB%A9%E7%82%B9/index.html",
+          "seq": 0,
+          "score": 0.545
+        },
+        {
+          "title": "该怎样获得高绩点_【张学长】",
+          "url": "https://lzjzj-creator.github.io/0001%E5%A4%A7%E4%B8%80%E6%A0%B8%E5%BF%83%E4%BF%A1%E6%81%AF%E5%B7%AE/2.%E9%AB%98%E4%BB%B7%E5%80%BC%E6%94%BF%E7%AD%96%E4%BF%A1%E6%81%AF/%E8%AF%A5%E6%80%8E%E6%A0%B7%E8%8E%B7%E5%BE%97%E9%AB%98%E7%BB%A9%E7%82%B9_%E3%80%90%E5%BC%A0%E5%AD%A6%E9%95%BF%E3%80%91/index.html",
+          "seq": 0,
+          "score": 0.542
+        },
+        {
+          "title": "怎么缩小绩点信息差",
+          "url": "https://lzjzj-creator.github.io/0001%E5%A4%A7%E4%B8%80%E6%A0%B8%E5%BF%83%E4%BF%A1%E6%81%AF%E5%B7%AE/6.%E5%8D%B7%E7%BB%A9%E7%82%B9%E6%8A%80%E5%B7%A7/%E6%80%8E%E4%B9%88%E7%BC%A9%E5%B0%8F%E7%BB%A9%E7%82%B9%E4%BF%A1%E6%81%AF%E5%B7%AE/index.html",
+          "seq": 0,
+          "score": 0.51
+        },
+        {
+          "title": "该怎样获得高绩点_【张学长】",
+          "url": "https://lzjzj-creator.github.io/0001%E5%A4%A7%E4%B8%80%E6%A0%B8%E5%BF%83%E4%BF%A1%E6%81%AF%E5%B7%AE/2.%E9%AB%98%E4%BB%B7%E5%80%BC%E6%94%BF%E7%AD%96%E4%BF%A1%E6%81%AF/%E8%AF%A5%E6%80%8E%E6%A0%B7%E8%8E%B7%E5%BE%97%E9%AB%98%E7%BB%A9%E7%82%B9_%E3%80%90%E5%BC%A0%E5%AD%A6%E9%95%BF%E3%80%91/index.html",
+          "seq": 1,
+          "score": 0.507
+        }
+      ],
+      "source_count": 5,
+      "top_score": 0.546,
+      "hosts": [
+        "lzjzj-creator.github.io"
+      ],
+      "answer_chars": 892,
+      "answer_head": "提高大学绩点的核心方法可归纳为**战略选课 + 精准执行 + 信息驱动**，具体如下：\n\n---\n\n**一、战略选课：用好“绩点杠杆”**  \n- **优先高学分课程**：GPA是加权平均（绩点×学分之和 ÷ 总学分），5学分课考72分（绩",
+      "errors": [],
+      "ok": true
+    },
+    {
+      "query": "转专业需要做哪些准备？",
+      "route": {
+        "intent": "kb_qa",
+        "kb_scope": "all",
+        "confidence": 0.5,
+        "route_layer": "llm",
+        "action": "answer",
+        "clarify_question": null
+      },
+      "sources": [
+        {
+          "title": "转专业申请个人陈述与面谈准备模板",
+          "url": "https://lzjzj-creator.github.io/0001%E5%A4%A7%E4%B8%80%E6%A0%B8%E5%BF%83%E4%BF%A1%E6%81%AF%E5%B7%AE/13.%E9%AB%98%E9%A2%91%E6%9D%90%E6%96%99%E6%A8%A1%E6%9D%BF/%E8%BD%AC%E4%B8%93%E4%B8%9A%E7%94%B3%E8%AF%B7%E4%B8%AA%E4%BA%BA%E9%99%88%E8%BF%B0%E4%B8%8E%E9%9D%A2%E8%B0%88%E5%87%86%E5%A4%87%E6%A8%A1%E6%9D%BF/index.html",
+          "seq": 1,
+          "score": 0.502
+        },
+        {
+          "title": "转专业申请个人陈述与面谈准备模板",
+          "url": "https://lzjzj-creator.github.io/0001%E5%A4%A7%E4%B8%80%E6%A0%B8%E5%BF%83%E4%BF%A1%E6%81%AF%E5%B7%AE/13.%E9%AB%98%E9%A2%91%E6%9D%90%E6%96%99%E6%A8%A1%E6%9D%BF/%E8%BD%AC%E4%B8%93%E4%B8%9A%E7%94%B3%E8%AF%B7%E4%B8%AA%E4%BA%BA%E9%99%88%E8%BF%B0%E4%B8%8E%E9%9D%A2%E8%B0%88%E5%87%86%E5%A4%87%E6%A8%A1%E6%9D%BF/index.html",
+          "seq": 0,
+          "score": 0.502
+        },
+        {
+          "title": "转专业要准备的学科",
+          "url": "https://lzjzj-creator.github.io/0001%E5%A4%A7%E4%B8%80%E6%A0%B8%E5%BF%83%E4%BF%A1%E6%81%AF%E5%B7%AE/1.%E8%BD%AC%E4%B8%93%E4%B8%9A_%E9%AB%98%E4%BB%B7%E5%80%BC%E4%BF%A1%E6%81%AF%E5%B7%AE/%E8%BD%AC%E4%B8%93%E4%B8%9A%E8%A6%81%E5%87%86%E5%A4%87%E7%9A%84%E5%AD%A6%E7%A7%91/index.html",
+          "seq": 0,
+          "score": 0.499
+        },
+        {
+          "title": "转专业整体流程",
+          "url": "https://lzjzj-creator.github.io/0001%E5%A4%A7%E4%B8%80%E6%A0%B8%E5%BF%83%E4%BF%A1%E6%81%AF%E5%B7%AE/1.%E8%BD%AC%E4%B8%93%E4%B8%9A_%E9%AB%98%E4%BB%B7%E5%80%BC%E4%BF%A1%E6%81%AF%E5%B7%AE/%E8%BD%AC%E4%B8%93%E4%B8%9A%E6%95%B4%E4%BD%93%E6%B5%81%E7%A8%8B/index.html",
+          "seq": 0,
+          "score": 0.492
+        },
+        {
+          "title": "转专业整体流程",
+          "url": "https://lzjzj-creator.github.io/0001%E5%A4%A7%E4%B8%80%E6%A0%B8%E5%BF%83%E4%BF%A1%E6%81%AF%E5%B7%AE/1.%E8%BD%AC%E4%B8%93%E4%B8%9A_%E9%AB%98%E4%BB%B7%E5%80%BC%E4%BF%A1%E6%81%AF%E5%B7%AE/%E8%BD%AC%E4%B8%93%E4%B8%9A%E6%95%B4%E4%BD%93%E6%B5%81%E7%A8%8B/index.html",
+          "seq": 1,
+          "score": 0.49
+        }
+      ],
+      "source_count": 5,
+      "top_score": 0.502,
+      "hosts": [
+        "lzjzj-creator.github.io"
+      ],
+      "answer_chars": 847,
+      "answer_head": "转专业需要做以下几方面准备，分阶段、有重点地推进：\n\n**一、前期调研与自我评估（大一上学期起）**  \n- 查清教务处和目标学院当年的转专业通知：明确资格条件、名额、时间节点、材料要求、是否需笔试/面试等。  \n- 评估自身基础：确认原专",
+      "errors": [],
+      "ok": true
+    }
+  ]
+}

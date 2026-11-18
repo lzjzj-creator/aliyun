@@ -130,7 +130,7 @@ defineExpose({ reload: load });
 /* 桌面内嵌栏：占据工作台一柱，随页面流 */
 .session-col {
   display: flex; flex-direction: column; gap: 10px;
-  width: 100%; height: 100%; padding: 14px 12px;
+  height: 100%; padding: 14px 12px;
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
   align-self: flex-start; position: sticky; top: 14px;
   max-height: calc(100vh - 120px);

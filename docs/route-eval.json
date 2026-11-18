@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-16T06:20:48.218269+00:00",
+  "generated_at": "2026-11-18T17:39:37.767479+00:00",
   "base": "https://zhimai-api-hiwijfvopw.cn-beijing.fcapp.run",
   "total": 50,
   "correct": 49,
@@ -92,7 +92,7 @@
       "route": {
         "intent": "kb_qa",
         "kb_scope": "all",
-        "confidence": 0.96,
+        "confidence": 0.95,
         "route_layer": "decision-model",
         "action": "answer",
         "clarify_question": null
@@ -152,7 +152,7 @@
       "route": {
         "intent": "kb_qa",
         "kb_scope": "senior",
-        "confidence": 0.97,
+        "confidence": 0.96,
         "route_layer": "decision-model",
         "action": "answer",
         "clarify_question": null
@@ -172,7 +172,7 @@
       "route": {
         "intent": "kb_qa",
         "kb_scope": "all",
-        "confidence": 0.7,
+        "confidence": 0.64,
         "route_layer": "decision-model",
         "action": "answer",
         "clarify_question": null
@@ -192,7 +192,7 @@
       "route": {
         "intent": "kb_qa",
         "kb_scope": "all",
-        "confidence": 0.73,
+        "confidence": 0.75,
         "route_layer": "decision-model",
         "action": "answer",
         "clarify_question": null
@@ -232,7 +232,7 @@
       "route": {
         "intent": "kb_qa",
         "kb_scope": "all",
-        "confidence": 0.96,
+        "confidence": 0.95,
         "route_layer": "decision-model",
         "action": "answer",
         "clarify_question": null
@@ -272,7 +272,7 @@
       "route": {
         "intent": "kb_qa",
         "kb_scope": "all",
-        "confidence": 0.7,
+        "confidence": 0.68,
         "route_layer": "decision-model",
         "action": "answer",
         "clarify_question": null
@@ -352,7 +352,7 @@
       "route": {
         "intent": "kb_qa",
         "kb_scope": "all",
-        "confidence": 0.6,
+        "confidence": 0.61,
         "route_layer": "decision-model",
         "action": "answer",
         "clarify_question": null
@@ -452,7 +452,7 @@
       "route": {
         "intent": "resume_edit",
         "kb_scope": "all",
-        "confidence": 0.9,
+        "confidence": 0.91,
         "route_layer": "decision-model",
         "action": "guide_resume",
         "clarify_question": null
@@ -472,7 +472,7 @@
       "route": {
         "intent": "resume_edit",
         "kb_scope": "all",
-        "confidence": 0.58,
+        "confidence": 0.65,
         "route_layer": "decision-model",
         "action": "guide_resume",
         "clarify_question": null
@@ -492,7 +492,7 @@
       "route": {
         "intent": "resume_edit",
         "kb_scope": "all",
-        "confidence": 0.49,
+        "confidence": 0.47,
         "route_layer": "decision-model",
         "action": "guide_resume",
         "clarify_question": null
@@ -532,7 +532,7 @@
       "route": {
         "intent": "resume_qa",
         "kb_scope": "all",
-        "confidence": 0.92,
+        "confidence": 0.91,
         "route_layer": "decision-model",
         "action": "answer",
         "clarify_question": null
@@ -552,7 +552,7 @@
       "route": {
         "intent": "kb_qa",
         "kb_scope": "all",
-        "confidence": 0.41,
+        "confidence": 0.43,
         "route_layer": "decision-model",
         "action": "answer",
         "clarify_question": null
@@ -572,7 +572,7 @@
       "route": {
         "intent": "resume_qa",
         "kb_scope": "all",
-        "confidence": 0.77,
+        "confidence": 0.8,
         "route_layer": "decision-model",
         "action": "answer",
         "clarify_question": null
@@ -652,7 +652,7 @@
       "route": {
         "intent": "out_of_scope",
         "kb_scope": "all",
-        "confidence": 0.86,
+        "confidence": 0.83,
         "route_layer": "decision-model",
         "action": "refuse",
         "clarify_question": null
@@ -712,7 +712,7 @@
       "route": {
         "intent": "kb_qa",
         "kb_scope": "all",
-        "confidence": 0.89,
+        "confidence": 0.9,
         "route_layer": "decision-model",
         "action": "answer",
         "clarify_question": null
@@ -771,8 +771,8 @@
       "behavior_ok": true,
       "route": {
         "intent": "kb_qa",
-        "kb_scope": "senior",
-        "confidence": 0.98,
+        "kb_scope": "all",
+        "confidence": 0.97,
         "route_layer": "decision-model",
         "action": "answer",
         "clarify_question": null
@@ -792,7 +792,7 @@
       "route": {
         "intent": "kb_qa",
         "kb_scope": "all",
-        "confidence": 1.0,
+        "confidence": 0.99,
         "route_layer": "decision-model",
         "action": "answer",
         "clarify_question": null
@@ -812,7 +812,7 @@
       "route": {
         "intent": "resume_qa",
         "kb_scope": "all",
-        "confidence": 0.66,
+        "confidence": 0.7,
         "route_layer": "decision-model",
         "action": "answer",
         "clarify_question": null
@@ -832,7 +832,7 @@
       "route": {
         "intent": "resume_qa",
         "kb_scope": "all",
-        "confidence": 0.95,
+        "confidence": 0.93,
         "route_layer": "decision-model",
         "action": "answer",
         "clarify_question": null
@@ -852,7 +852,7 @@
       "route": {
         "intent": "resume_qa",
         "kb_scope": "all",
-        "confidence": 0.42,
+        "confidence": 0.41,
         "route_layer": "decision-model",
         "action": "answer",
         "clarify_question": null
@@ -872,7 +872,7 @@
       "route": {
         "intent": "resume_qa",
         "kb_scope": "all",
-        "confidence": 0.74,
+        "confidence": 0.71,
         "route_layer": "decision-model",
         "action": "answer",
         "clarify_question": null
@@ -892,7 +892,7 @@
       "route": {
         "intent": "resume_qa",
         "kb_scope": "all",
-        "confidence": 0.23,
+        "confidence": 0.21,
         "route_layer": "decision-model",
         "action": "answer",
         "clarify_question": null
@@ -992,7 +992,7 @@
       "route": {
         "intent": "chitchat",
         "kb_scope": "all",
-        "confidence": 0.71,
+        "confidence": 0.73,
         "route_layer": "decision-model",
         "action": "answer",
         "clarify_question": null
@@ -1012,7 +1012,7 @@
       "route": {
         "intent": "chitchat",
         "kb_scope": "all",
-        "confidence": 0.83,
+        "confidence": 0.87,
         "route_layer": "decision-model",
         "action": "answer",
         "clarify_question": null
@@ -1032,7 +1032,7 @@
       "route": {
         "intent": "out_of_scope",
         "kb_scope": "all",
-        "confidence": 0.95,
+        "confidence": 0.96,
         "route_layer": "decision-model",
         "action": "refuse",
         "clarify_question": null
