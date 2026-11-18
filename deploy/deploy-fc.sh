@@ -22,6 +22,22 @@ if [ -z "${ADMIN_PASSWORD_HASH:-}" ] || [ -z "${ADMIN_SESSION_SECRET:-}" ]; then
 fi
 export ADMIN_SESSION_TTL="${ADMIN_SESSION_TTL:-7200}"
 
+# v2 开关：默认全 0（不挂载 v2 路由）。开启顺序见 docs/部署清单.md：
+# 先执行 supabase/migrations 下两个迁移 → 冒烟 → 再置 1。
+# V2_SHARED_QUOTA=1 依赖 20261118_v2_quota.sql，否则 anon 轮次配额会 503（fail-closed）。
+export V2_MEMORY_ENABLED="${V2_MEMORY_ENABLED:-0}"
+export COACH_ENABLED="${COACH_ENABLED:-0}"
+export V2_SHARED_QUOTA="${V2_SHARED_QUOTA:-0}"
+export V2_IP_LIMIT_PER_MIN="${V2_IP_LIMIT_PER_MIN:-20}"
+export V2_ANON_TURNS_PER_DAY="${V2_ANON_TURNS_PER_DAY:-100}"
+export QWEN_MODEL_ROUTER="${QWEN_MODEL_ROUTER:-qwen-turbo}"
+export COACH_MAX_TURNS="${COACH_MAX_TURNS:-12}"
+export COACH_WRAP_COVERAGE="${COACH_WRAP_COVERAGE:-0.8}"
+export COACH_WRAP_STAR="${COACH_WRAP_STAR:-0.6}"
+export COACH_THINKING="${COACH_THINKING:-0}"
+export COACH_DAILY_TOKEN_BUDGET="${COACH_DAILY_TOKEN_BUDGET:-200000}"
+echo "v2 开关：memory=$V2_MEMORY_ENABLED coach=$COACH_ENABLED shared_quota=$V2_SHARED_QUOTA token_budget=$COACH_DAILY_TOKEN_BUDGET"
+
 echo '=== 部署 zhimai-api (FastAPI) ==='
 (cd "$ROOT/deploy/fc/zhimai-api" && s deploy -y)
 
