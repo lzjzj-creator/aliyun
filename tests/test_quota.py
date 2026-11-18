@@ -216,52 +216,59 @@ class SharedLimiterTest(unittest.TestCase):
 
 
 class CoachBudgetTest(unittest.TestCase):
+    """Budget admission contract, independent of coach's orchestration state."""
     def setUp(self):
-        self.coach = importlib.import_module("backend.coach")
+        self.budget = importlib.import_module("backend.model_budget")
         self.store = RpcStore()
         self.client = httpx.Client(
             base_url="https://supabase.invalid/rest/v1",
             transport=httpx.MockTransport(self.store),
         )
-        patcher = patch.object(memory, "_client", self.client)
-        patcher.start()
-        self.addCleanup(patcher.stop)
+        for patcher in (patch.object(memory, "_client", self.client),
+                        patch.object(self.budget, "ENABLED", True),
+                        patch.object(self.budget, "DAILY_LIMIT", 2000),
+                        patch.object(self.budget, "_day", {"date": "", "used": 0})):
+            patcher.start()
+            self.addCleanup(patcher.stop)
         self.addCleanup(self.client.close)
-        self.addCleanup(self.coach._budget_read.update, {"at": 0.0, "used": 0})
 
     def test_local_counter_when_shared_disabled(self):
-        with patch.object(self.coach, "SHARED_BUDGET", False):
-            self.coach._day_budget.update(date="", used=0)
-            self.assertTrue(self.coach.budget_ok())
-            with patch.object(self.coach, "DAILY_TOKEN_BUDGET", 10):
-                self.coach.charge_tokens(90)      # 90 chars ≈ 30 tokens > 10
-                self.assertFalse(self.coach.budget_ok())
-        self.assertEqual(self.store.calls, [])    # no storage round-trip at all
+        with patch.object(self.budget, "SHARED", False):
+            self.assertTrue(self.budget.available())
+            self.budget.reserve("hello", 100)
+            with self.assertRaises(self.budget.BudgetUnavailable):
+                self.budget.reserve("hello", 100)
+            self.assertGreater(self.budget._day["used"], 100)
+        self.assertEqual(self.store.calls, [])
 
-    def test_shared_budget_blocks_at_cap_and_caches_reads(self):
-        with patch.object(self.coach, "SHARED_BUDGET", True), \
-                patch.object(self.coach, "DAILY_TOKEN_BUDGET", 100):
-            self.assertTrue(self.coach.budget_ok())
-            reads = len([c for c in self.store.calls if c[0] == "v2_token_usage_today"])
-            self.coach.budget_ok()
-            self.assertEqual(len([c for c in self.store.calls if c[0] == "v2_token_usage_today"]),
-                             reads)                          # served from the 30s cache
-            self.coach.charge_tokens(300)                     # ≈100 tokens → at cap
-            self.assertFalse(self.coach.budget_ok())
+    def test_shared_budget_blocks_overshoot_without_spending(self):
+        with patch.object(self.budget, "SHARED", True):
+            self.assertTrue(self.budget.available())
+            self.budget.reserve("hello", 100)
+            used = self.store.usage
+            for _ in range(3):
+                with self.assertRaises(self.budget.BudgetUnavailable):
+                    self.budget.reserve("hello", 100)
+            self.assertEqual(self.store.usage, used)
+            self.store.usage = 2000
+            self.assertFalse(self.budget.available())
 
     def test_unknown_spend_fails_closed(self):
         def boom(request):
             raise httpx.ConnectError("down")
-        with patch.object(self.coach, "SHARED_BUDGET", True), patch.object(
-                self.coach, "_budget_read", {"at": 0.0, "used": 0}), patch.object(
-                memory, "_client", httpx.Client(base_url="https://supabase.invalid/rest/v1",
-                                                transport=httpx.MockTransport(boom))):
-            self.assertFalse(self.coach.budget_ok())
+        self.store.fail = boom
+        with patch.object(self.budget, "SHARED", True):
+            self.assertFalse(self.budget.available())
+            with self.assertRaises(self.budget.BudgetUnavailable):
+                self.budget.reserve("hello", 100)
+        self.assertEqual(self.budget._day["used"], 0)
 
-    def test_finished_turn_survives_charge_failure(self):
-        with patch.object(self.coach, "SHARED_BUDGET", True), patch.object(
-                memory, "charge_tokens", side_effect=memory.MemoryStoreError("down")):
-            self.assertIsNone(self.coach.charge_tokens(300))
+    def test_disabled_v1_has_no_storage_or_local_charge(self):
+        with patch.object(self.budget, "ENABLED", False):
+            self.assertTrue(self.budget.available())
+            self.assertIsNone(self.budget.reserve("hello", 100))
+        self.assertEqual(self.store.calls, [])
+        self.assertEqual(self.budget._day["used"], 0)
 
 
 if __name__ == "__main__":
