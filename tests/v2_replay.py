@@ -189,9 +189,17 @@ def _flatten(profile, prefix=""):
             yield path, value
 
 
+_EXPERIENCE_TYPES = {"internship", "project", "campus", "competition", "opensource", "research"}
+
+
 def _derived_ok(path, piece, all_user):
-    """经历条数、时间归并等由系统推导，不算编造。"""
-    return path.endswith((".count", "period", ".period")) or piece in {"无"}
+    """经历条数、时间归并、分组/类型标签由系统推导，不算编造。"""
+    if path.endswith((".count", "period", ".period")) or piece in {"无"}:
+        return True
+    # skills.group 是系统分组名；type/star_score 是契约枚举与系统评分（与 backend/coach.py 同源）
+    if path.endswith("skills.group") or path.endswith("experiences.star_score"):
+        return True
+    return path.endswith("experiences.type") and piece in _EXPERIENCE_TYPES
 
 
 def profile_of(record):
