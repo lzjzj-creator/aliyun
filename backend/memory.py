@@ -320,3 +320,77 @@ def set_session_stage(session_id: str, stage: str) -> dict:
     if not rows:
         raise SessionNotFound("Session not found")
     return _public_session(rows[0])
+
+
+# --- Shared quota / stream lease (multi-instance; 20261118_v2_quota.sql) ---------
+# In-process buckets cannot bound a fleet, so the economically meaningful caps
+# (turns per identity, one stream per session, daily token budget) live here.
+QUOTA_WINDOWS = {"ip": 60, "anon": 86400}   # tumbling windows, seconds
+LEASE_TTL_SECONDS = 300                      # one turn must not outlive its lease
+
+
+def new_lease_token() -> str:
+    return secrets.token_hex(16)
+
+
+def spend_quota(scope: str, key: str, limit: int) -> tuple[bool, int]:
+    """Shared admission control. Returns (allowed, retry_after_seconds)."""
+    if scope not in QUOTA_WINDOWS:
+        raise ValueError("unknown quota scope")
+    if type(limit) is not int or limit < 1:
+        raise ValueError("quota limit must be a positive integer")
+    out = _json(_request("POST", "/rpc/v2_spend_quota", json={
+        "p_scope": scope, "p_key": _text(key, "quota key")[:200],
+        "p_limit": limit, "p_window": QUOTA_WINDOWS[scope],
+    }))
+    if not isinstance(out, dict) or not isinstance(out.get("allowed"), bool):
+        raise MemoryStoreError("Unexpected quota response shape")
+    if out["allowed"]:
+        return True, 0
+    return False, max(1, int(out.get("retry_after") or 1))
+
+
+def acquire_stream_lease(session_id: str, lease_token: str,
+                         ttl: int = LEASE_TTL_SECONDS) -> bool:
+    """True when this caller owns the session's single live stream."""
+    if type(ttl) is not int or ttl < 1 or ttl > 900:
+        raise ValueError("lease ttl must be between 1 and 900 seconds")
+    out = _json(_request("POST", "/rpc/v2_acquire_stream_lease", json={
+        "p_session_id": _uuid(session_id), "p_lease_token": lease_token, "p_ttl": ttl,
+    }))
+    return out is True
+
+
+def release_stream_lease(session_id: str, lease_token: str) -> bool:
+    out = _json(_request("POST", "/rpc/v2_release_stream_lease", json={
+        "p_session_id": _uuid(session_id), "p_lease_token": lease_token,
+    }))
+    return bool(out)
+
+
+def charge_tokens(approx_tokens: int, budget: int) -> tuple[bool, int]:
+    """Add daily spend; refused (allowed=False) when it would overshoot the budget."""
+    if type(approx_tokens) is not int or approx_tokens < 0:
+        raise ValueError("token charge must not be negative")
+    if type(budget) is not int or budget < 1:
+        raise ValueError("token budget must be positive")
+    out = _json(_request("POST", "/rpc/v2_charge_tokens", json={
+        "p_tokens": approx_tokens, "p_budget": budget,
+    }))
+    if not isinstance(out, dict) or not isinstance(out.get("allowed"), bool):
+        raise MemoryStoreError("Unexpected token usage response shape")
+    return out["allowed"], int(out.get("used") or 0)
+
+
+def token_usage_today() -> int:
+    return int(_json(_request("POST", "/rpc/v2_token_usage_today", json={}) or 0))
+
+
+def prune_quota(dry_run: bool = True) -> dict:
+    """Housekeeping for the daily scheduler: old windows and dead leases."""
+    if type(dry_run) is not bool:
+        raise ValueError("dry_run must be boolean")
+    out = _json(_request("POST", "/rpc/v2_prune_quota", json={"dry_run": dry_run}))
+    if not isinstance(out, dict):
+        raise MemoryStoreError("Unexpected prune response shape")
+    return out

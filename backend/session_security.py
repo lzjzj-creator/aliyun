@@ -1,9 +1,17 @@
-"""Single-instance v2 ownership and rate limits; no request bodies or tokens logged.
+"""v2 ownership and rate limits; no request bodies or tokens logged.
 
 XFF's last hop is trusted to match the existing FC gateway contract. Do not use
-this configuration behind an untrusted proxy or with multiple FC instances.
+this configuration behind an untrusted proxy.
+
+Two limiter backends:
+  * RateLimiter  — in-process buckets. Correct only for a single FC instance.
+  * SharedLimiter — Supabase-backed turn quota and per-session stream lease, so the
+    economically meaningful caps hold across instances (V2_SHARED_QUOTA=1).
+The per-IP minute bucket deliberately stays in-process: it bounds request spam,
+while turns/day and the daily token budget (both shared) bound real spend.
 """
 import math
+import os
 import threading
 import time
 from collections import deque
@@ -18,12 +26,21 @@ except ImportError:  # FC starts with backend on sys.path
     import memory
 
 
+IP_LIMIT_PER_MIN = int(os.getenv("V2_IP_LIMIT_PER_MIN", "20"))
+ANON_TURNS_PER_DAY = int(os.getenv("V2_ANON_TURNS_PER_DAY", "100"))
+SHARED_QUOTA_ENABLED = os.getenv("V2_SHARED_QUOTA", "0") == "1"
+
+
 def not_found():
     return HTTPException(404, "资源不存在")
 
 
 def throttled(retry=1):
     return HTTPException(429, "请求过于频繁", headers={"Retry-After": str(max(1, math.ceil(retry)))})
+
+
+def unavailable():
+    return HTTPException(503, "配额存储暂时不可用")
 
 
 class RateLimiter:
@@ -56,10 +73,10 @@ class RateLimiter:
             return True, 0
 
     def check_ip(self, key):
-        return self._allow(self._ip, key, 60, 20)
+        return self._allow(self._ip, key, 60, IP_LIMIT_PER_MIN)
 
     def check_anon(self, key):
-        return self._allow(self._anon, key, 86400, 100)
+        return self._allow(self._anon, key, 86400, ANON_TURNS_PER_DAY)
 
     @contextmanager
     def stream(self, session_id):
@@ -75,7 +92,51 @@ class RateLimiter:
                 self._streams.discard(session_id)
 
 
-limiter = RateLimiter()
+class SharedLimiter:
+    """Turn quota and stream lease in Postgres, so a fleet shares one accounting.
+
+    Fail-closed on store errors: an unbounded FC fleet must not silently drop the
+    only caps that limit spend. The IP minute bucket stays local (spam shaping, not
+    spend), served by the embedded RateLimiter.
+    """
+    def __init__(self, *, store=memory, local=None, clock=time.monotonic):
+        self._store = store
+        self._local = local or RateLimiter()
+        self._clock = clock
+
+    def check_ip(self, key):
+        return self._local.check_ip(key)
+
+    def check_anon(self, key):
+        try:
+            return self._store.spend_quota("anon", key, ANON_TURNS_PER_DAY)
+        except self._store.MemoryStoreError:
+            raise unavailable() from None
+
+    @contextmanager
+    def stream(self, session_id):
+        session_id = str(UUID(str(session_id)))
+        lease = self._store.new_lease_token()
+        try:
+            owned = self._store.acquire_stream_lease(session_id, lease)
+        except self._store.MemoryStoreError:
+            raise unavailable() from None
+        if not owned:
+            raise throttled(5)
+        try:
+            yield
+        finally:
+            try:  # a lost release only costs the remaining lease TTL
+                self._store.release_stream_lease(session_id, lease)
+            except self._store.MemoryStoreError:
+                pass
+
+
+def build_limiter():
+    return SharedLimiter() if SHARED_QUOTA_ENABLED else RateLimiter()
+
+
+limiter = build_limiter()
 
 
 def client_ip(request: Request) -> str:

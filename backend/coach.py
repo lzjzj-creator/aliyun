@@ -37,23 +37,45 @@ _orch_failures = []             # 模块级失败时间戳（单实例 FC 够用
 
 _EXP_GROUPS = ("internships", "projects")   # 经历承载类槽位（skills 属条目组但非经历）
 
-# §10 全局日 token 预算：进程内近似计数（token≈字/3）。单实例近似闸门，
-# 多实例下为每实例口径——精确全局预算需共享计数器，部署清单已注明。
+# §10 全局日 token 预算。V2_SHARED_QUOTA=1 时以共享计数为准（多实例同一个闸），
+# 读值带 30s 缓存以免给首 step 增加一次往返；否则退回进程内近似计数（单实例口径）。
 DAILY_TOKEN_BUDGET = int(os.getenv("COACH_DAILY_TOKEN_BUDGET", "200000"))
+SHARED_BUDGET = os.getenv("V2_SHARED_QUOTA", "0") == "1"
+_budget_read = {"at": 0.0, "used": 0}
 _day_budget = {"date": "", "used": 0}
 
 
 def budget_ok() -> bool:
     today = time.strftime("%Y-%m-%d")
+    if SHARED_BUDGET:
+        now = time.monotonic()
+        if _budget_read["at"] and now - _budget_read["at"] < 30:
+            return _budget_read["used"] < DAILY_TOKEN_BUDGET
+        try:
+            used = memory.token_usage_today()
+        except memory.MemoryStoreError:
+            return False        # 花费用未知时不开新访谈（fail closed）
+        _budget_read["at"] = now
+        _budget_read["used"] = used
+        return used < DAILY_TOKEN_BUDGET
     return _day_budget["date"] != today or _day_budget["used"] < DAILY_TOKEN_BUDGET
 
 
 def charge_tokens(approx_chars: int) -> None:
+    approx = max(0, approx_chars // 3)
+    if SHARED_BUDGET:
+        try:
+            _, used = memory.charge_tokens(approx, DAILY_TOKEN_BUDGET)
+            _budget_read["at"] = time.monotonic()
+            _budget_read["used"] = used
+        except memory.MemoryStoreError:
+            pass                # 回复已完成，不再因记账失败打断本轮；下次写入会补上
+        return
     today = time.strftime("%Y-%m-%d")
     if _day_budget["date"] != today:
         _day_budget["date"] = today
         _day_budget["used"] = 0
-    _day_budget["used"] += max(0, approx_chars // 3)
+    _day_budget["used"] += approx
 
 
 def _prompt(name: str) -> str:
