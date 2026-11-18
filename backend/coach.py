@@ -37,45 +37,14 @@ _orch_failures = []             # 模块级失败时间戳（单实例 FC 够用
 
 _EXP_GROUPS = ("internships", "projects")   # 经历承载类槽位（skills 属条目组但非经历）
 
-# §10 全局日 token 预算。V2_SHARED_QUOTA=1 时以共享计数为准（多实例同一个闸），
-# 读值带 30s 缓存以免给首 step 增加一次往返；否则退回进程内近似计数（单实例口径）。
-DAILY_TOKEN_BUDGET = int(os.getenv("COACH_DAILY_TOKEN_BUDGET", "200000"))
-SHARED_BUDGET = os.getenv("V2_SHARED_QUOTA", "0") == "1"
-_budget_read = {"at": 0.0, "used": 0}
-_day_budget = {"date": "", "used": 0}
-
-
+# Budget admission and reservations use the same counter at the model-call layer.
+# Never charge only the final answer: failed/repair/fallback calls cost money too.
 def budget_ok() -> bool:
-    today = time.strftime("%Y-%m-%d")
-    if SHARED_BUDGET:
-        now = time.monotonic()
-        if _budget_read["at"] and now - _budget_read["at"] < 30:
-            return _budget_read["used"] < DAILY_TOKEN_BUDGET
-        try:
-            used = memory.token_usage_today()
-        except memory.MemoryStoreError:
-            return False        # 花费用未知时不开新访谈（fail closed）
-        _budget_read["at"] = now
-        _budget_read["used"] = used
-        return used < DAILY_TOKEN_BUDGET
-    return _day_budget["date"] != today or _day_budget["used"] < DAILY_TOKEN_BUDGET
-
-
-def charge_tokens(approx_chars: int) -> None:
-    approx = max(0, approx_chars // 3)
-    if SHARED_BUDGET:
-        try:
-            _, used = memory.charge_tokens(approx, DAILY_TOKEN_BUDGET)
-            _budget_read["at"] = time.monotonic()
-            _budget_read["used"] = used
-        except memory.MemoryStoreError:
-            pass                # 回复已完成，不再因记账失败打断本轮；下次写入会补上
-        return
-    today = time.strftime("%Y-%m-%d")
-    if _day_budget["date"] != today:
-        _day_budget["date"] = today
-        _day_budget["used"] = 0
-    _day_budget["used"] += approx
+    try:
+        from . import model_budget
+    except ImportError:  # FC flat-module entry point
+        import model_budget
+    return model_budget.available()
 
 
 def _prompt(name: str) -> str:
@@ -313,159 +282,280 @@ SCALAR_SLOT_PATH = {
 }
 
 
+def _current_user_text(messages):
+    """The pure merge API treats only the last user message as this turn's evidence."""
+    for m in reversed(messages or []):
+        if isinstance(m, dict) and m.get("role") == "user":
+            return m.get("content") if isinstance(m.get("content"), str) else ""
+    return ""
+
+
 def _user_quote_ok(quote, messages) -> bool:
-    q = _norm(quote)
-    return bool(q) and any(q in _norm(m.get("content", ""))
-                           for m in messages if m.get("role") == "user")
+    return (isinstance(quote, str) and bool(_norm(quote))
+            and _norm(quote) in _norm(_current_user_text(messages)))
+
+
+def _validate_extraction(data):
+    """Strict, bounded JSON schema, with no coercion or unknown properties.
+
+    Validation is atomic: a malformed model response is never partially applied.
+    Bounds also cap work/storage before any evidence checks or profile changes.
+    """
+    schemas = {
+        "slot_updates": ({"slot": "text", "value": "text", "quote": "text"},
+                         {"slot", "value", "quote"}),
+        "denials": ({"slot": "text", "quote": "text"}, {"slot", "quote"}),
+        "experiences": ({"type": "type", "title": "text", "quote": "text",
+                         "role": "text", "period": "text", "situation": "text",
+                         "actions": "texts", "results": "texts", "metrics": "texts"},
+                        {"title", "quote"}),
+        "skills": ({"group": "group", "items": "texts"}, {"items"}),
+        "awards": ({"text": "text", "period": "text", "quote": "text"}, {"text"}),
+    }
+    types = {"internship", "project", "campus", "competition", "opensource", "research"}
+    if type(data) is not dict or not set(data) <= set(schemas):
+        raise ValueError("extraction must be a known-key object")
+    total = 0
+    for key, rows in data.items():
+        if type(rows) is not list or len(rows) > 32:
+            raise ValueError("extraction list bound/type")
+        fields, required = schemas[key]
+        for row in rows:
+            if type(row) is not dict or not required <= set(row) or not set(row) <= set(fields):
+                raise ValueError("extraction object fields")
+            for field, value in row.items():
+                kind = fields[field]
+                values = value if kind == "texts" else [value]
+                if kind == "texts" and (type(value) is not list or len(value) > 32):
+                    raise ValueError("extraction text list bound/type")
+                for text in values:
+                    bound = 80 if kind == "group" else 2000
+                    if type(text) is not str or len(text) > bound:
+                        raise ValueError("extraction text bound/type")
+                    if any(ord(c) < 32 and c not in "\n\r\t" for c in text):
+                        raise ValueError("extraction control character")
+                    if kind == "group" and any(ord(c) < 32 for c in text):
+                        raise ValueError("unsafe group")
+                    total += len(text)
+                if kind == "type" and value not in types:
+                    raise ValueError("extraction experience type")
+                if total > 32000:
+                    raise ValueError("extraction total text bound")
+    return data
 
 
 def _merge_experience(exps, item):
-    """按标题归并：同题经历并入补细节；新经历追加。返回 (exps, 是否新增)。"""
+    """Merge already evidence-filtered fields; confirmed records remain immutable."""
     title = _norm(item.get("title"))
     if not title:
         return exps, False
     for e in exps:
-        if _norm(e.get("title")) == title:
+        if not isinstance(e, dict) or not isinstance(e.get("title"), str):
+            continue
+        if _norm(e["title"]) == title:
+            if e.get("confirmed"):
+                return exps, False
             for k in ("type", "role", "period", "situation"):
-                if item.get(k):
-                    e[k] = e.get(k) or item[k]
+                if item.get(k) and not e.get(k):
+                    e[k] = item[k]
             for k in ("actions", "results", "metrics"):
-                v = item.get(k)
-                if isinstance(v, list):
-                    e[k] = list(dict.fromkeys((e.get(k) or []) + [str(x) for x in v]))
-                elif isinstance(v, str) and v.strip():
-                    e[k] = list(dict.fromkeys((e.get(k) or []) + [v]))
+                previous = e.get(k) or []
+                if isinstance(previous, str):
+                    previous = [previous]
+                if isinstance(previous, list) and all(isinstance(x, str) for x in previous):
+                    e[k] = list(dict.fromkeys(previous + item.get(k, [])))
             e["star_score"] = _star_score(e)
             return exps, False
-    exp = {k: item.get(k) for k in
-           ("type", "title", "role", "period", "situation", "actions", "results", "metrics")}
+    if not item.get("type"):
+        return exps, False
+    exp = {k: item[k] for k in
+           ("type", "title", "role", "period", "situation", "actions", "results", "metrics")
+           if k in item}
     exp["star_score"] = _star_score(exp)
     return exps + [exp], True
 
 
 def apply_extraction(profile, detail, data, messages, valid_slots):
-    """纯函数：抽取结果经 quote 校验后合并进 (profile, detail)。返回 (profile, detail, updates)。"""
+    """Pure merge API; only this turn's extractive evidence may introduce facts."""
     profile = json.loads(json.dumps(profile or {}, ensure_ascii=False))
-    detail = dict(detail or {})
+    detail = json.loads(json.dumps(detail or {}, ensure_ascii=False))
     filled = dict(detail.get("filled") or {})
+    detail["filled"] = filled
     updates = []
+    try:
+        _validate_extraction(data)
+    except ValueError:
+        return profile, detail, updates
+    current = _current_user_text(messages)
 
-    for su in data.get("slot_updates") or []:
-        if not isinstance(su, dict):
+    def supported(value):
+        return isinstance(value, str) and bool(_norm(value)) and _norm(value) in _norm(current)
+
+    def locked(slot):
+        # User-confirmed (quote-backed) values are immutable. A denied slot can be
+        # overturned by real evidence, and derived counters are only display state:
+        # they must not freeze the whole group against later turns.
+        entry = filled.get(slot)
+        if isinstance(entry, dict):
+            return not entry.get("denied") and not entry.get("derived")
+        return slot in filled
+
+    for su in data.get("slot_updates", []):
+        slot, value, quote = su["slot"], su["value"], su["quote"]
+        # Group evidence is handled by its own typed branch, not scalar updates.
+        if (slot not in valid_slots or slot not in SCALAR_SLOT_PATH or locked(slot)
+                or not _user_quote_ok(quote, messages) or not supported(value)
+                or _norm(value) not in _norm(quote)):
             continue
-        slot, value, quote = su.get("slot"), su.get("value"), su.get("quote", "")
-        if slot not in valid_slots or value in (None, "") or not _user_quote_ok(quote, messages):
-            continue
-        ent = filled.get(slot)
-        if ent and not (isinstance(ent, dict) and ent.get("denied")):
-            continue            # 已确认字段不被覆盖（§6）；否认过的可被新值更正
+        path = SCALAR_SLOT_PATH[slot]
+        parent = path.split(".")[0]
+        if "." in path and parent in profile and not isinstance(profile[parent], dict):
+            continue  # Legacy malformed containers are not silently migrated.
         filled[slot] = {"value": value, "quote": quote}
-        if slot in SCALAR_SLOT_PATH:
-            _path_set(profile, SCALAR_SLOT_PATH[slot], value)
+        _path_set(profile, path, value)
         updates.append({"slot": slot, "value": value})
 
-    for d_ in data.get("denials") or []:
-        # denials 也要 quote 证据（用户明确说过"没有"），防模型虚构缺口抬覆盖率
-        if not isinstance(d_, dict):
-            continue
-        slot, quote = d_.get("slot"), d_.get("quote", "")
-        if slot in valid_slots and slot not in filled and _user_quote_ok(quote, messages):
+    for denial in data.get("denials", []):
+        slot, quote = denial["slot"], denial["quote"]
+        if (slot in valid_slots and slot not in filled and _user_quote_ok(quote, messages)
+                and re.search(r"没有|没做过|不熟悉|无|\bno\b|\bnever\b", quote, re.I)):
             filled[slot] = {"value": "无", "denied": True, "quote": quote}
             updates.append({"slot": slot, "value": "（已确认无）"})
 
-    for item in data.get("experiences") or []:
-        if not isinstance(item, dict) or not _user_quote_ok(item.get("quote", ""), messages):
+    for item in data.get("experiences", []):
+        if not _user_quote_ok(item["quote"], messages) or not supported(item["title"]):
             continue
-        exps = list(profile.get("experiences") or [])
-        exps, is_new = _merge_experience(exps, item)
-        profile["experiences"] = exps
-        updates.append({"slot": "experiences",
-                        "value": ("新增" if is_new else "补充") + f"经历:{item.get('title', '')[:20]}"})
-    # 经历可推翻"已确认无"：按当前经历内容重算经历类槽位 filled（用户原话写的值不覆盖）
+        old_exps = profile.get("experiences") or []
+        if not isinstance(old_exps, list):
+            continue
+        existing = next((e for e in old_exps if isinstance(e, dict)
+                         and isinstance(e.get("title"), str)
+                         and _norm(e["title"]) == _norm(item["title"])), None)
+        exp_type = (existing or {}).get("type") or item.get("type")
+        group = "internships" if exp_type == "internship" else "projects"
+        if locked(group) or locked("experiences") or (existing or {}).get("confirmed"):
+            continue
+        safe = {"title": item["title"]}
+        if item.get("type"):
+            safe["type"] = item["type"]  # Classification enum, not a claimed user phrase.
+        for k in ("role", "period", "situation"):
+            if supported(item.get(k)):
+                safe[k] = item[k]
+        for k in ("actions", "results", "metrics"):
+            safe[k] = [v for v in item.get(k, []) if supported(v)]
+        before = json.dumps(old_exps, ensure_ascii=False)
+        exps, is_new = _merge_experience(old_exps, safe)
+        if json.dumps(exps, ensure_ascii=False) != before:
+            profile["experiences"] = exps
+            updates.append({"slot": "experiences",
+                            "value": ("新增" if is_new else "补充") + f"经历:{item['title'][:20]}"})
+
+    # Only derived counters / denials can change; explicit filled evidence is immutable.
     tpl = _load_tpl()
     for s in tpl.interview_slots:
         if s.id not in _EXP_GROUPS:
             continue
-        types = _exp_types_for(s)
-        n = sum(1 for e in profile.get("experiences", []) if e.get("type") in types)
+        exps = profile.get("experiences") or []
+        if not isinstance(exps, list):
+            continue
+        n = sum(1 for e in exps if isinstance(e, dict) and e.get("type") in _exp_types_for(s))
         ent = filled.get(s.id)
         ent = ent if isinstance(ent, dict) else {}
         label = f"{n}段经历"
-        stale_counter = "quote" not in ent and ent.get("value") != label
-        if n and (ent.get("denied") or stale_counter):
-            filled[s.id] = {"value": label, "derived": True}
-            updates.append({"slot": s.id, "value": label})
+        if n and (s.id not in filled or ent.get("denied") or ent.get("derived")):
+            if ent.get("value") != label or ent.get("denied"):
+                filled[s.id] = {"value": label, "derived": True}
+                updates.append({"slot": s.id, "value": label})
 
-    for g in data.get("skills") or []:
-        if not isinstance(g, dict) or not g.get("items"):
-            continue
-        # 逐条红线：技能词必须能在用户原话中找到，防模型塞未提及技能
-        items = [str(x) for x in g["items"]
-                 if _user_quote_ok(str(x), messages)]
-        if not items:
-            continue
-        skills = [s for s in (profile.get("skills") or []) if isinstance(s, dict)]
-        name = g.get("group") or "其他"
-        grp = next((s for s in skills if s.get("group") == name), None)
-        if grp is None:
-            grp = {"group": name, "items": []}
-            skills.append(grp)
-        grp["items"] = list(dict.fromkeys(grp.get("items", []) + items))
-        profile["skills"] = skills
-        filled["skills"] = {"value": "、".join(grp["items"][:8]), "derived": True}
-        updates.append({"slot": "skills", "value": "、".join(items[:4])})
+    if not locked("skills") and "skills" in valid_slots:
+        for g in data.get("skills", []):
+            items = [x for x in g["items"] if supported(x)]
+            if not items:
+                continue
+            skills = profile.get("skills") or []
+            if not isinstance(skills, list):
+                continue
+            skills = [s for s in skills if isinstance(s, dict)]
+            name = g.get("group") or "其他"
+            grp = next((s for s in skills if s.get("group") == name), None)
+            if grp is None:
+                grp = {"group": name, "items": []}
+                skills.append(grp)
+            previous = grp.get("items", [])
+            if not isinstance(previous, list) or not all(isinstance(x, str) for x in previous):
+                continue
+            grp["items"] = list(dict.fromkeys(previous + items))
+            profile["skills"] = skills
+            filled["skills"] = {"value": "、".join(grp["items"][:8]), "derived": True}
+            updates.append({"slot": "skills", "value": "、".join(items[:4])})
 
-    for a in data.get("awards") or []:
-        if (isinstance(a, dict) and a.get("text")
-                and _user_quote_ok(str(a["text"]), messages)):
+    if not locked("awards") and "awards" in valid_slots:
+        for a in data.get("awards", []):
+            if (not supported(a["text"]) or (a.get("period") and not supported(a["period"]))
+                    or (a.get("quote") and not _user_quote_ok(a["quote"], messages))):
+                continue
             awards = profile.setdefault("awards", [])
-            if not any(x.get("text") == a["text"] for x in awards):
-                awards.append({"text": str(a["text"]), "period": str(a.get("period", ""))})
-                filled["awards"] = {"value": str(a["text"]), "quote": str(a["text"])}
-                updates.append({"slot": "awards", "value": str(a["text"])[:20]})
+            if not isinstance(awards, list):
+                continue
+            if not any(isinstance(x, dict) and x.get("text") == a["text"] for x in awards):
+                awards.append({"text": a["text"], "period": a.get("period", "")})
+                filled["awards"] = {"value": a["text"], "quote": a["text"]}
+                updates.append({"slot": "awards", "value": a["text"][:20]})
 
-    if profile.get("summary_material"):
-        filled.setdefault("summary",
-                          {"value": profile["summary_material"][:20], "derived": True})
-    detail["filled"] = filled
+    summary = profile.get("summary_material")
+    if isinstance(summary, str) and summary:
+        filled.setdefault("summary", {"value": summary[:20], "derived": True})
     return profile, detail, updates
 
 
 def _extract(user_text, profile, detail, messages):
-    """→ (new_profile, new_detail, updates, raw_data)。raw_data 供 CAS 冲突时免模型重放。"""
+    """→ (new_profile, new_detail, updates, raw_data); invalid output degrades closed."""
     tpl = _load_tpl()
     slot_ids = "\n".join(f"- {s.id}（{s.label}）" for s in tpl.interview_slots)
     prompt = [
         {"role": "system", "content":
          _prompt("extractor.md") +
+         "\n严格使用上述字段和类型；每数组至多32项，每字符串至多2000字。"
+         "所有事实值必须逐字来自本轮用户消息，不可改写或引用历史轮次。"
          f"\n\n可选 slot：\n{slot_ids}\n\n当前画像（勿覆盖用户已确认字段）："
          f"{json.dumps(profile, ensure_ascii=False)[:1200]}"},
         {"role": "user", "content": user_text},
     ]
     try:
-        data = llm.chat_json(prompt, model=QWEN_ROUTER, retries=1, max_tokens=500)
+        data = _validate_extraction(
+            llm.chat_json(prompt, model=QWEN_ROUTER, retries=1, max_tokens=500))
     except Exception:
         return profile, detail, [], {}
     valid = {s.id for s in tpl.interview_slots}
-    p, d, u = apply_extraction(profile, detail, data, messages, valid)
+    p, d, u = apply_extraction(profile, detail, data,
+                               [{"role": "user", "content": user_text}], valid)
     return p, d, u, data
 
 
 # ---------------- 生成（interviewer / answer / wrapup） ----------------
 
 def _profile_brief(profile):
+    """Best-effort display of legacy data, not a migration or schema guarantee."""
+    if not isinstance(profile, dict):
+        return "画像为空"
     parts = []
-    ident = profile.get("identity") or {}
-    if any(ident.values()):
-        parts.append("身份:" + "/".join(str(v) for v in ident.values() if v))
-    goal = (profile.get("goal") or {}).get("target_role")
-    if goal:
+    ident = profile.get("identity")
+    if isinstance(ident, dict):
+        values = [v for v in ident.values() if isinstance(v, str) and v]
+        if values:
+            parts.append("身份:" + "/".join(values))
+    goal = profile.get("goal")
+    goal = goal.get("target_role") if isinstance(goal, dict) else None
+    if isinstance(goal, str) and goal:
         parts.append(f"目标:{goal}")
-    exps = profile.get("experiences") or []
-    if exps:
-        parts.append("经历:" + "；".join(e.get("title", "?") for e in exps))
-    if profile.get("skills"):
-        parts.append("技能:" + "/".join(g.get("group", "") for g in profile["skills"]))
+    for key, label, field, sep in (("experiences", "经历:", "title", "；"),
+                                    ("skills", "技能:", "group", "/")):
+        rows = profile.get(key)
+        if isinstance(rows, list):
+            values = [row[field] for row in rows if isinstance(row, dict)
+                      and isinstance(row.get(field), str) and row[field]]
+            if values:
+                parts.append(label + sep.join(values))
     return "；".join(parts) or "画像为空"
 
 

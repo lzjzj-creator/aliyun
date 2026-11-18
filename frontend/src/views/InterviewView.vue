@@ -297,6 +297,9 @@ async function boot() {
   try {
     const bundle = await getSession(sid);
     restoreMessages(bundle);
+    dead.value = "";
+    deadCanRetry.value = false;
+    deadFallbackV1.value = false;
     scroll();
   } catch (e) {
     deadCanRetry.value = e.status !== 404;   // 瞬时故障给重试入口

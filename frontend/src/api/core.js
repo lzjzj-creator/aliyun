@@ -52,7 +52,9 @@ export async function sse(path, { body, sessionId, headers, handlers } = {}) {
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
-    buf += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
+    // Normalize after accumulation: CR and LF may arrive in separate chunks.
+    buf += decoder.decode(value, { stream: true });
+    buf = buf.replace(/\r\n/g, "\n");
     const parts = buf.split("\n\n");
     buf = parts.pop();
     for (const part of parts) {

@@ -105,7 +105,18 @@ def append_legacy_message(req: MessageReq, request: Request,
         # (a retried null session_id creates a new session by design).
         security.charge_turn(anon)
         created = _storage(lambda: memory.create_session(anon))
-        result = _write_pair(created["session"]["id"], req)
+        sid = created["session"]["id"]
+        try:
+            result = _write_pair(sid, req)
+        except HTTPException:
+            # No token has reached the browser: do not retain private messages
+            # in a newly created session the caller cannot access or delete.
+            # Compensate only this request's new session, never existing ones.
+            try:
+                memory.delete_session(sid)
+            except memory.MemoryStoreError:
+                pass  # Preserve the sanitized original error on storage outage.
+            raise
         return {**result, "session_token": created["token"]}
     sid = security.require_owner(req.session_id, anon, x_session_token)
     # All pair checks and writes are inside the lease. A concurrent request gets

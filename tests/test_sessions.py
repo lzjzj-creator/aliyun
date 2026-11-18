@@ -224,6 +224,29 @@ class SessionRoutesTest(unittest.TestCase):
         no_token = self.client.post('/api/v2/messages', headers={'X-Anon-Id': ANON}, json=self.body)
         self.assertEqual(no_token.status_code, 404)
 
+    def test_new_session_write_failure_does_not_retain_unreachable_private_data(self):
+        # A bootstrap response has not delivered the token yet. If either write
+        # fails, the caller cannot access or delete the newly created session.
+        original = memory.append_message
+        for failed_role in ('user', 'assistant'):
+            with self.subTest(failed_role=failed_role):
+                self.store.sessions.clear()
+                self.store.messages.clear()
+                self.store.profiles.clear()
+
+                def fail_write(sid, role, content, **kwargs):
+                    if role == failed_role:
+                        raise memory.MemoryStoreError('private upstream detail')
+                    return original(sid, role, content, **kwargs)
+
+                with patch.object(memory, 'append_message', side_effect=fail_write):
+                    response = self.send(session_id=None)
+                self.assertEqual(response.status_code, 503)
+                self.assertNotIn('private upstream detail', response.text)
+                self.assertEqual(self.store.sessions, {})
+                self.assertEqual(self.store.messages, [])
+                self.assertEqual(self.store.profiles, {})
+
     def test_canonical_ids_share_ownership_and_lease(self):
         self.headers['X-Anon-Id'] = ANON.replace('-', '')
         self.assertEqual(self.send(session_id=SID.upper()).status_code, 200)

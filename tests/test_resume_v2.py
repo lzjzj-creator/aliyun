@@ -178,6 +178,89 @@ class EndpointShapeTest(unittest.TestCase):
         self.assertEqual(by_key["internships"]["status"], "skipped")
         self.assertFalse(by_key["basics"]["optimizable"])
 
+    def test_session_conversation_uses_authenticated_package_memory(self):
+        from unittest.mock import patch
+        from fastapi import HTTPException
+        from backend import memory
+        from backend.routers.resume import AutofillReq, _resolve_conversation
+
+        sid = "12345678-1234-4234-8234-123456789abc"
+        anon = self.H["X-Anon-Id"]
+        req = AutofillReq(session_id=sid, template_version=self.ver)
+        messages = [{"id": 1, "role": "user", "content": "实现课程推荐"}]
+        bundle = {"session": {"id": sid}, "messages": messages,
+                  "profile": {"profile": {"summary": "课程推荐"}}}
+        with patch.object(memory, "verify_session", return_value=True) as verify, patch.object(
+                memory, "get_session_bundle", return_value=bundle) as read:
+            self.assertEqual(_resolve_conversation(req, anon, "test-token"),
+                             (messages, bundle["profile"]["profile"]))
+            verify.assert_called_once_with(sid, anon, "test-token")
+            read.assert_called_once_with(sid)
+        with patch.object(memory, "verify_session", return_value=False), patch.object(
+                memory, "get_session_bundle") as read:
+            with self.assertRaises(HTTPException) as caught:
+                _resolve_conversation(req, anon, "forged")
+            self.assertEqual(caught.exception.status_code, 404)
+            read.assert_not_called()
+        for missing in (None, {"session": None, "messages": []}):
+            with self.subTest(missing=missing), patch.object(
+                    memory, "verify_session", return_value=True), patch.object(
+                    memory, "get_session_bundle", return_value=missing):
+                with self.assertRaises(HTTPException) as caught:
+                    _resolve_conversation(req, anon, "test-token")
+                self.assertEqual(caught.exception.status_code, 404)
+        with patch.object(memory, "verify_session", return_value=True), patch.object(
+                memory, "get_session_bundle", side_effect=memory.MemoryStoreError("private upstream detail")):
+            with self.assertRaises(HTTPException) as caught:
+                _resolve_conversation(req, anon, "test-token")
+            self.assertEqual(caught.exception.status_code, 503)
+            self.assertNotIn("private upstream detail", str(caught.exception.detail))
+
+    def test_nonempty_sections_reach_model_and_complete(self):
+        from unittest.mock import patch
+        from backend.routers import resume as routes
+        from backend import resume_optimizer as optimizer
+
+        original = "实现课程推荐"
+        for section in ("projects", "internships", "summary"):
+            with self.subTest(section=section):
+                data = {"text": original} if section == "summary" else [{"bullets": [original]}]
+                output = {"rewritten": [{"original": original, "suggested": original}], "questions": []}
+                with patch.object(routes.security, "enforce_ip"), patch.object(
+                        routes.security, "charge_turn"), patch.object(
+                        optimizer.llm, "chat_json", return_value=output) as model:
+                    response = self.c.post("/api/v2/resume/optimize/section", headers=self.H, json={
+                        "template_version": self.ver, "section": section,
+                        "fields": {section: data}})
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.json()["status"], "done")
+                model.assert_called_once()
+                self.assertEqual(response.json()["optimized"], data)
+
+    def test_unsupported_claim_with_separate_placeholder_is_not_written(self):
+        from unittest.mock import patch
+        from backend.routers import resume as routes
+        from backend import resume_optimizer as optimizer
+
+        original = "实现课程推荐"
+        for suggested in ("实现课程推荐，提升85%【待补充：环境】",
+                          "使用 K8s 实现课程推荐【待补充：环境】"):
+            with self.subTest(suggested=suggested):
+                output = {"rewritten": [{"original": original, "suggested": suggested}], "questions": []}
+                with patch.object(routes.security, "enforce_ip"), patch.object(
+                        routes.security, "charge_turn"), patch.object(
+                        optimizer.llm, "chat_json", return_value=output):
+                    response = self.c.post("/api/v2/resume/optimize/section", headers=self.H, json={
+                        "template_version": self.ver, "section": "projects",
+                        "fields": {"projects": [{"bullets": [original]}]}})
+                self.assertEqual(response.status_code, 200)
+                result = response.json()
+                self.assertEqual(result["status"], "done")
+                safe = original + "【待补充】"
+                self.assertEqual(result["optimized"][0]["bullets"], [safe])
+                self.assertEqual(result["change_log"][0]["after"], safe)
+                self.assertTrue(result["needs_input"])
+
     def test_section_rejects_non_optimizable(self):
         fields = json.loads((FIXTURE / "autofill.json").read_text(encoding="utf-8"))["fields"]
         r = self.c.post("/api/v2/resume/optimize/section", headers=self.H,

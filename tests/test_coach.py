@@ -107,7 +107,9 @@ class ExtractionTest(unittest.TestCase):
         self.assertEqual(len(u), 1)
 
     def test_denials_and_experience_merge(self):
-        msgs = [{"role": "user", "content": "我没做过任何项目，只做过二手书小程序"}]
+        # 事实必须在本轮原话里：抽取只做 extractive 校验，不再由模型自述背书
+        msgs = [{"role": "user", "content": "我没做过任何项目，只做过二手书小程序，"
+                                            "自己写后端，指标提升 30%，用户翻倍"}]
         # 无 quote 的否认被丢弃（防虚构缺口抬覆盖率）
         d0 = coach.apply_extraction({}, {}, {"denials": ["projects"]},
                                   msgs, self.SLOTS)[1]
@@ -231,7 +233,10 @@ class CoachRouteTest(unittest.TestCase):
             base_url="https://supabase.invalid/rest/v1",
             transport=httpx.MockTransport(self.store))
         self._patchers = [patch.object(memory, "_client", self.transport),
-                          patch.object(security, "limiter", security.RateLimiter())]
+                          patch.object(security, "limiter", security.RateLimiter()),
+                          # 与本地 .env 解耦：线上 V2_SHARED_QUOTA=1 时预算门禁会走
+                          # /rpc/*，mock Store 不覆盖 → 误判 503；配额另见 test_quota
+                          patch.object(coach, "budget_ok", return_value=True)]
         for p in self._patchers:
             p.start()
             self.addCleanup(p.stop)
@@ -296,16 +301,26 @@ class CoachRouteTest(unittest.TestCase):
         self.assertEqual(len(users), 1)
         self.assertTrue(any(m["status"] == "done" and m["steps"] for m in asst))
 
-    def test_duplicate_client_msg_id_returns_error_not_regen(self):
+    def test_duplicate_client_msg_id_replays_completed_result_without_regeneration(self):
         first = _parse_sse(self._post({"message": ""}).text)
         sess = dict(first)["session"]
         headers = {"X-Session-Token": sess["session_token"]}
         body = {"session_id": sess["session_id"], "client_msg_id": "dup",
                 "message": "hi there"}
-        self._post(body, headers)
-        res = self._post(body, headers)
+        original = _parse_sse(self._post(body, headers).text)
+        persisted = len(self.store.messages)
+        with patch.object(coach, "turn_events",
+                          side_effect=AssertionError("completed request must replay")) as generate:
+            res = self._post(body, headers)
+            generate.assert_not_called()
+        self.assertEqual(res.status_code, 200)
         evs = _parse_sse(res.text)
-        self.assertIn("error", [e for e, _ in evs])
+        self.assertNotIn("error", [e for e, _ in evs])
+        self.assertEqual(evs[-1][0], "done")
+        self.assertEqual(dict(evs)["done"], dict(original)["done"])
+        self.assertEqual("".join(d for e, d in evs if e == "token"),
+                         "".join(d for e, d in original if e == "token"))
+        self.assertEqual(len(self.store.messages), persisted)
         users = [m for m in self.store.messages if m["role"] == "user"]
         self.assertEqual(len(users), 1)
 

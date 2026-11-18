@@ -51,7 +51,7 @@ function addEntry(sec) {
 function removeEntry(secKey, i) {
   const arr = (props.modelValue[secKey] || []).slice();
   arr.splice(i, 1);
-  emit("update:modelValue", { ...props.modelValue, [sec.key]: arr });
+  emit("update:modelValue", { ...props.modelValue, [secKey]: arr });
 }
 const join = (v) => (Array.isArray(v) ? v.join("、") : v || "");
 const split = (v) => v.split(/[、,，\n]/).map((s) => s.trim()).filter(Boolean);

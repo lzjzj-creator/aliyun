@@ -9,6 +9,11 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
+try:
+    from . import model_budget as budget
+except ImportError:  # FC flat-module entry point
+    import model_budget as budget
+
 DASHSCOPE_KEY = os.getenv("DASHSCOPE_API_KEY", "")
 DEEPSEEK_KEY = os.getenv("DEEPSEEK_API_KEY", "")
 QWEN_CHAT = os.getenv("QWEN_MODEL_CHAT", "qwen-plus")
@@ -30,6 +35,10 @@ class LLM:
         try:
             return self._chat(DS_BASE, DASHSCOPE_KEY, model or QWEN_CHAT,
                               messages, json_mode, temperature, max_tokens)
+        except budget.BudgetUnavailable:
+            # A rejected reservation is not an upstream outage; never bypass
+            # the shared admission gate by trying another paid provider.
+            raise
         except Exception:
             if not DEEPSEEK_KEY:
                 raise
@@ -56,34 +65,77 @@ class LLM:
     def chat_stream(self, messages, model=None, max_tokens=None,
                     enable_thinking=False):
         """流式对话，逐行产出 content delta 文本（生成器）。
-        enable_thinking 时模型的 reasoning_content 只在此处被丢弃——原始 CoT 不离开服务端。"""
+        enable_thinking 时模型的 reasoning_content 只在此处被丢弃——原始 CoT 不离开服务端。
+        成功终态为 [DONE] 或 finish_reason=stop 后的正常 EOF；usage 空 choices
+        帧不算终态。其它终止原因、坏帧、流内错误与缺失终态均报固定错误。
+        """
         body = {"model": model or QWEN_CHAT, "messages": messages,
                 "stream": True, "temperature": 0.5}
         if max_tokens:
             body["max_tokens"] = max_tokens
         if enable_thinking:
+            if budget.ENABLED:
+                # This provider's hidden reasoning allowance is not bounded by
+                # our text max_tokens contract. Fail closed instead of claiming
+                # the reservation covers unbounded paid reasoning.
+                raise budget.BudgetUnavailable("预算模式暂不支持思考输出")
             body["enable_thinking"] = True
-        with self._client.stream(
-            "POST", f"{DS_BASE}/chat/completions", json=body,
-            headers={"Authorization": f"Bearer {DASHSCOPE_KEY}"},
-        ) as r:
-            r.raise_for_status()
-            for line in r.iter_lines():
-                if not line.startswith("data:"):
-                    continue
-                data = line[5:].strip()
-                if data == "[DONE]":
-                    return
-                try:
-                    delta = json.loads(data)["choices"][0].get("delta", {})
-                except Exception:
-                    continue
-                if delta.get("content"):
-                    yield delta["content"]
+        if budget.ENABLED:
+            bounded_output = budget.bounded_output(body["model"], max_tokens)
+            budget.reserve(messages, bounded_output)
+            body["max_tokens"] = bounded_output
+        finished = False
+        try:
+            with self._client.stream(
+                "POST", f"{DS_BASE}/chat/completions", json=body,
+                headers={"Authorization": f"Bearer {DASHSCOPE_KEY}"},
+            ) as r:
+                r.raise_for_status()
+                for line in r.iter_lines():
+                    if not line.startswith("data:"):
+                        continue
+                    data = line[5:].strip()
+                    if data == "[DONE]":
+                        return
+                    frame = json.loads(data)
+                    if not isinstance(frame, dict) or "error" in frame:
+                        raise ValueError
+                    choices = frame.get("choices")
+                    if not isinstance(choices, list):
+                        raise ValueError
+                    # OpenAI-compatible include_usage trailers have no choices.
+                    if not choices and isinstance(frame.get("usage"), dict):
+                        continue
+                    if len(choices) != 1 or not isinstance(choices[0], dict):
+                        raise ValueError
+                    choice = choices[0]
+                    reason = choice.get("finish_reason")
+                    if reason is not None and reason != "stop":
+                        raise ValueError
+                    delta = choice.get("delta", {} if reason == "stop" else None)
+                    if not isinstance(delta, dict):
+                        raise ValueError
+                    content = delta.get("content")
+                    if content is not None and not isinstance(content, str):
+                        raise ValueError
+                    if finished and content:
+                        raise ValueError
+                    if reason == "stop":
+                        finished = True
+                    if content:
+                        yield content
+                if not finished:
+                    raise ValueError
+        except (httpx.HTTPError, ValueError, TypeError):
+            # Never expose provider error text, request echoes or JSON fragments.
+            raise RuntimeError("LLM stream failed") from None
 
     def decide(self, content: str, questions: dict, ticket_id: str = "q") -> dict:
         """decision-model-preview 结构化决策（systemone 专用端点）。
         返回 answers 字典：choice→{choice,confidence,probabilities}，noul→{noul}，score→{score,confidence}"""
+        if budget.ENABLED:
+            # systemone has no reviewed hard output/reasoning bound.
+            raise budget.BudgetUnavailable("预算模式暂不支持决策模型")
         r = self._client.post(
             "https://cn-beijing.maas.qianwenaiapi.com/compatible-mode/v1/systemone",
             json={"model": "decision-model-preview",
@@ -96,6 +148,7 @@ class LLM:
         return r.json()["answers"]
 
     def embed(self, text: str, text_type: str = "query") -> list[float]:
+        budget.reserve({"texts": [text], "text_type": text_type}, 0)
         r = self._client.post(
             EMBED_URL,
             json={"model": EMBED_MODEL,
@@ -113,6 +166,10 @@ class LLM:
             body["response_format"] = {"type": "json_object"}
         if max_tokens:
             body["max_tokens"] = max_tokens
+        if budget.ENABLED:
+            bounded_output = budget.bounded_output(body["model"], max_tokens)
+            budget.reserve(messages, bounded_output)
+            body["max_tokens"] = bounded_output
         r = httpx.post(f"{base}/chat/completions", json=body,
                        headers={"Authorization": f"Bearer {key}"}, timeout=60)
         r.raise_for_status()
