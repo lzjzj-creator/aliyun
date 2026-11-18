@@ -75,7 +75,7 @@ def _resolve_conversation(req: AutofillReq, anon_id: str, token: str):
         return req.messages, req.profile or {}
     if req.session_id:
         try:
-            from . import memory   # A 域 #2 交付后生效
+            from .. import memory
         except ImportError:
             try:
                 import memory      # FC 以 backend 为根启动的裸模块形态
@@ -85,9 +85,13 @@ def _resolve_conversation(req: AutofillReq, anon_id: str, token: str):
             raise HTTPException(status_code=501, detail={
                 "code": "SESSION_STORE_NOT_READY",
                 "message": "会话存储未就绪；请先以 messages 直传调用"})
-        if not memory.verify_session(req.session_id, anon_id, token):
-            raise HTTPException(status_code=404, detail="not found")
-        bundle = memory.get_session_bundle(req.session_id)
+        sid = security.require_owner(req.session_id, anon_id, token)
+        try:
+            bundle = memory.get_session_bundle(sid)
+        except memory.MemoryStoreError:
+            raise HTTPException(status_code=503, detail="存储暂时不可用") from None
+        if bundle is None or bundle.get("session") is None:
+            raise security.not_found()
         return bundle["messages"], (bundle.get("profile") or {}).get("profile") or {}
     raise HTTPException(status_code=400, detail={
         "code": "CONVERSATION_REQUIRED",
@@ -108,22 +112,33 @@ def _norm(s: str) -> str:
     return re.sub(r"\s+", "", s or "")
 
 
+def _message_id(message: dict, index: int):
+    # Only absent ids fall back to the displayed index; bool is not an integer id.
+    mid = message.get("id", index)
+    return mid if type(mid) in (int, str) and mid != "" else None
+
+
 def _conversation_text(messages: list[dict]) -> str:
-    """[m<id>] 角色：内容 —— quote 校验只允许 role=user 的消息。"""
+    """Use JSON ids in the prompt so string and integer ids remain distinct."""
     out = []
     for i, m in enumerate(messages):
-        mid = m.get("id", i)
+        mid = _message_id(m, i)
         role = "用户" if m.get("role") == "user" else "知脉"
-        out.append(f"[m{mid}] {role}：{m.get('content', '')}")
+        content = m.get("content", "")
+        if isinstance(content, str):
+            out.append(f"[msg_id={json.dumps(mid, ensure_ascii=False)}] {role}：{content}")
     return "\n".join(out)
 
 
-def _user_quote_ok(quote: str, messages: list[dict]) -> bool:
-    q = _norm(quote)
-    if not q:
+def _user_quote_ok(quote, messages: list[dict], msg_id=None) -> bool:
+    if not isinstance(quote, str) or not quote.strip() or type(msg_id) not in (int, str):
         return False
-    return any(q in _norm(m.get("content", ""))
-               for m in messages if m.get("role") == "user")
+    # Duplicate ids are ambiguous, even if one duplicate is an assistant message.
+    matched = [m for i, m in enumerate(messages)
+               if type(_message_id(m, i)) is type(msg_id) and _message_id(m, i) == msg_id]
+    return (len(matched) == 1 and matched[0].get("role") == "user"
+            and isinstance(matched[0].get("content"), str)
+            and quote in matched[0]["content"])
 
 
 def _get_leaf(fields: dict, path: str):
@@ -178,11 +193,13 @@ def _iter_leaves(tpl, fields: dict):
         elif sec.type == "skillgroups":
             req_flag = bool(sec.spec_fields() and sec.spec_fields()[0].required)
             for gi, g in enumerate((data or {}).get("groups", [])):
+                yield f"{sec.key}.groups.{gi}.name", g.get("name"), False, "技能分组"
                 for ii, it in enumerate((g or {}).get("items", [])):
                     yield f"{sec.key}.groups.{gi}.items.{ii}", it, req_flag, f"{g.get('name','技能')}项"
         elif sec.type == "lines":
             for i, it in enumerate((data or {}).get("items", [])):
                 yield f"{sec.key}.items.{i}.text", (it or {}).get("text"), False, sec.title
+                yield f"{sec.key}.items.{i}.period", (it or {}).get("period"), False, "获奖时间"
         elif sec.type == "text":
             yield f"{sec.key}.text", (data or {}).get("text"), False, sec.title
 
@@ -190,7 +207,7 @@ def _iter_leaves(tpl, fields: dict):
 def _normalize_fields(tpl, raw: dict) -> dict:
     """把模型输出收敛到契约形状：未知键丢弃，类型偏差置空。"""
     out = empty_fields(tpl)
-    raw = raw or {}
+    raw = raw if isinstance(raw, dict) else {}
     for sec in tpl.sections:
         data = raw.get(sec.key)
         if data is None:
@@ -202,32 +219,36 @@ def _normalize_fields(tpl, raw: dict) -> dict:
         elif sec.type == "entries" and isinstance(data, list):
             entries = []
             for e in data[: (sec.max or 5)]:
-                if not isinstance(e, dict):
-                    continue
+                # Keep source indexes, including malformed/empty rows. Evidence paths
+                # must never silently move to a different model row.
+                e = e if isinstance(e, dict) else {}
                 norm = {}
                 for f in sec.entry_fields:
                     v = e.get(f.key)
                     if f.input in ("bullets", "tags"):
-                        norm[f.key] = [str(x) for x in v] if isinstance(v, list) else []
+                        norm[f.key] = [x if isinstance(x, str) else "" for x in v] if isinstance(v, list) else []
                     else:
                         norm[f.key] = v if isinstance(v, str) else ""
                 entries.append(norm)
             out[sec.key] = entries
         elif sec.type == "skillgroups" and isinstance(data, dict):
             groups = []
-            for g in (data.get("groups") or [])[:4]:
-                if isinstance(g, dict):
-                    items = g.get("items")
-                    groups.append({"name": str(g.get("name", "")),
-                                   "items": [str(x) for x in items] if isinstance(items, list) else []})
+            raw_groups = data.get("groups")
+            for g in (raw_groups if isinstance(raw_groups, list) else [])[:4]:
+                g = g if isinstance(g, dict) else {}
+                items = g.get("items")
+                groups.append({"name": g.get("name") if isinstance(g.get("name"), str) else "",
+                               "items": [x if isinstance(x, str) else "" for x in items] if isinstance(items, list) else []})
             out[sec.key] = {"groups": groups}
         elif sec.type == "lines" and isinstance(data, dict):
             items = []
-            for it in (data.get("items") or [])[:10]:
-                if isinstance(it, dict):
-                    items.append({"text": str(it.get("text", "")), "period": str(it.get("period", ""))})
-                elif isinstance(it, str):
-                    items.append({"text": it, "period": ""})
+            raw_items = data.get("items")
+            for it in (raw_items if isinstance(raw_items, list) else [])[:10]:
+                if isinstance(it, str):
+                    it = {"text": it}
+                it = it if isinstance(it, dict) else {}
+                items.append({k: it.get(k) if isinstance(it.get(k), str) else ""
+                              for k in ("text", "period")})
             out[sec.key] = {"items": items}
         elif sec.type == "text" and isinstance(data, dict):
             out[sec.key] = {"text": data.get("text") if isinstance(data.get("text"), str) else ""}
@@ -263,58 +284,50 @@ def autofill(req: AutofillReq, request: Request,
         raise HTTPException(status_code=502, detail={
             "code": "AUTOFILL_MODEL_FAILED", "message": "填写生成服务暂时不可用"})
 
+    data = data if isinstance(data, dict) else {}
     fields = _normalize_fields(tpl, data.get("fields"))
-    gaps = list(data.get("gaps") or [])
-    gap_paths = {g.get("field_path") for g in gaps if isinstance(g, dict)}
+    leaves = list(_iter_leaves(tpl, fields))
+    leaf_values = {path: value for path, value, _, _ in leaves}
+    raw_gaps = data.get("gaps")
+    gaps = [{"field_path": g["field_path"],
+             "label": g.get("label") if isinstance(g.get("label"), str) else g["field_path"],
+             "reason": g.get("reason") if isinstance(g.get("reason"), str) else "请确认或手动填写"}
+            for g in (raw_gaps if isinstance(raw_gaps, list) else [])
+            if isinstance(g, dict) and isinstance(g.get("field_path"), str)
+            and (g["field_path"] in leaf_values or g["field_path"] in fields)]
+    gap_paths = {g["field_path"] for g in gaps}
 
-    # 证据校验：quote 必须是用户原话子串，否则证据作废（§8 红线）
+    # Exact concrete leaf only. A genuine but unrelated quote cannot support a
+    # value: retain only extractive strings occurring verbatim inside that quote.
     evidence_map = {}
-    for path, evs in (data.get("evidence_map") or {}).items():
-        if not valid_path_syntax(path) or not isinstance(evs, list):
+    raw_evidence = data.get("evidence_map")
+    for path, evs in (raw_evidence if isinstance(raw_evidence, dict) else {}).items():
+        value = leaf_values.get(path)
+        if not isinstance(value, str) or not value.strip() or not isinstance(evs, list):
             continue
-        ok = [{"msg_id": e.get("msg_id"), "quote": e.get("quote", "")}
+        ok = [{"msg_id": e["msg_id"], "quote": e["quote"]}
               for e in evs if isinstance(e, dict)
-              and _user_quote_ok(e.get("quote", ""), messages)]
+              and _user_quote_ok(e.get("quote"), messages, e.get("msg_id"))
+              and value in e["quote"]]
         if ok:
             evidence_map[path] = ok
 
-    # 红线：非空叶子必须至少一条有效证据（自身或祖先路径），否则置空 + gap；
-    # 空叶子仅在必填时补 gap。
-    def _has_evidence(path: str) -> bool:
-        return path in evidence_map or any(
-            path.startswith(k + ".") for k in evidence_map)
-
-    for path, v, required, label in _iter_leaves(tpl, fields):
-        filled = bool(v) if not isinstance(v, list) else bool([x for x in v if str(x).strip()])
-        if filled and not _has_evidence(path):
-            _set_leaf(fields, path, _blank_like(v))
+    for path, v, required, label in leaves:
+        filled = isinstance(v, str) and bool(v.strip())
+        if filled and path not in evidence_map:
+            _set_leaf(fields, path, "")
             if path not in gap_paths:
                 gaps.append({"field_path": path, "label": label,
-                             "reason": "无有效证据来源，请确认或手动填写"})
+                             "reason": "无逐字支持该字段的用户消息证据，请确认或手动填写"})
                 gap_paths.add(path)
         elif not filled and required and path not in gap_paths:
             gaps.append({"field_path": path, "label": label,
                          "reason": "对话中未提及，请手动填写"})
             gap_paths.add(path)
 
-    # 清掉被置空的空项/空条目/空 bullets
-    for sec in tpl.sections:
-        if sec.type == "skillgroups":
-            for g in fields[sec.key].get("groups", []):
-                g["items"] = [x for x in g.get("items", []) if str(x).strip()]
-            fields[sec.key]["groups"] = [g for g in fields[sec.key]["groups"] if g["items"]]
-        elif sec.type == "lines":
-            fields[sec.key]["items"] = [
-                it for it in fields[sec.key].get("items", []) if str(it.get("text", "")).strip()]
-        elif sec.type == "entries":
-            for e in fields[sec.key]:
-                for f in sec.entry_fields:
-                    if f.input in ("bullets", "tags") and isinstance(e.get(f.key), list):
-                        e[f.key] = [x for x in e[f.key] if str(x).strip()]
-            fields[sec.key] = [
-                e for e in fields[sec.key]
-                if any(str(v).strip() for v in e.values() if not isinstance(v, list))
-                or any(bool(v) for v in e.values() if isinstance(v, list))]
+    # Preserve indexes, including empty entries/list slots. Removing them would
+    # silently retarget evidence and gaps. Clients must accept sparse blank rows;
+    # any later compaction must remap fields, evidence_map and gaps together.
 
     # 区块级缺口：必填 entries 区块为空 → section 级 gap
     for sec in tpl.sections:
@@ -456,7 +469,10 @@ def optimize_section(req: OptimizeSectionReq, request: Request,
     originals = [t for _, t in metas]
     facts = _facts_for_section(sec, data, req.confirmed_facts)
     try:
-        result = rewrite_bullets(originals, facts, rubric=sec.rubric or "")
+        rubric = "\n".join(
+            f.rubric or f.rules or "" for f in sec.spec_fields()
+            if f.key in ("bullets", "text"))
+        result = rewrite_bullets(originals, facts, rubric=rubric)
     except Exception:
         steps.append({"kind": "rewrite", "title": "STAR 改写",
                       "detail": "改写失败，请稍后重试", "status": "error"})
@@ -473,21 +489,19 @@ def optimize_section(req: OptimizeSectionReq, request: Request,
     for idx, (path, original) in enumerate(metas):
         item = rewritten[idx] if idx < len(rewritten) else None
         suggested = (item or {}).get("suggested") or original
-        if suggested != original:
-            reason = "STAR 改写：动词开头+量化结果" if not item.get("needs_user_data") \
-                else "改写后仍缺数据，守卫落占位"
-            change_log.append({"field_path": path, "before": original,
-                               "after": suggested, "reason": reason})
         write = suggested
+        reason = "STAR 改写：动词开头+量化结果"
         if item and item.get("needs_user_data"):
             blocked += 1
-            ph = extract_placeholder(suggested)
-            if ph:
-                pass                                # 模型已在文内嵌占位，写回即可
-            else:
-                write = f"{original}【待补充】"      # 编造内容不进导出稿（§9）
+            # A placeholder elsewhere does not sanitize unsupported claims.
+            # Conservatively retain the user's original until facts are supplied.
+            write = f"{original}【待补充】"
+            reason = "建议含未确认事实，保留原文并待补充"
             placeholders.append({"field_path": path, "label": "待补充",
-                                 "placeholder": ph or "【待补充】"})
+                                 "placeholder": "【待补充】"})
+        if write != original:
+            change_log.append({"field_path": path, "before": original,
+                               "after": write, "reason": reason})
         # 写回 optimized
         parts = path.split(".")
         if sec.type == "text":

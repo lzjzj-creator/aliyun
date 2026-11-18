@@ -48,22 +48,62 @@ def _enum_novel(item: str, corpus: str) -> bool:
     return all(item[i:i + 4] not in corpus for i in range(len(item) - 3))
 
 
+# 技术标识符里的数字（Top-5 / v2 / C++11）是名字的一部分，不是可改写的数量
+_IDENT_RE = re.compile(r"[A-Za-z][A-Za-z0-9+#.\-]*\d[A-Za-z0-9+#.\-]*")
+# 数量 = 数字 + 紧跟的最短单位/量词（单字符或 % 或拉丁后缀）；不吞后续汉字，
+# 以免「Top-5 命中率」这类上下文被当成单位导致误报。
+_QTY_RE = re.compile(r"(?<![A-Za-z0-9+#.\-])(\d+(?:\.\d+)?)([%％]|[A-Za-z]+|[\u4e00-\u9fff])?")
+
+
+def _numeric_atoms(text: str) -> set[str]:
+    """Conservative surface quantities, not a proof of Chinese factual semantics.
+
+    Only the number plus its immediate unit/count noun is compared, so unit swaps
+    (12 interfaces vs 12%, 1 s vs 1 ms) cannot borrow another bullet's evidence.
+    The guard still cannot prove Chinese semantics: it only refuses visible drift.
+    """
+    compact = re.sub(r"\s+", "", text)
+    atoms = {m.group(0) for m in _IDENT_RE.finditer(compact)}
+    atoms |= {m.group(1) + (m.group(2) or "") for m in _QTY_RE.finditer(compact)}
+    return atoms
+
+
+def _safe_rewrite_data(data, originals: list[str]) -> dict:
+    data = data if isinstance(data, dict) else {}
+    rows = data.get("rewritten")
+    rows = rows if isinstance(rows, list) else []
+    normalized = []
+    for index, original in enumerate(originals):
+        row = rows[index] if index < len(rows) else None
+        valid = (isinstance(row, dict) and row.get("original") == original
+                 and isinstance(row.get("suggested"), str) and bool(row["suggested"].strip()))
+        normalized.append({"original": original,
+                           "suggested": row["suggested"] if valid else original,
+                           "needs_user_data": not valid or row.get("needs_user_data") is not False
+                           if valid and "needs_user_data" in row else not valid})
+    questions = data.get("questions")
+    return {"rewritten": normalized,
+            "questions": [q for q in questions if isinstance(q, str)]
+            if isinstance(questions, list) else []}
+
+
 def guard_fabricated_numbers(data: dict, originals: list[str], facts: str) -> dict:
-    """确定性守卫：建议文本里的数字必须能在原文/已确认事实中找到，
-    找不到的强制 needs_user_data 并生成确认问题（不依赖模型自觉）。"""
-    allowed = set(_NUM_RE.findall(" ".join(originals) + " " + facts))
-    questions = list(data.get("questions") or [])
-    for item in data.get("rewritten") or []:
-        suggested = item.get("suggested", "")
-        novel = [n for n in dict.fromkeys(_NUM_RE.findall(suggested)) if n not in allowed]
+    """Bind every output row to its input original, never the pooled section.
+
+    Free-form shared facts cannot attribute a quantity to a particular bullet,
+    so they do not authorize numbers. Users must incorporate confirmed numeric
+    facts in that bullet before retrying. This deliberately favors false gaps.
+    """
+    data = _safe_rewrite_data(data, originals)
+    questions = data["questions"]
+    for item in data["rewritten"]:
+        allowed = _numeric_atoms(item["original"])
+        novel = sorted(_numeric_atoms(item["suggested"]) - allowed)
         if novel:
             item["needs_user_data"] = True
-            shown = "、".join(novel[:5])
             questions.append(
-                f"建议条目「{item.get('original', '')[:20]}…」中出现了原文没有的数字（{shown}），"
-                "是真实数据还是占位估计？请提供准确数字。")
-    if questions:
-        data["questions"] = questions
+                f"建议条目「{item['original'][:20]}…」出现未获该条原文支持的数值/单位"
+                f"（{'、'.join(novel[:5])}），请在本条原文确认准确数据。")
     return data
 
 
@@ -71,11 +111,11 @@ def guard_new_claims(data: dict, originals: list[str], facts: str) -> dict:
     """claim-evidence 校验：改写新增的技术/公司类 token 必须有原文依据（§9）。
     覆盖数字守卫拦不住的"用了 K8s""为美团做了 X"型事实性新增；
     另查顿号列举项（如把"搜索和下单"扩写成"搜索、详情、购物车、订单创建"），
-    纯中文编造不含英文字母，token 正则拦不住，靠语料包含性判断。"""
-    corpus = " ".join(originals) + " " + facts
-    corpus_set = set(_CLAIM_RE.findall(corpus))
+    纯中文事实无法由 token/列举正则完整证明；这里只是有限的拒绝守卫。"""
     questions = list(data.get("questions") or [])
-    for item in data.get("rewritten") or []:
+    for index, item in enumerate(data.get("rewritten") or []):
+        corpus = (originals[index] if index < len(originals) else "") + " " + facts
+        corpus_set = set(_CLAIM_RE.findall(corpus))
         # 占位符内部说明文字不校验
         sug = _PLACEHOLDER_RE.sub(" ", item.get("suggested", ""))
         novel = [t for t in dict.fromkeys(_CLAIM_RE.findall(sug))
