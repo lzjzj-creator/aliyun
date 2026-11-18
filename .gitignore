@@ -36,7 +36,7 @@ backend/vendor/
 .s/
 sites-status.tmp.json
 *.tmp.json
-/*.qoder.site
+**/*.qoder.site
 
 # 可公开的环境模板与前端公开服务地址（不含密钥）
 !.env.example
