@@ -79,6 +79,8 @@ Labels: `p0` `shared` ｜ Blocked by: — ｜ 估 0.5 人日 ｜ Owner: 共同 �
 
 **验收**：B 确认能驱动 UI；A 确认能写成契约测试；双方在该 issue 下 ack 冻结。
 
+> **待确认（A 侧已完，缺双方 ack）**：10 个 fixture（`frontend/public/demo/v2/`，口径见其 README 与开发计划 §4/§5）与契约测试已就位——`tests/test_coach.py` 做 fixture↔真实路由事件序双向对拍，`tests/test_resume_v2.py` 做模板契约快照与前端 fixture 字段集对拍。仍缺两件事才能冻结：① B 用这些 fixture 离线驱动一次真实 UI（会话列表 → 访谈 → 填写 → 优化）；② 双方在本 issue 下回帖 ack。ack 之前 #11/#14/#15/#16/#18/#20/#21/#22 的响应字段视为**未冻结**，后续增删仍须在本 issue 评论 @对方。另注：fixture 里标注的「真实链路录制」目前是**本地链路**（离线编排 + Mock 存储）产物，部署后需用线上真机链路复录一次。
+
 ---
 
 ## #5 [P0] storage.js + api 分模块协议层
