@@ -19,7 +19,7 @@
     {
       "name": "session 事件一次性下发令牌",
       "ok": true,
-      "detail": "session_id=f580e638…"
+      "detail": "session_id=0123252a…"
     },
     {
       "name": "问候轮以 done 终结",
@@ -223,8 +223,8 @@
     },
     {
       "name": "访谈轮以 done 终结",
-      "ok": false,
-      "detail": "['token', 'token', 'token', 'error']"
+      "ok": true,
+      "detail": "['token', 'token', 'card', 'done']"
     },
     {
       "name": "访谈轮以 done 终结",
@@ -233,8 +233,8 @@
     },
     {
       "name": "访谈轮以 done 终结",
-      "ok": false,
-      "detail": "['token', 'token', 'token', 'error']"
+      "ok": true,
+      "detail": "['token', 'token', 'card', 'done']"
     },
     {
       "name": "响应与事件流无令牌哈希/上游密钥",
@@ -245,23 +245,23 @@
   "timings": {
     "首 step": {
       "n": 30,
-      "median": 0.33,
-      "max": 0.98,
-      "p95": 0.57
+      "median": 0.3,
+      "max": 0.62,
+      "p95": 0.4
     },
     "首 token": {
       "n": 30,
-      "median": 0.38,
-      "max": 2.87,
-      "p95": 2.8
+      "median": 0.34,
+      "max": 2.39,
+      "p95": 2.33
     },
     "整轮": {
       "n": 30,
-      "median": 15.81,
-      "max": 26.04,
-      "p95": 23.07
+      "median": 11.25,
+      "max": 19.82,
+      "p95": 18.67
     }
   },
   "leaks": [],
-  "ran_at": 1795022559
+  "ran_at": 1795024201
 }

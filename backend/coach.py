@@ -9,6 +9,7 @@
 import json
 import os
 import re
+import threading
 import time
 from pathlib import Path
 
@@ -658,6 +659,21 @@ def turn_events(session, profile_row, messages, user_text):
 
     yield ("reasoning_summary", _reasoning(plan, profile, detail))
 
+    # 抽取只依赖本轮用户消息，与回复生成互不依赖：并行跑，避免把 extractor
+    # 的 3-5s 串在流之后抬高整轮延迟；事件仍保持「流后 profile/done」的顺序。
+    extract_box = {}
+
+    def _extract_worker():
+        try:
+            extract_box["value"] = _extract(user_text, profile, detail, messages)
+        except Exception:
+            extract_box["value"] = None
+
+    extract_thread = None
+    if plan["act"] != "ack":
+        extract_thread = threading.Thread(target=_extract_worker, daemon=True)
+        extract_thread.start()
+
     tpl = _load_tpl()
     # 低分命中不进 answer 上下文（grade 校验否则形同虚设），sources 同步不出
     kb_ctx = "\n\n---\n\n".join(h.get("text", "") for h in hits[:4]) if ok and hits else ""
@@ -680,7 +696,13 @@ def turn_events(session, profile_row, messages, user_text):
     if plan["act"] != "ack":
         seq += 1
         yield ("step_start", {"id": "s5", "seq": seq, "kind": "profile", "title": "更新画像"})
-        new_profile, new_detail, updates, raw = _extract(user_text, profile, detail, messages)
+        if extract_thread is not None:
+            extract_thread.join(timeout=90)
+        result = extract_box.get("value")
+        if result is None:
+            new_profile, new_detail, updates, raw = profile, detail, [], {}
+        else:
+            new_profile, new_detail, updates, raw = result
         merged = None
         try:
             merged = _persist_merge(session["id"], new_profile, new_detail, version)
