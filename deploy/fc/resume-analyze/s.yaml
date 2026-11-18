@@ -15,6 +15,7 @@ resources:
       functionName: ${vars.functionName}
       description: resume evidence audit API (vendored upstream)
       runtime: custom.debian10
+      logConfig: auto
       timeout: 90
       cpu: 1
       memorySize: 2048

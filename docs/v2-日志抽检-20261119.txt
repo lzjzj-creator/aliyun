@@ -1,0 +1,25 @@
+# FC 日志隐私抽检（2026-11-19）
+
+- 账号 SLS 已开通；`zhimai-api` / `resume-analyze` 均配置 `logConfig: auto`（服务端自动落到 `serverless-cn-beijing-…/default-logs`）
+- 抽检窗口：2026-11-19 07:49–07:54 (+08:00)
+- 探针流量：`POST /api/chat/stream` 与 `POST /api/v2/chat/stream` 各一条含独特标记 `PRIVACYPROBE7f3a` 的消息，另建/删一个 v2 会话
+- 窗口内日志 22 行；标记命中 **0**；`sk-*` / `eyJhbGciOi` / `Bearer` / `session_token` / `service_role` 命中 **0**
+- 日志只含：启动信息、`FC Invoke Start/End RequestId`、HTTP 方法/路径/状态码；不含请求体、响应体、令牌、密钥
+- `s logs --tail` 与按时间窗查询均可用（内网 IP 已在下方摘录中脱敏）
+
+## 摘录（脱敏）
+
+```
+[2026-11-19 7:50:56] INFO: Started server process [1]
+[2026-11-19 7:50:56] INFO: Waiting for application startup.
+[2026-11-19 7:50:56] INFO: Application startup complete.
+[2026-11-19 7:50:56] INFO: Uvicorn running on http://0.0.0.0:9000
+[2026-11-19 7:51:50] FC Invoke Start RequestId: 1-6afe3a16-…-cc607abbcb6e
+[2026-11-19 7:51:50] FC Invoke End RequestId: 1-6afe3a16-…-cc607abbcb6e
+[2026-11-19 7:51:51] INFO: <ip>:54494 - "POST /api/chat/stream HTTP/1.1" 200 OK
+[2026-11-19 7:51:58] FC Invoke Start RequestId: 1-6afe3a1e-…-bb651f563047
+[2026-11-19 7:52:00] FC Invoke End RequestId: 1-6afe3a1e-…-bb651f563047
+[2026-11-19 7:52:01] INFO: <ip>:54494 - "POST /api/v2/chat/stream HTTP/1.1" 200 OK
+[2026-11-19 7:52:01] FC Invoke Start RequestId: 1-6afe3a21-…-c15f687680b4
+[2026-11-19 7:52:04] FC Invoke End RequestId: 1-6afe3a21-…-c15f687680b4
+```
