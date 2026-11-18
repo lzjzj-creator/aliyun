@@ -45,6 +45,7 @@ class SectionSpec(BaseModel):
     max: Optional[int] = None
     priority: Optional[int] = None
     rules: Optional[str] = None
+    rubric: Optional[str] = None
     fields: list[FieldSpec] = []        # kv 型用 fields
     entry_fields: list[FieldSpec] = []  # entries/skillgroups/lines/text 型用 entry_fields
     adaptive_min: Optional[dict] = None
