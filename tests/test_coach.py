@@ -233,7 +233,10 @@ class CoachRouteTest(unittest.TestCase):
             base_url="https://supabase.invalid/rest/v1",
             transport=httpx.MockTransport(self.store))
         self._patchers = [patch.object(memory, "_client", self.transport),
-                          patch.object(security, "limiter", security.RateLimiter())]
+                          patch.object(security, "limiter", security.RateLimiter()),
+                          # 与本地 .env 解耦：线上 V2_SHARED_QUOTA=1 时预算门禁会走
+                          # /rpc/*，mock Store 不覆盖 → 误判 503；配额另见 test_quota
+                          patch.object(coach, "budget_ok", return_value=True)]
         for p in self._patchers:
             p.start()
             self.addCleanup(p.stop)
