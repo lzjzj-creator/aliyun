@@ -38,8 +38,11 @@ def _prompt(name: str) -> str:
 def _tpl():
     try:
         return load()
-    except TemplateError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except TemplateError:
+        # 契约文件损坏属于部署事故：内部报错原文（含 JSON 位置/字段名）不下发给浏览器
+        raise HTTPException(status_code=500, detail={
+            "code": "TEMPLATE_CONTRACT_UNAVAILABLE",
+            "message": "模板契约暂不可用，请联系维护者（服务端日志见 ingest 校验输出）"})
 
 
 def _require_version(tpl, version: str):

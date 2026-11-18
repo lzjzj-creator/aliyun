@@ -128,8 +128,10 @@ def chat_stream(req: ChatReq):
         try:
             for tok in llm.chat_stream(messages, model=QWEN_CHAT):
                 yield _sse("token", tok)
-        except Exception as e:
-            yield _sse("error", {"code": "MODEL_FAILED", "message": str(e)[:200]})
+        except Exception:
+            # 上游异常原文可能含请求体或密钥片段，一律不下发给浏览器
+            yield _sse("error", {"code": "MODEL_FAILED",
+                                 "message": "模型服务暂时不可用，请稍后重试", "retryable": True})
         yield _sse("done", {})
 
     return StreamingResponse(gen(), media_type="text/event-stream")
