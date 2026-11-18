@@ -2,55 +2,106 @@
 import { onMounted, onUnmounted, ref } from "vue";
 import AdminView from "./views/AdminView.vue";
 import ChatView from "./views/ChatView.vue";
+import ContractDemoView from "./views/ContractDemoView.vue";
+import InterviewView from "./views/InterviewView.vue";
 import ResumeView from "./views/ResumeView.vue";
+import ResumeWizardView from "./views/ResumeWizardView.vue";
+import SessionList from "./components/SessionList.vue";
+import { setCurrentSessionId } from "./storage";
 
-const tab = ref("chat");
-const admin = ref(false);
+// hash 路由：#chat | #chat/:id | #chat-v1 | #resume | #resume-v1 | #demo | #admin（不引 vue-router）
+const view = ref("chat");
+const sidebar = ref(false);          // 移动端会话抽屉
+const chatSid = ref("");   // 作为 InterviewView 的 key：切会话即重挂载走 boot()
+const sessionListRef = ref(null);
 
-function syncAdminRoute() {
-  admin.value = /^#\/?admin\/?$/.test(location.hash);
+function syncRoute() {
+  const h = location.hash || "#/chat";
+  if (/^#\/?admin\/?$/.test(h)) { view.value = "admin"; return; }
+  if (/^#\/?demo/.test(h)) { view.value = "contractDemo"; return; }
+  if (/^#\/?resume-v1/.test(h)) { view.value = "resumeV1"; return; }
+  if (/^#\/?resume/.test(h)) { view.value = "resume"; return; }
+  if (/^#\/?chat-v1/.test(h)) { view.value = "chatV1"; return; }
+  const m = h.match(/^#\/?chat\/?([0-9a-zA-Z-]+)?/);
+  view.value = "chat";
+  chatSid.value = m?.[1] || "";
+  setCurrentSessionId(chatSid.value);
+}
+
+function nav(target) {
+  location.hash = target;
+}
+
+function onSelectSession(id) {
+  sidebar.value = false;
+  nav(id ? `#/chat/${id}` : "#/chat");
+}
+
+function onNewSession() {
+  sidebar.value = false;
+  setCurrentSessionId("");
+  nav("#/chat");
+}
+
+function onSessionCreated() {
+  sessionListRef.value?.reload?.();
 }
 
 onMounted(() => {
-  syncAdminRoute();
-  window.addEventListener("hashchange", syncAdminRoute);
+  if (!location.hash) location.hash = "#/chat";
+  syncRoute();
+  window.addEventListener("hashchange", syncRoute);
 });
-onUnmounted(() => window.removeEventListener("hashchange", syncAdminRoute));
+onUnmounted(() => window.removeEventListener("hashchange", syncRoute));
 </script>
 
 <template>
-  <div v-if="admin" class="shell admin-shell">
+  <div v-if="view === 'admin'" class="shell admin-shell">
     <AdminView />
   </div>
 
-  <div v-else class="shell">
-    <header class="top">
-      <div class="brand">
-        <h1>知脉 · 简历成长助手</h1>
-        <p class="tagline">先查资料，再改简历——所有建议都要有出处。</p>
-      </div>
-      <nav class="tabs">
-        <button :class="{ on: tab === 'chat' }" @click="tab = 'chat'">知识问答</button>
-        <button :class="{ on: tab === 'resume' }" @click="tab = 'resume'">简历助手</button>
-      </nav>
-    </header>
+  <div v-else class="workbench">
+    <nav class="rail" aria-label="主导航">
+      <div class="rail-logo" title="知脉">知</div>
+      <button class="rail-item" :class="{ on: view === 'chat' || view === 'chatV1' }"
+              @click="nav('#/chat')">
+        <span class="rail-ico">◈</span><span>访谈</span>
+      </button>
+      <button class="rail-item" :class="{ on: view === 'resume' || view === 'resumeV1' }"
+              @click="nav('#/resume')">
+        <span class="rail-ico">▤</span><span>简历</span>
+      </button>
+    </nav>
 
-    <section class="intro">
-      <p class="slogan">证据优先的大学规划与简历助手</p>
-      <div class="intro-entries">
-        <span><b>知识问答</b>：检索知脉知识库 2790 篇规划/求职笔记，回答附真实来源，没有依据就明说不知道。</span>
-        <span><b>简历助手</b>：证据诊断 → 不虚构事实的安全改写，粘贴 JD 可看岗位匹配与缺失关键词。</span>
-      </div>
-    </section>
+    <div class="stage">
+      <header class="topbar">
+        <div class="tb-left">
+          <span class="tb-title">知脉 · 简历成长助手</span>
+          <span class="tb-sub">先聊出你的经历，再长出一份简历</span>
+        </div>
+        <button v-if="view === 'chat'" class="tb-sessions" @click="sidebar = true">☰ 会话</button>
+        <span class="tb-privacy">对话留存可删 · 简历只在本机</span>
+      </header>
 
-    <p class="privacy">
-      简历只在浏览器内存读取、提交分析才出网；不存储简历内容，不同会话互相隔离。
-      建议先删除姓名、电话等敏感信息。
-    </p>
+      <main class="main-area">
+        <!-- 访谈：会话栏 | 消息流 | 画像栏 三柱工作台 -->
+        <div v-if="view === 'chat'" class="iv-workbench">
+          <SessionList ref="sessionListRef" class="iv-side-col" inline :active-id="chatSid"
+                       @select="onSelectSession" @new="onNewSession" />
+          <InterviewView class="iv-main-col" :key="chatSid"
+                         @goto-resume="nav('#/resume')"
+                         @session-created="onSessionCreated" />
+        </div>
+        <div v-else-if="view === 'chatV1' || view === 'resumeV1' || view === 'contractDemo'" class="v1-wrap">
+          <ChatView v-if="view === 'chatV1'" @goto-resume="nav('#/resume')" />
+          <ContractDemoView v-else-if="view === 'contractDemo'" />
+          <ResumeView v-else />
+        </div>
+        <ResumeWizardView v-else-if="view === 'resume'" />
+      </main>
+    </div>
 
-    <main>
-      <ChatView v-if="tab === 'chat'" @goto-resume="tab = 'resume'" />
-      <ResumeView v-else />
-    </main>
+    <SessionList v-if="sidebar" :active-id="chatSid" @close="sidebar = false"
+                 @select="onSelectSession" @new="onNewSession" />
   </div>
 </template>

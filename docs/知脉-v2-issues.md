@@ -2,14 +2,14 @@
 
 > 用法：按 §12.3 总表顺序建 issue；`Blocked by:` 填实际 issue 编号；Milestone 统一 `v2.0`。
 > 每条 = 标题 + Labels + 正文（背景/任务/边界/验收/依赖）。
-> 分工：两人全栈——#1–#3 归 A（后端共享件），#5–#6 归 B（前端共享件），#4/#7/#25 共同；特性域期 **A=访谈引擎域（#8,#9,#11–#16,#23），B=简历向导域（#10,#17–#22,#24）**。
-> 文件分片：后端 `routers/coach.py`(A)/`routers/resume.py`(B)/`routers/sessions.py`(A)，main.py 只 include；前端 `api/chat.js`(A)/`api/resume.js`(B)/`api/sessions.js`+`storage.js`(B)；组件 `Coach*`/`Resume*` 前缀，`<style scoped>` 为主。
+> 分工：前后端分离——**A=后端**（#1–#3、#8、#9、#11–#13、#17、#18、#21、#23），**B=前端**（#5–#7、#10、#14–#16、#19、#20、#22、#24）；#4/#25 共同。`backend`/`frontend` label 即 Owner。
+> 文件边界：后端 `backend/`+`supabase/`+`tests/` 全归 A；前端 `frontend/` 全归 B；唯一公共财产 `frontend/public/demo/v2/`（fixture）与 `docs/`。B 全程可按 fixture 先行开发 UI，Gate=真接口联调点。
 
 ---
 
 ## #1 [P0] Supabase v2 迁移：三表+约束+触发器+90天清理
 
-Labels: `p0` `backend` ｜ Blocked by: — ｜ 估 1 人日
+Labels: `p0` `backend` ｜ Blocked by: — ｜ 估 1 人日 ｜ Owner: A
 
 **背景**：v2 需持久化会话/消息/画像，FC 无状态全靠 Supabase（§3）。
 
@@ -26,7 +26,7 @@ Labels: `p0` `backend` ｜ Blocked by: — ｜ 估 1 人日
 
 ## #2 [P0] memory.py：会话/消息/画像 CRUD + 令牌签发
 
-Labels: `p0` `backend` ｜ Blocked by: #1 ｜ 估 1 人日
+Labels: `p0` `backend` ｜ Blocked by: #1 ｜ 估 1 人日 ｜ Owner: A
 
 **背景**：§3 数据模型的服务端访问层，复用 `kb.py` 的 httpx Supabase REST 客户端模式。
 
@@ -44,9 +44,9 @@ Labels: `p0` `backend` ｜ Blocked by: #1 ｜ 估 1 人日
 
 ---
 
-## #3 [P0] 归属校验中间件 + 三层限流 + 删除接口
+## #3 [P0] 归属校验中间件 + 三层限流 + 删除/messages 接口
 
-Labels: `p0` `backend` ｜ Blocked by: #2 ｜ 估 1 人日
+Labels: `p0` `backend` ｜ Blocked by: #2 ｜ 估 1 人日 ｜ Owner: A
 
 **背景**：匿名会话必须防越权读写（IDOR）；公开端点要防刷（§5、§14）。
 
@@ -65,7 +65,7 @@ Labels: `p0` `backend` ｜ Blocked by: #2 ｜ 估 1 人日
 
 ## #4 [P0] 契约 fixture：SSE 事件序列 + 接口响应 demo JSON（最先做）
 
-Labels: `p0` `shared` ｜ Blocked by: — ｜ 估 0.5 人日 ｜ **两轨分叉点，B 拿到后可独立开发全部 UI**
+Labels: `p0` `shared` ｜ Blocked by: — ｜ 估 0.5 人日 ｜ Owner: 共同 ｜ **两轨分叉点，B 拿到后可独立开发全部 UI**
 
 **背景**：契约先行让 B 不等 A（§12.2）。
 
@@ -79,18 +79,20 @@ Labels: `p0` `shared` ｜ Blocked by: — ｜ 估 0.5 人日 ｜ **两轨分叉�
 
 **验收**：B 确认能驱动 UI；A 确认能写成契约测试；双方在该 issue 下 ack 冻结。
 
+> **待确认（A 侧已完，缺双方 ack）**：10 个 fixture（`frontend/public/demo/v2/`，口径见其 README 与开发计划 §4/§5）与契约测试已就位——`tests/test_coach.py` 做 fixture↔真实路由事件序双向对拍，`tests/test_resume_v2.py` 做模板契约快照与前端 fixture 字段集对拍。仍缺两件事才能冻结：① B 用这些 fixture 离线驱动一次真实 UI（会话列表 → 访谈 → 填写 → 优化）；② 双方在本 issue 下回帖 ack。ack 之前 #11/#14/#15/#16/#18/#20/#21/#22 的响应字段视为**未冻结**，后续增删仍须在本 issue 评论 @对方。另注：fixture 里标注的「真实链路录制」目前是**本地链路**（离线编排 + Mock 存储）产物，部署后需用线上真机链路复录一次。
+
 ---
 
 ## #5 [P0] storage.js + api 分模块协议层
 
-Labels: `p0` `frontend` `shared` ｜ Blocked by: #4 ｜ 估 1 人日
+Labels: `p0` `frontend` `shared` ｜ Blocked by: #4 ｜ 估 1 人日 ｜ Owner: B
 
 **任务**：
 - `storage.js`：`anon_id`（`crypto.randomUUID()` 惰性生成）、`session_tokens{sid:token}`、`resume_draft_v1`/`resume_draft_optimized`（带 schema_version+template_version）读写
-- **api 分模块**（文件分片规则）：`api/sessions.js` + `api/core.js`（headers 注入/SSE 解析底座）；`api/chat.js`、`api/resume.js` 先留空壳给特性域期两人各自扩展，避免后期同文件互踩
+- **api 分模块**：`api/core.js`（headers 注入/SSE 解析底座）+ `api/sessions.js`；`api/chat.js`、`api/resume.js` 先留空壳，后续按域扩展（`api/*.js` 全归 B，分模块仅为可维护性）
 - 全部请求自动带 `X-Anon-Id`/`X-Session-Token` 头
 
-**边界**：只做协议层，不碰 UI；此后 A 只扩 `api/chat.js`、B 只扩 `api/resume.js`。
+**边界**：只做协议层，不碰 UI。
 
 **验收**：对 fixture 回放事件序列解析正确；headers 注入正确；断线抛错可捕获。
 
@@ -98,7 +100,7 @@ Labels: `p0` `frontend` `shared` ｜ Blocked by: #4 ｜ 估 1 人日
 
 ## #6 [P0] SessionList 侧栏 + 删除确认 + 隐私文案
 
-Labels: `p0` `frontend` ｜ Blocked by: #5 ｜ 估 1 人日
+Labels: `p0` `frontend` ｜ Blocked by: #5 ｜ 估 1 人日 ｜ Owner: B
 
 **任务**：`SessionList.vue` 抽屉式侧栏（移动端全屏）：会话卡（标题/时间/stage 徽标）、新建、删除（二次确认文案说明级联删除）；App.vue 接入。隐私条更新为 v2 文案："对话将保存用于历史记录，可随时删除；简历成稿只存本机"。
 
@@ -110,11 +112,11 @@ Labels: `p0` `frontend` ｜ Blocked by: #5 ｜ 估 1 人日
 
 ## #7 [P0] 过渡落库：POST /api/v2/messages + 旧 ChatView 接入（Gate P0）
 
-Labels: `p0` `backend` `frontend` `shared` ｜ Blocked by: #3, #5 ｜ 估 1 人日
+Labels: `p0` `backend` `frontend` `shared` ｜ Blocked by: #3, #5 ｜ 估 1 人日 ｜ Owner: B（接口由 A 在 #3 交付；Gate 共同验收）
 
 **背景**：平滑过渡——v1 问答链路不动，但消息先落新库，P1 切换无缝。
 
-**任务**：旧 ChatView 每轮流结束后调 `POST /api/v2/messages` 回写 `{session_id, client_msg_id, user, assistant}`；首次自动先建会话。历史可回看、可删除。
+**任务**：旧 ChatView 每轮流结束后调 `POST /api/v2/messages` 回写 `{session_id, client_msg_id, user, assistant, meta?}`；`session_id` 为空时由服务端建会话并一次性返回 `session_token`（响应 `{session_id, message_ids[, session_token]}`，见 `demo/v2/messages.json`），此后客户端须复用 `session_id`+`X-Session-Token`。历史可回看、可删除。
 
 **验收（Gate P0）**：旧问答在新存储下可用；刷新可回看；删除生效；伪造 token/越权 404；90 天清理 dry-run 命中；隐私文案与删除入口在线；`npm run build` 通过。
 
@@ -122,7 +124,7 @@ Labels: `p0` `backend` `frontend` `shared` ｜ Blocked by: #3, #5 ｜ 估 1 人�
 
 ## #8 [P0.5] 编排 spike：turbo JSON / reasoning / 延迟报告
 
-Labels: `p0.5` `backend` `spike` ｜ Blocked by: — ｜ 估 1 人日
+Labels: `p0.5` `backend` `spike` ｜ Blocked by: — ｜ 估 1 人日 ｜ Owner: A
 
 **任务**：离线脚本实测：
 - qwen-turbo json_mode 多字段编排输出 `{act,need_kb,focus_slot,reason,deep}` 成功率（30 条样例输入）
@@ -134,21 +136,21 @@ Labels: `p0.5` `backend` `spike` ｜ Blocked by: — ｜ 估 1 人日
 
 ---
 
-## #9 [P0.5] optimize 单段 p95 实测 + 打印导出验证
+## #9 [P0.5] optimize 单段 p95 实测
 
-Labels: `p0.5` `backend` `spike` ｜ Blocked by: — ｜ 估 0.5 人日
+Labels: `p0.5` `backend` `spike` ｜ Blocked by: — ｜ 估 0.5 人日 ｜ Owner: A
 
-**任务**：FC 环境下实测 analyze+单 section 改写延迟 p95（10 次采样）；验证当前简历打印导出在移动端可用性。产出数据贴 issue。
+**任务**：FC 环境下实测 analyze+单 section 改写延迟 p95（10 次采样）；产出数据贴 issue。（打印导出可行性验证移至前端 spike #10）
 
 **验收（Gate Spike 之二）**：单段 p95 距 FC 120s 限制有足够余量；否则缩单段范围或 P3 延期，结论写进 issue。
 
 ---
 
-## #10 [P0.5] 契约渲染 demo + template.json 骨架
+## #10 [P0.5] 契约渲染 demo + 打印导出可行性草样
 
 Labels: `p0.5` `frontend` `spike` ｜ Blocked by: #4 ｜ 估 1 人日 ｜ Owner: B
 
-**任务**：最小 Vue 组件按 `template.json` `v-for` 渲染 sections/fields 骨架（不美化），验证"契约驱动渲染"成立：改契约 JSON → 渲染跟随变。**同时产出 `template.json` 骨架初稿**（sections/slot 集，供 A 的 coach #11/#12 消费，定稿在 #17）。确认中文排版所需 CSS 量可控。
+**任务**：最小 Vue 组件按 `template.json` `v-for` 渲染 sections/fields 骨架（不美化），验证"契约驱动渲染"成立：改契约 JSON → 渲染跟随变。消费 #4 产出的 `template.json` 初稿并反馈可用性（slot 集深化由 A 在 #11/#17 迭代）；打印导出可行性草样（print CSS 试写，确认中文排版 CSS 量可控、移动端可行）。
 
 **验收（Gate Spike 之三）**：契约字段增删能即时反映；确认不需要任何契约外硬编码。
 
@@ -156,12 +158,12 @@ Labels: `p0.5` `frontend` `spike` ｜ Blocked by: #4 ｜ 估 1 人日 ｜ Owner:
 
 ## #11 [P1] coach.py：L1 + 状态机 + orchestrator + step 事件协议
 
-Labels: `p1` `backend` ｜ Blocked by: #2, #8, #4(模板骨架) ｜ 估 2.5 人日 ｜ Owner: A（访谈域）
+Labels: `p1` `backend` ｜ Blocked by: #2, #8, #4(模板骨架) ｜ 估 2.5 人日 ｜ Owner: A
 
 **背景**：§6 核心引擎。状态机 greeting→probing→wrapping→done。
 
 **任务**：
-- `coach.py` + `routers/coach.py`（文件分片：本域路由单独文件，main.py 只 include）：L1 规则（招呼/直接提问/跳轮/收尾）→ orchestrator（turbo JSON，schema 校验+修复重试1次+3连败降级规则）→ retrieve 工具（need_kb 时，CRAG 打分+重写重试≤1）→ interviewer（qwen-plus 流式；deep 轮开 thinking）→ 事件按 §4 发出
+- `coach.py` + `routers/coach.py`（路由一文件一模块，main.py 只 include）：L1 规则（招呼/直接提问/跳轮/收尾）→ orchestrator（turbo JSON，schema 校验+修复重试1次+3连败降级规则）→ retrieve 工具（need_kb 时，CRAG 打分+重写重试≤1）→ interviewer（qwen-plus 流式；deep 轮开 thinking）→ 事件按 §4 发出
 - `llm.py`：reasoning 流支持（服务端生成 reasoning_summary，不透原始 CoT）
 - `POST /api/v2/chat/stream`：建会话/令牌签发/消息落库（streaming→done/error）全流程
 - `COACH_ENABLED=0` 开关
@@ -174,8 +176,8 @@ Labels: `p1` `backend` ｜ Blocked by: #2, #8, #4(模板骨架) ｜ 估 2.5 人�
 
 ## #12 [P1] extractor + quote 校验 + profile merge + coverage/收尾
 
-Labels: `p1` `backend` ｜ Blocked by: #11 ｜ 估 1.5 人日 ｜ Owner: A（访谈域）
-**产出共享 schema**：`user_profiles.profile` JSON 结构是本 issue 定稿的**跨域契约**（B 的 autofill #18 按它消费），冻结后在 issue 评论区钉住。
+Labels: `p1` `backend` ｜ Blocked by: #11 ｜ 估 1.5 人日 ｜ Owner: A
+**产出共享 schema**：`user_profiles.profile` JSON 结构是本 issue 定稿的**跨端契约**（前端 ProfilePanel #15 按它渲染、autofill #18 按它消费），冻结后在 issue 评论区钉住。
 
 **任务**：
 - `prompts/extractor.md`：本轮对话→`{new_facts, slot_updates[{slot, value, quote}]}`
@@ -190,7 +192,7 @@ Labels: `p1` `backend` ｜ Blocked by: #11 ｜ 估 1.5 人日 ｜ Owner: A（访
 
 ## #13 [P1] 招呼流 + 直接提问分流
 
-Labels: `p1` `backend` ｜ Blocked by: #11 ｜ 估 1 人日 ｜ Owner: A（访谈域）
+Labels: `p1` `backend` ｜ Blocked by: #11 ｜ 估 1 人日 ｜ Owner: A
 
 **任务**：新会话空 message → 流式发招呼+「开始访谈 / 直接提问」两 chips（card:suggest_reply）；`prompts/coach_system.md` 完稿（人设/每轮一问/先回应再追问/KB 钩子/不报分）；知识提问分支走 retrieve+answer 后自然带回；`interview_plan` 由契约 slot 生成。
 
@@ -200,9 +202,9 @@ Labels: `p1` `backend` ｜ Blocked by: #11 ｜ 估 1 人日 ｜ Owner: A（访�
 
 ## #14 [P1] ThinkingSteps 组件 + SSE 事件流接入
 
-Labels: `p1` `frontend` ｜ Blocked by: #4, #5 ｜ 估 1.5 人日 ｜ Owner: A（访谈域）
+Labels: `p1` `frontend` ｜ Blocked by: #4, #5 ｜ 估 1.5 人日 ｜ Owner: B
 
-**任务**：`CoachThinkingSteps.vue`：折叠思考流（icon+title+detail，默认收起显示"N 步"），渲染 step_start/end、reasoning_summary；接 `api/chat.js` 事件流（只扩本文件），对 fixture 与真实接口均可工作；sources 卡片沿用现有样式。
+**任务**：`CoachThinkingSteps.vue`：折叠思考流（icon+title+detail，默认收起显示"N 步"），渲染 step_start/end、reasoning_summary；接 `api/chat.js` 事件流，对 fixture 与真实接口均可工作；sources 卡片沿用现有样式。
 
 **验收**：事件乱序/缺失不崩；折叠/展开流畅；真实接口与 fixture 渲染一致。
 
@@ -210,7 +212,7 @@ Labels: `p1` `frontend` ｜ Blocked by: #4, #5 ｜ 估 1.5 人日 ｜ Owner: A�
 
 ## #15 [P1] ProfilePanel 画像面板
 
-Labels: `p1` `frontend` ｜ Blocked by: #5 ｜ 估 1 人日 ｜ Owner: A（访谈域）
+Labels: `p1` `frontend` ｜ Blocked by: #5 ｜ 估 1 人日 ｜ Owner: B
 
 **任务**：`CoachProfilePanel.vue` 侧栏：覆盖率环 + 已收集维度（experiences/skills/goal 分组）+ gaps 提示；`profile` 事件实时更新；可折叠。
 
@@ -218,19 +220,19 @@ Labels: `p1` `frontend` ｜ Blocked by: #5 ｜ 估 1 人日 ｜ Owner: A（访�
 
 ---
 
-## #16 [P1] InterviewView 整合（Gate 访谈域）
+## #16 [P1] InterviewView 整合（Gate 访谈）
 
-Labels: `p1` `frontend` ｜ Blocked by: #14, #15 ｜ 估 1 人日 ｜ Owner: A（访谈域）
+Labels: `p1` `frontend` ｜ Blocked by: #11(真接口), #14, #15 ｜ 估 1 人日 ｜ Owner: B
 
 **任务**：ChatView 重构为 InterviewView：`#chat/:id` 路由直开→GET bundle 恢复（含 steps 回放）；消息流+思考流+画像+来源+suggest chips 全整合；新建/切换会话；断线提示与重发。
 
-**验收（Gate 访谈域）**：新会话 AI 先开口；每轮有真实 step 无原始 CoT；画像随对话增长；12 轮内达标或输出 gaps；直接提问不被强行拉回；会话直链可打开。
+**验收（Gate 访谈）**：新会话 AI 先开口；每轮有真实 step 无原始 CoT；画像随对话增长；12 轮内达标或输出 gaps；直接提问不被强行拉回；会话直链可打开。
 
 ---
 
 ## #17 [P2] resume_template.json 定稿 + loader + /template 接口
 
-Labels: `p2` `backend` ｜ Blocked by: #10 ｜ 估 1 人日 ｜ Owner: B（简历域，契约监护人）
+Labels: `p2` `backend` ｜ Blocked by: #4(骨架), #10(反馈) ｜ 估 1 人日 ｜ Owner: A（契约监护人）
 
 **任务**：`backend/resume_template.json` 按 §8 契约定稿（fields/rubric/slot 映射/adaptive 规则）；`resume_template.py` 加载+JSON Schema 校验；`GET /api/v2/resume/template` 唯一出口；slot 推导函数（orchestrator 与 #12 coverage 复用）。
 
@@ -240,8 +242,8 @@ Labels: `p2` `backend` ｜ Blocked by: #10 ｜ 估 1 人日 ｜ Owner: B（简�
 
 ## #18 [P2] autofill：会话 → 字段 + evidence_map + gaps
 
-Labels: `p2` `backend` ｜ Blocked by: #17, #12 ｜ 估 1.5 人日 ｜ Owner: B（简历域）
-**跨域消费**：按 #12 冻结的 profile JSON 编码，不读 A 的内部实现。
+Labels: `p2` `backend` ｜ Blocked by: #17, #12 ｜ 估 1.5 人日 ｜ Owner: A
+**契约产出**：按 #12 冻结的 profile JSON 编码；响应形状即 #19 的开发依据，必须与 #4 fixture 一致。
 
 **任务**：`routers/resume.py` 内实现 `POST /api/v2/resume/autofill`：`prompts/autofill.md`（qwen-plus json_mode）profile+消息→模板字段；`evidence_map` 每条 quote 服务端校验在消息中存在，否则降级 gap；无证据字段进 gaps 不脑补（红线 §8）；`template_version` 校验 409。
 
@@ -251,7 +253,7 @@ Labels: `p2` `backend` ｜ Blocked by: #17, #12 ｜ 估 1.5 人日 ｜ Owner: B�
 
 ## #19 [P2] Wizard① 模板选择 + 一键填写 + 表单编辑
 
-Labels: `p2` `frontend` ｜ Blocked by: #17, #18 ｜ 估 1.5 人日 ｜ Owner: B（简历域）
+Labels: `p2` `frontend` ｜ Blocked by: #17, #18(真接口；可先按 #4 fixture 开发) ｜ 估 1.5 人日 ｜ Owner: B
 
 **任务**：`ResumeWizard.vue` Step①：会话选择 + [一键填写] → autofill 结果写 `resume_draft_v1`；契约驱动表单编辑（v-for sections）；gaps 黄标。
 
@@ -259,9 +261,9 @@ Labels: `p2` `frontend` ｜ Blocked by: #17, #18 ｜ 估 1.5 人日 ｜ Owner: B
 
 ---
 
-## #20 [P2] Wizard② 契约预览 + 打印导出 + 出处悬停（Gate 简历域Ⅰ）
+## #20 [P2] Wizard② 契约预览 + 打印导出 + 出处悬停（Gate 简历Ⅰ）
 
-Labels: `p2` `frontend` ｜ Blocked by: #17 ｜ 估 1.5 人日 ｜ Owner: B（简历域）
+Labels: `p2` `frontend` ｜ Blocked by: #17 ｜ 估 1.5 人日 ｜ Owner: B
 
 **任务**：Step②：契约渲染器实现单栏中文校招版式（按 sb2nov/billryan 风格写普通 CSS，含 print 媒体查询）；字段悬停显示出处 quote；浏览器打印导出。
 
@@ -271,7 +273,7 @@ Labels: `p2` `frontend` ｜ Blocked by: #17 ｜ 估 1.5 人日 ｜ Owner: B（�
 
 ## #21 [P3] optimize/plan|section 流水线
 
-Labels: `p3` `backend` ｜ Blocked by: #17 ｜ 估 2 人日 ｜ Owner: B（简历域）
+Labels: `p3` `backend` ｜ Blocked by: #17 ｜ 估 2 人日 ｜ Owner: A
 
 **任务**：`routers/resume.py` 内实现 `optimize/plan`（section 优先级）与 `optimize/section`：analyze(vendor)→STAR 改写（STAR_PROMPT+bullet_rubric）→`_guard_fabricated_numbers`→claim-evidence（公司/角色/技术须原文依据）→未过则占位+待确认问题→change_log；响应带 steps。
 
@@ -279,9 +281,9 @@ Labels: `p3` `backend` ｜ Blocked by: #17 ｜ 估 2 人日 ｜ Owner: B（简�
 
 ---
 
-## #22 [P3] Wizard③ 逐段进度 + 对比 + 占位 + 导出（Gate 简历域Ⅱ）
+## #22 [P3] Wizard③ 逐段进度 + 对比 + 占位 + 导出（Gate 简历Ⅱ）
 
-Labels: `p3` `frontend` ｜ Blocked by: #20, #21 ｜ 估 1.5 人日 ｜ Owner: B（简历域）
+Labels: `p3` `frontend` ｜ Blocked by: #20, #21(真接口；可先按 fixture 开发) ｜ 估 1.5 人日 ｜ Owner: B
 
 **任务**：Step③：[一键优化]→plan→逐段调用（进度流展示 steps）→前后对比视图（逐字段采纳）→占位黄标清单二次确认→优化稿存 `resume_draft_optimized`→导出。
 
@@ -291,7 +293,7 @@ Labels: `p3` `frontend` ｜ Blocked by: #20, #21 ｜ 估 1.5 人日 ｜ Owner: B
 
 ## #23 [P4] tests/coach_sim.py 脚本化回放评测
 
-Labels: `p4` `backend` `test` ｜ Blocked by: #12 ｜ 估 1 人日 ｜ Owner: A（访谈域；同时断言跨域契约：profile schema 与 SSE 事件序，供 B 校验 autofill 输入假设）
+Labels: `p4` `backend` `test` ｜ Blocked by: #12 ｜ 估 1 人日 ｜ Owner: A（同时断言跨端契约：profile schema 与 SSE 事件序，供 B 校验前端假设）
 
 **任务**：5 个固定回答序列 persona（大一无经历/大二有项目/大三有实习/文科/故意跑偏）走真实接口回放；断言：收敛轮数、act 序列合理性、profile 准确≥90%/0 虚构、coverage 单调、越权/限流/幂等负向用例、SSE 事件序与 done/error 终结。报告入 `docs/评测报告-v2.md`。
 
@@ -301,7 +303,7 @@ Labels: `p4` `backend` `test` ｜ Blocked by: #12 ｜ 估 1 人日 ｜ Owner: A�
 
 ## #24 [P4] 演示快照 v2 + 移动端/打印复查 + 开源许可登记
 
-Labels: `p4` `frontend` `docs` ｜ Blocked by: #19, #22 ｜ 估 1 人日 ｜ Owner: B（简历域；演示快照含全链路，A 配合提供访谈样例数据）
+Labels: `p4` `frontend` `docs` ｜ Blocked by: #19, #22 ｜ 估 1 人日 ｜ Owner: B（演示快照含全链路，A 配合提供真实接口/样例数据）
 
 **任务**：`public/demo/` 新快照（访谈/填写/优化各一，真实链路录制）；移动端 375px 全流程复查；打印输出复查；所有借鉴来源+LICENSE 登记 `docs/开源许可.md`。
 

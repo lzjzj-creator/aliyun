@@ -1,0 +1,14 @@
+[
+  {"event": "session", "data": {"protocol": 2, "session_id": "demo-sess-0001", "stage": "wrapping", "is_new": false}},
+  {"event": "step_start", "data": {"id": "s1", "seq": 1, "kind": "recall", "title": "回顾记忆"}},
+  {"event": "step_end", "data": {"id": "s1", "seq": 1, "status": "done", "detail": "画像已齐：2 段项目经历 + 技能盘点 + 目标清晰"}},
+  {"event": "step_start", "data": {"id": "s2", "seq": 2, "kind": "plan", "title": "判断本轮动作"}},
+  {"event": "step_end", "data": {"id": "s2", "seq": 2, "status": "done", "detail": "act=wrap_up · coverage 达标 0.82"}},
+  {"event": "reasoning_summary", "data": "素材足够填出一份合格校招简历，收尾并引导去建简历。"},
+  {"event": "token", "data": "聊了这么多，我帮你理一下手里能写进简历的素材："},
+  {"event": "token", "data": "两段项目——二手交易小程序里你独立做的后端和 Redis 缓存优化，还有课程推荐系统；技能上 Java/MySQL/Redis 和后端实习方向对得上。"},
+  {"event": "token", "data": "接下来可以直接把这些素材一键填进简历模板了："},
+  {"event": "card", "data": {"type": "goto_resume", "payload": {"label": "去一键填写简历", "session_id": "demo-sess-0001"}}},
+  {"event": "profile", "data": {"coverage": 0.82, "gaps": ["basics.phone", "basics.email", "summary.text"], "updates": []}},
+  {"event": "done", "data": {"session_id": "demo-sess-0001", "message_id": 88, "stage": "done", "coverage": 0.82}}
+]

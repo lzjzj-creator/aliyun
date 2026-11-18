@@ -6,7 +6,7 @@ from collections import Counter
 
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 try:
     from .admin_auth import (SESSION_TTL, admin_ready, issue_session,
@@ -62,6 +62,37 @@ def require_admin(authorization: str | None = Header(default=None)) -> None:
 
 class AdminLoginReq(BaseModel):
     password: str = Field(min_length=1, max_length=256)
+
+
+try:
+    from . import memory as _memory
+except ImportError:  # FC 以 backend 目录为根启动
+    import memory as _memory
+
+
+class CleanupReq(BaseModel):
+    # strict：物理删除的开关不能被 "false"/"0" 这类字符串悄悄带过去
+    model_config = ConfigDict(strict=True, extra="forbid")
+    days: int = Field(default=90, ge=90, le=3650)
+    dry_run: bool = True
+
+
+@router.post("/api/admin/cleanup")
+def admin_cleanup(req: CleanupReq, _: None = Depends(require_admin)):
+    """保留期核对：默认只报命中行数，物理删除要显式 dry_run=false。
+
+    定时任务由数据库侧 pg_cron（或运维批准的定时器）承担，这里只是首次核对与
+    事后验证入口；不在任何请求路径里顺手做物理清理。响应只有计数，不含会话内容。
+    """
+    try:
+        report = {"days": req.days, "dry_run": req.dry_run,
+                  "expired_sessions": _memory.cleanup_expired(req.days, req.dry_run),
+                  "quota": _memory.prune_quota(req.dry_run)}
+    except ValueError:
+        raise HTTPException(status_code=400, detail="保留期参数不合法") from None
+    except _memory.MemoryStoreError:
+        raise HTTPException(status_code=503, detail="配额存储暂时不可用") from None
+    return {"ok": True, "data": report}
 
 
 @router.post("/api/admin/login")

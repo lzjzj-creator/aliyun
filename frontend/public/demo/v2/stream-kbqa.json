@@ -1,0 +1,20 @@
+[
+  {"event": "session", "data": {"protocol": 2, "session_id": "demo-sess-0001", "stage": "probing", "is_new": false}},
+  {"event": "step_start", "data": {"id": "s1", "seq": 1, "kind": "recall", "title": "回顾记忆"}},
+  {"event": "step_end", "data": {"id": "s1", "seq": 1, "status": "done", "detail": "已知：大二/计算机；目标：后端开发实习"}},
+  {"event": "step_start", "data": {"id": "s2", "seq": 2, "kind": "plan", "title": "判断本轮动作"}},
+  {"event": "step_end", "data": {"id": "s2", "seq": 2, "status": "done", "detail": "act=answer · need_kb=true · 用户在问知识"}},
+  {"event": "step_start", "data": {"id": "s3", "seq": 3, "kind": "retrieve", "title": "检索知识库"}},
+  {"event": "step_end", "data": {"id": "s3", "seq": 3, "status": "done", "detail": "query=「后端实习 技术要求 准备」· 命中 5 段 · 最高分 0.41"}},
+  {"event": "step_start", "data": {"id": "s4", "seq": 4, "kind": "grade", "title": "相关性校验"}},
+  {"event": "step_end", "data": {"id": "s4", "seq": 4, "status": "done", "detail": "相关性达标，直接作答"}},
+  {"event": "sources", "data": [
+    {"title": "后端开发实习需要准备什么", "url": "/kb/senior/backend-intern-prep", "seq": 3, "score": 0.41},
+    {"title": "Java 后端学习路线（大二版）", "url": "/kb/sophomore_junior/java-roadmap", "seq": 1, "score": 0.36}
+  ]},
+  {"event": "token", "data": "后端实习的核心准备一般分三块："},
+  {"event": "token", "data": "① 一门主力语言+框架（Java 配 Spring Boot 最常见）；② 数据库与缓存（MySQL、Redis）的基本使用；③ 一段能讲清“你做了什么、结果如何”的项目。"},
+  {"event": "token", "data": "顺带问一句，你现在是想往这个方向准备吗？手里有没有已经在做的项目？"},
+  {"event": "profile", "data": {"coverage": 0.33, "gaps": ["projects", "internships", "skills"], "updates": []}},
+  {"event": "done", "data": {"session_id": "demo-sess-0001", "message_id": 50, "stage": "probing", "coverage": 0.33}}
+]

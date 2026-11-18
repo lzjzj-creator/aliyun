@@ -39,12 +39,24 @@ resources:
         DEEPSEEK_API_KEY: ${env(DEEPSEEK_API_KEY)}
         ALLOWED_ORIGINS: ${env(ALLOWED_ORIGINS)}
         QWEN_MODEL_CHAT: ${env(QWEN_MODEL_CHAT)}
+        QWEN_MODEL_ROUTER: ${env(QWEN_MODEL_ROUTER)}
         EMBEDDING_MODEL: ${env(EMBEDDING_MODEL)}
         MIN_RETRIEVE_SCORE: ${env(MIN_RETRIEVE_SCORE)}
         KB_SOURCE_BASE: ${env(KB_SOURCE_BASE)}
         ADMIN_PASSWORD_HASH: ${env(ADMIN_PASSWORD_HASH)}
         ADMIN_SESSION_SECRET: ${env(ADMIN_SESSION_SECRET)}
         ADMIN_SESSION_TTL: ${env(ADMIN_SESSION_TTL)}
+        # v2：迁移验收通过前一律保持 0（挂载开关 + 访谈引擎开关 + 共享配额开关）
+        V2_MEMORY_ENABLED: ${env(V2_MEMORY_ENABLED)}
+        V2_SHARED_QUOTA: ${env(V2_SHARED_QUOTA)}
+        V2_IP_LIMIT_PER_MIN: ${env(V2_IP_LIMIT_PER_MIN)}
+        V2_ANON_TURNS_PER_DAY: ${env(V2_ANON_TURNS_PER_DAY)}
+        COACH_ENABLED: ${env(COACH_ENABLED)}
+        COACH_MAX_TURNS: ${env(COACH_MAX_TURNS)}
+        COACH_WRAP_COVERAGE: ${env(COACH_WRAP_COVERAGE)}
+        COACH_WRAP_STAR: ${env(COACH_WRAP_STAR)}
+        COACH_THINKING: ${env(COACH_THINKING)}
+        COACH_DAILY_TOKEN_BUDGET: ${env(COACH_DAILY_TOKEN_BUDGET)}
       triggers:
         - triggerName: http
           triggerType: http
@@ -52,4 +64,5 @@ resources:
             methods:
               - GET
               - POST
+              - DELETE
             authType: anonymous

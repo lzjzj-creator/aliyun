@@ -19,16 +19,35 @@ from pydantic import BaseModel
 import decision
 import kb
 from admin import router as admin_router
+try:
+    from routers.sessions import router as sessions_router
+except ImportError:  # 以 backend.main 包形式导入（测试）
+    from .routers.sessions import router as sessions_router
 from llm import llm, QWEN_CHAT
+try:
+    from routers.resume import router as resume_v2_router
+except ImportError:  # 以 backend.main 包形式导入（测试）
+    from .routers.resume import router as resume_v2_router
+try:
+    from routers.coach import router as coach_router
+except ImportError:  # 以 backend.main 包形式导入（测试）
+    from .routers.coach import router as coach_router
 
 app = FastAPI(title="zhimai-api", version="0.1.0")
 app.include_router(admin_router)
+app.include_router(resume_v2_router)
+# Off by default until isolated DB validation and the shared contract Gate pass.
+if os.getenv("V2_MEMORY_ENABLED", "0") == "1":
+    app.include_router(sessions_router)
+    app.include_router(coach_router)
 
 origins = [o.strip() for o in os.getenv("ALLOWED_ORIGINS",
            "http://localhost:5173,http://127.0.0.1:5173").split(",") if o.strip()]
 app.add_middleware(CORSMiddleware, allow_origins=origins,
-                   allow_methods=["POST", "GET", "OPTIONS"],
-                   allow_headers=["Content-Type", "X-File-Name", "Authorization"])
+                   allow_methods=["POST", "GET", "DELETE", "OPTIONS"],
+                   allow_headers=["Content-Type", "X-File-Name", "Authorization",
+                                  "X-Anon-Id", "X-Session-Token"],
+                   expose_headers=["Retry-After"])
 
 MIN_SCORE = float(os.getenv("MIN_RETRIEVE_SCORE", "0.25"))
 
@@ -109,44 +128,17 @@ def chat_stream(req: ChatReq):
         try:
             for tok in llm.chat_stream(messages, model=QWEN_CHAT):
                 yield _sse("token", tok)
-        except Exception as e:
-            yield _sse("error", {"code": "MODEL_FAILED", "message": str(e)[:200]})
+        except Exception:
+            # 上游异常原文可能含请求体或密钥片段，一律不下发给浏览器
+            yield _sse("error", {"code": "MODEL_FAILED",
+                                 "message": "模型服务暂时不可用，请稍后重试", "retryable": True})
         yield _sse("done", {})
 
     return StreamingResponse(gen(), media_type="text/event-stream")
 
 
-STAR_PROMPT = """你是简历改写助手。把下面的简历条目逐条改成 STAR 结构：
-动词开头、突出行动与结果、每条尽量有量化点、不超过 3 行。
-红线：
-1. 不得新增用户没提供的事实、职责、技能或成果；
-2. 缺量化数据时，在 suggested 里写【待补充：需要的数据】占位符，严禁编造具体数字；
-3. 同时把需要用户确认的数据列入 questions 反问。
-用户已确认的事实：{facts}
-输出 JSON：{{"rewritten":[{{"original":"...","suggested":"...","needs_user_data":false}}],"questions":["..."]}}
-只输出 JSON。"""
-
-
-def _guard_fabricated_numbers(data: dict, originals: list[str], facts: str):
-    """确定性守卫：建议文本里的数字必须能在原文/已确认事实中找到，
-    找不到的强制 needs_user_data 并生成确认问题（不依赖模型自觉）。"""
-    import re
-    num_re = re.compile(r"\d+(?:\.\d+)?")
-    allowed = set(num_re.findall(" ".join(originals) + " " + facts))
-    questions = list(data.get("questions") or [])
-    for item in data.get("rewritten") or []:
-        suggested = item.get("suggested", "")
-        novel = [n for n in dict.fromkeys(num_re.findall(suggested)) if n not in allowed]
-        # 排除占位符内部的说明文字误伤：占位符【待补充：...】里的数字同样要求确认
-        if novel:
-            item["needs_user_data"] = True
-            shown = "、".join(novel[:5])
-            questions.append(
-                f"建议条目「{item.get('original', '')[:20]}…」中出现了原文没有的数字（{shown}），"
-                "是真实数据还是占位估计？请提供准确数字。")
-    if questions:
-        data["questions"] = questions
-    return data
+# STAR_PROMPT / 数字守卫已迁入 resume_optimizer.py（v2 optimize 复用，§9）
+from resume_optimizer import STAR_PROMPT, guard_fabricated_numbers as _guard_fabricated_numbers
 
 
 @app.post("/api/resume/rewrite")
@@ -154,7 +146,9 @@ def resume_rewrite(req: RewriteReq):
     if not req.bullets:
         return {"ok": False, "error": {"code": "BULLETS_REQUIRED", "message": "请先提供要改写的条目。"}}
     raw = llm.chat(
-        [{"role": "system", "content": STAR_PROMPT.format(facts=req.confirmed_facts or "（无）")},
+        [{"role": "system", "content": STAR_PROMPT.format(
+            facts=req.confirmed_facts or "（无）",
+            rubric="STAR：动词开头、突出行动与结果、尽量量化")},
          {"role": "user", "content": "\n".join(f"{i+1}. {b}" for i, b in enumerate(req.bullets[:20]))}],
         model=QWEN_CHAT, json_mode=True, temperature=0.4)
     try:

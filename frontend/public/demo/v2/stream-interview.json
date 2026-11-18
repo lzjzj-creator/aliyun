@@ -1,0 +1,15 @@
+[
+  {"event": "session", "data": {"protocol": 2, "session_id": "demo-sess-0001", "stage": "probing", "is_new": false}},
+  {"event": "step_start", "data": {"id": "s1", "seq": 1, "kind": "recall", "title": "回顾记忆"}},
+  {"event": "step_end", "data": {"id": "s1", "seq": 1, "status": "done", "detail": "已知：大二/计算机；目标：后端开发实习"}},
+  {"event": "step_start", "data": {"id": "s2", "seq": 2, "kind": "plan", "title": "判断本轮动作"}},
+  {"event": "step_end", "data": {"id": "s2", "seq": 2, "status": "done", "detail": "act=ask · focus_slot=projects · 继续深挖经历"}},
+  {"event": "step_start", "data": {"id": "s3", "seq": 3, "kind": "profile", "title": "更新画像"}},
+  {"event": "step_end", "data": {"id": "s3", "seq": 3, "status": "done", "detail": "+identity.grade=大二 · +identity.major=计算机 · +basics.target_role=后端开发实习"}},
+  {"event": "reasoning_summary", "data": "身份与目标已补齐；接下来找一段可写进简历的经历深挖。"},
+  {"event": "token", "data": "好的，大二计算机、目标是后端开发实习，方向很清晰。"},
+  {"event": "token", "data": "那接下来想重点了解你的动手经历——"},
+  {"event": "token", "data": "做过哪些项目（课设/自研/开源都可以）？挑一个你投入最多的，说说你在里面具体做了什么？"},
+  {"event": "profile", "data": {"coverage": 0.33, "gaps": ["projects", "internships", "skills"], "updates": [{"slot": "identity.grade", "value": "大二"}, {"slot": "identity.major", "value": "计算机"}, {"slot": "basics.target_role", "value": "后端开发实习"}]}},
+  {"event": "done", "data": {"session_id": "demo-sess-0001", "message_id": 42, "stage": "probing", "coverage": 0.33}}
+]

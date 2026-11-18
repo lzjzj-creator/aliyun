@@ -2,6 +2,8 @@
 import { ref, reactive, nextTick, onUnmounted } from "vue";
 import MarkdownIt from "markdown-it";
 import { chatStream } from "../api";
+import { writebackRound } from "../api/sessions";
+import { getCurrentSessionId, setCurrentSessionId, setSessionToken } from "../storage";
 import { toMirrorHref } from "../kbSource.mjs";
 
 const md = new MarkdownIt({ linkify: true, html: false, breaks: true });
@@ -73,6 +75,30 @@ const slow = ref(false);
 const box = ref(null);
 let slowTimer = null;
 
+// P0 过渡落库：v1 链路不变，每轮结束回写新会话存储（接口未上线时静默停用）
+const sessionId = ref(getCurrentSessionId());
+let wbDisabled = false;
+async function writeback(query, ai) {
+  if (wbDisabled || !ai.text) return;
+  try {
+    const r = await writebackRound({
+      session_id: sessionId.value || null,
+      client_msg_id: (crypto.randomUUID?.() ||
+        `cm-${Date.now()}-${Math.random().toString(36).slice(2)}`),
+      user: query,
+      assistant: ai.text,
+      meta: { route: ai.route, sources: ai.sources },
+    }, sessionId.value || undefined);
+    if (r?.session_id) {
+      sessionId.value = r.session_id;
+      setCurrentSessionId(r.session_id);
+      if (r.session_token) setSessionToken(r.session_id, r.session_token);
+    }
+  } catch (e) {
+    if (e.status === 404 || e.status === 405) wbDisabled = true;
+  }
+}
+
 function startSlowHint() {
   clearTimeout(slowTimer);
   slow.value = false;
@@ -97,13 +123,14 @@ function ask(q) {
   const history = messages.value.slice(-7, -1)
     .map((m) => ({ role: m.role, content: m.text }));
 
+  let hadError = false;
   chatStream(query, history, {
     route: (r) => { ai.route = r; },
     guide: (g) => { ai.guide = g; scroll(); },
     sources: (s) => { ai.sources = s; scroll(); },
     token: (t) => { ai.text += t; scroll(); },
-    error: (e) => { ai.text += `\n[出错了：${e.message || e}]`; },
-    done: () => { scroll(); },
+    error: (e) => { hadError = true; ai.text += `\n[出错了：${e.message || e}]`; },
+    done: () => { scroll(); if (!hadError) writeback(query, ai); },
   }).catch((e) => {
     ai.text += `\n[网络错误：${e.message}]`;
   }).finally(() => {
