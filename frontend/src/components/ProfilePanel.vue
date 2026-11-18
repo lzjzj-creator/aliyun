@@ -1,7 +1,8 @@
 <script setup>
-// #15 画像面板：覆盖度进度 + 缺口提醒 + 本轮/累计已收集事实（消费 §4 profile 事件）
+// #15 画像面板：覆盖率环 + 缺口提醒 + 本轮/累计已收集事实（消费 §4 profile 事件）
 import { computed } from "vue";
 
+const emit = defineEmits(["ask"]);   // 点「待补充」chip → 回填引导句
 const props = defineProps({
   coverage: { type: Number, default: null },   // 0..1
   gaps: { type: Array, default: () => [] },    // 缺口 slot_id
@@ -16,6 +17,9 @@ const slotCn = (id) => props.labels[id] || EXTRA_CN[id] || id;
 const pct = computed(() =>
   props.coverage == null ? null : Math.round(props.coverage * 100));
 const recent = computed(() => props.updates.slice(-6));
+const ringStyle = computed(() => ({
+  background: `conic-gradient(var(--teal) ${(pct.value || 0) * 3.6}deg, var(--surface-warm) 0deg)`,
+}));
 </script>
 
 <template>
@@ -25,22 +29,26 @@ const recent = computed(() => props.updates.slice(-6));
         素材收集
         <b v-if="pct !== null">{{ pct }}%</b>
       </summary>
-      <div v-if="pct !== null" class="pp-bar" role="progressbar"
-           :aria-valuenow="pct" aria-valuemin="0" aria-valuemax="100">
-        <i :style="{ width: pct + '%' }"></i>
-      </div>
-      <div v-if="recent.length" class="pp-section">
-        <span class="pp-label">已收集</span>
-        <div class="pp-chips">
-          <span v-for="(u, i) in recent" :key="i" class="chip hit">
-            {{ slotCn(u.slot) }}<template v-if="u.value && !String(u.value).startsWith('（')">·{{ u.value }}</template>
-          </span>
+      <div v-if="pct !== null" class="pp-coverage">
+        <div class="pp-ring" :style="ringStyle" role="progressbar"
+             :aria-valuenow="pct" aria-valuemin="0" aria-valuemax="100">
+          <span>{{ pct }}<small>%</small></span>
+        </div>
+        <div class="pp-coverage-side">
+          <span class="pp-label">已收集</span>
+          <div class="pp-chips">
+            <span v-for="(u, i) in recent" :key="i" class="chip hit">
+              {{ slotCn(u.slot) }}<template v-if="u.value && !String(u.value).startsWith('（')">·{{ u.value }}</template>
+            </span>
+            <span v-if="!recent.length" class="pp-none">暂无</span>
+          </div>
         </div>
       </div>
       <div v-if="gaps.length" class="pp-section">
-        <span class="pp-label">待补充</span>
+        <span class="pp-label">待补充 · 点击直接聊</span>
         <div class="pp-chips">
-          <span v-for="g in gaps" :key="g" class="chip miss">{{ slotCn(g) }}</span>
+          <button v-for="g in gaps" :key="g" class="chip miss gap-chip"
+                  @click="emit('ask', slotCn(g))">{{ slotCn(g) }}</button>
         </div>
       </div>
       <p v-if="pct === 0" class="pp-hint">
@@ -55,18 +63,31 @@ const recent = computed(() => props.updates.slice(-6));
 
 <style scoped>
 .profile-panel {
-  margin: 0 0 10px; background: #fff; border: 1px solid var(--line);
-  border-radius: 12px; padding: 10px 14px; font-size: .82rem;
+  background: #fff; border: 1px solid var(--line);
+  border-radius: 12px; padding: 12px 14px; font-size: .82rem;
 }
 .pp-summary { cursor: pointer; color: var(--teal); font-weight: 600; list-style: none; }
 .pp-summary::before { content: "▸ "; font-weight: 400; }
 .pp-body[open] .pp-summary::before { content: "▾ "; }
 .pp-summary b { margin-left: 6px; }
-.pp-bar { height: 6px; border-radius: 999px; background: #f3eee6; overflow: hidden; margin: 8px 0; }
-.pp-bar i { display: block; height: 100%; background: var(--teal); border-radius: 999px; transition: width .5s; }
-.pp-section { margin-top: 6px; }
-.pp-label { display: block; font-size: .72rem; color: #9a9186; margin-bottom: 4px; }
+.pp-coverage { display: flex; align-items: center; gap: 14px; margin: 10px 0 4px; }
+.pp-ring {
+  flex: none; width: 64px; height: 64px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+}
+.pp-ring > span {
+  width: 46px; height: 46px; border-radius: 50%; background: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .95rem; font-weight: 700; color: var(--teal);
+}
+.pp-ring small { font-size: .6rem; margin-left: 1px; }
+.pp-coverage-side { flex: 1; min-width: 0; }
+.pp-section { margin-top: 8px; }
+.pp-label { display: block; font-size: .72rem; color: var(--mute); margin-bottom: 4px; }
 .pp-chips { display: flex; flex-wrap: wrap; }
 .pp-chips .chip { font-size: .72rem; }
+.pp-none { font-size: .75rem; color: var(--mute); }
+button.gap-chip { cursor: pointer; font: inherit; transition: transform .15s; }
+button.gap-chip:hover { border-color: var(--accent); color: var(--accent); transform: translateY(-1px); }
 .pp-hint { margin: 8px 0 0; color: var(--teal); font-size: .78rem; }
 </style>

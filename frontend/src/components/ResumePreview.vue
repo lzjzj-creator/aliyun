@@ -9,6 +9,7 @@ const props = defineProps({
   evidence: { type: Object, default: () => ({}) }, // evidence_map：字段路径→引用
   gaps: { type: Array, default: () => [] },        // [{field_path,label,reason}]
   compare: { type: Object, default: null },        // 优化对比模式 {path:before}
+  focus: { type: String, default: "" },            // 左栏点选的区块 key → 高亮
 });
 
 const gapSet = computed(() => new Set(props.gaps.map((g) => g.field_path)));
@@ -120,7 +121,8 @@ defineExpose({ fp, simpleFp });
     </header>
 
     <!-- 其余区块按契约 v-for -->
-    <section v-for="sec in bodySections" :key="sec.key" class="rd-sec" :data-key="sec.key">
+    <section v-for="sec in bodySections" :key="sec.key" class="rd-sec"
+             :class="{ hl: focus === sec.key }" :data-key="sec.key">
       <h2 class="rd-sec-title">{{ sec.title }}</h2>
 
       <!-- 空 entries 区块：整节占位 -->
@@ -198,6 +200,8 @@ defineExpose({ fp, simpleFp });
   font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
   font-size: 10.5pt; line-height: 1.5;
   border: 1px solid var(--line, #e5ddd2); border-radius: 4px;
+  max-width: 760px; margin: 0 auto;   /* A4 画布感：纸面居中浮在纸底上 */
+  box-shadow: 0 2px 6px rgba(31,42,46,.06), 0 10px 28px rgba(31,42,46,.08);
 }
 .rd-head { text-align: center; border-bottom: 2px solid #333; padding-bottom: 8px; margin-bottom: 10px; }
 .rd-name { font-size: 20pt; margin: 0; font-weight: 700; letter-spacing: 2px; }
@@ -228,9 +232,13 @@ defineExpose({ fp, simpleFp });
 .rd-text { margin: 0; }
 
 /* 占位/对比标记 */
-.gap { background: #fff3cd; color: #8a6d00; padding: 0 2px; border-radius: 2px; }
-.rd-sec-empty { padding: 4px 8px; }
-.compared { background: #e6f4ea; border-bottom: 1px dashed #0e8a16; }
+.gap {
+  background: var(--warn-bg); color: var(--warn); padding: 0 3px; border-radius: 3px;
+  box-shadow: inset 0 0 0 1px var(--warn-line);   /* 琥珀虚线感占位：是标注不是错误 */
+}
+.rd-sec-empty { padding: 4px 8px; border: 1px dashed var(--warn-line); border-radius: 6px; }
+.compared { background: var(--good-bg); border-bottom: 1px dashed var(--good); }
+.rd-sec.hl { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
 
 /* 打印：白底、去交互、不跨页断行 */
 @media print {

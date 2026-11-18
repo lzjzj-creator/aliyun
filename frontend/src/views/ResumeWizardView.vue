@@ -45,6 +45,33 @@ const pendingQuestions = computed(() =>
 
 const STEP_CN = { 1: "① 一键填写", 2: "② 修改预览", 3: "③ 一键优化" };
 
+// —— 工作台：区块导航 + 点击定位 ——
+const focusSec = ref("");
+const panelEl = ref(null);
+const navSections = computed(() =>
+  (tpl.value?.sections || [])
+    .slice().sort((a, b) => a.order - b.order)
+    .map((s) => ({
+      key: s.key, title: s.title, required: s.required !== false,
+      gapCount: gaps.value.filter((g) => g.field_path === s.key || g.field_path.startsWith(s.key + ".")).length,
+      hasData: sectionHasData(s),
+    })));
+function sectionHasData(s) {
+  const d = fields.value[s.key];
+  if (d == null) return false;
+  if (s.type === "entries") return d.length > 0;
+  if (s.type === "lines") return (d.items || []).length > 0;
+  if (s.type === "skillgroups") return (d.groups || []).length > 0;
+  if (s.type === "text") return !!(d.text || "").trim();
+  return Object.values(d).some((v) => v !== "" && v != null && !(Array.isArray(v) && !v.length));
+}
+// 点区块卡 → 右栏表单滚动定位 + 预览高亮
+function gotoSec(key) {
+  focusSec.value = key;
+  panelEl.value?.querySelector(`.rff-sec[data-key="${key}"]`)
+    ?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
 onMounted(() => { loadTemplate(); loadSessions(); });
 
 // 即改即存本机（§11：简历不落服务端）
@@ -245,58 +272,79 @@ function exportPrint() {
       </div>
     </div>
 
-    <!-- ================= ② 修改 + 预览 + 导出 ================= -->
-    <div v-else-if="step === 2" class="wiz-grid">
-      <div class="wz-left">
-        <h2>第二步：人工修改（即改即存本机）</h2>
+    <!-- ================= ② 修改 + 预览 + 导出：区块导航 | A4 画布 | 表单 ================= -->
+    <div v-else-if="step === 2" class="wiz-work">
+      <nav class="wz-nav">
+        <button v-for="s in navSections" :key="s.key" class="wz-nav-item"
+                :class="{ on: focusSec === s.key, gap: s.gapCount > 0, ok: s.hasData && !s.gapCount }"
+                @click="gotoSec(s.key)">
+          <span class="wz-nav-title">{{ s.title }}</span>
+          <span v-if="s.gapCount" class="wz-nav-badge warn">{{ s.gapCount }} 待补</span>
+          <span v-else-if="s.hasData" class="wz-nav-badge">✓</span>
+          <span v-else class="wz-nav-badge dim">空</span>
+        </button>
+      </nav>
+
+      <div class="wz-canvas print-area">
+        <ResumePreview v-if="tpl" :template="tpl" :fields="fields"
+                       :evidence="evidence" :gaps="gaps" :focus="focusSec" />
+      </div>
+
+      <aside class="wz-panel" ref="panelEl">
+        <h2 class="wz-panel-title">人工修改 · 即改即存本机</h2>
         <ResumeFieldsForm v-model="fields" :template="tpl" :gaps="gaps" />
-        <div class="row">
+        <div class="row wz-actions">
           <button class="ghost" @click="step = 1">← 上一步</button>
           <div class="row-right">
             <button class="ghost" @click="saveDraft(DRAFT_KEY, { template_version: draftVer, fields, evidence_map: evidence, gaps })">保存草稿</button>
-            <button @click="exportPrint">导出 PDF</button>
-            <button @click="step = 3">下一步：一键优化 →</button>
+            <button class="primary" @click="exportPrint">导出 PDF</button>
+            <button @click="step = 3">一键优化 →</button>
           </div>
         </div>
-      </div>
-      <div class="wz-right print-area">
-        <ResumePreview v-if="tpl" :template="tpl" :fields="fields"
-                       :evidence="evidence" :gaps="gaps" />
-      </div>
+      </aside>
     </div>
 
     <!-- ================= ③ 逐段优化 + 对比 + 导出 ================= -->
-    <div v-else class="wiz-grid">
-      <div class="wz-left opt-panel">
-        <h2>第三步：黑箱优化（逐段跑，不改事实）</h2>
-        <button :disabled="optBusy || !filled" @click="doOptimize">
+    <div v-else class="wiz-work">
+      <nav class="wz-nav opt-panel">
+        <button class="opt-run" :disabled="optBusy || !filled" @click="doOptimize">
           {{ optBusy ? "优化中…" : "⚡ 一键优化" }}
         </button>
-
         <ul v-if="plan" class="opt-list">
-          <li v-for="s in plan.sections" :key="s.key" :data-st="s.status">
+          <li v-for="s in plan.sections" :key="s.key" :data-st="s.status"
+              :class="{ on: focusSec === s.key }" @click="gotoSec(s.key)">
             <b>{{ s.title }}</b>
             <span class="st">
               {{ { pending: "待优化", running: "优化中…", done: "完成", error: "失败", skipped: "跳过", ok: "无需改", check: "人工确认" }[s.status] || s.status }}
             </span>
             <span v-if="s.reason" class="rs">{{ s.reason }}</span>
-            <div v-if="results[s.key]?.steps?.length" class="opt-steps">
-              <span v-for="(st, i) in results[s.key].steps" :key="i">
-                {{ st.title }}：{{ st.detail }}
-              </span>
-            </div>
-            <div v-if="results[s.key]?.error" class="warn">{{ results[s.key].error }}</div>
           </li>
         </ul>
+        <button class="ghost back" @click="step = 2">← 返回修改</button>
+      </nav>
+
+      <div class="wz-canvas print-area">
+        <ResumePreview v-if="tpl && optFields" :template="tpl" :fields="optFields"
+                       :evidence="evidence" :gaps="gaps" :compare="compareMap" :focus="focusSec" />
+        <ResumePreview v-else-if="tpl" :template="tpl" :fields="fields"
+                       :evidence="evidence" :gaps="gaps" :focus="focusSec" />
+      </div>
+
+      <aside class="wz-panel">
+        <h2 class="wz-panel-title">优化上下文</h2>
+        <template v-if="!plan && !optBusy">
+          <p class="wiz-hint">点左侧「一键优化」，逐段跑黑箱优化；只改表达，不改事实。改动处会在预览里标绿，悬停可见原文。</p>
+        </template>
 
         <template v-for="(r, key) in results" :key="key">
           <div v-if="r.change_log?.length" class="rewrite">
-            <h3>改动明细 · {{ key }}</h3>
+            <h3>改动明细 · {{ (plan?.sections || []).find(s => s.key === key)?.title || key }}</h3>
             <div v-for="(c, i) in r.change_log" :key="i" class="pair">
               <div><b>原文</b><p>{{ c.before }}</p></div>
               <div><b>优化</b><p>{{ c.after }}</p><p class="follow">{{ c.reason }}</p></div>
             </div>
           </div>
+          <div v-if="r.error" class="warn">{{ r.error }}</div>
         </template>
 
         <div v-if="placeholders.length" class="gaps">
@@ -308,21 +356,11 @@ function exportPrint() {
           <p v-for="(q, i) in pendingQuestions" :key="i">· {{ q }}</p>
         </div>
 
-        <div v-if="optFields" class="row">
-          <button class="ghost" @click="step = 2">← 返回原稿</button>
-          <div class="row-right">
-            <button @click="adoptAll">采纳优化稿</button>
-            <button class="ghost" @click="exportPrint">导出优化稿</button>
-          </div>
+        <div v-if="optFields" class="row wz-actions">
+          <button @click="adoptAll">采纳优化稿</button>
+          <button class="primary" @click="exportPrint">导出优化稿</button>
         </div>
-      </div>
-
-      <div class="wz-right print-area">
-        <ResumePreview v-if="tpl && optFields" :template="tpl" :fields="optFields"
-                       :evidence="evidence" :gaps="gaps" :compare="compareMap" />
-        <ResumePreview v-else-if="tpl" :template="tpl" :fields="fields"
-                       :evidence="evidence" :gaps="gaps" />
-      </div>
+      </aside>
     </div>
   </section>
 </template>
@@ -331,27 +369,65 @@ function exportPrint() {
 <style scoped>
 .wiz-steps { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
 .wiz-steps button {
-  border: 1px solid var(--line); background: #fff; color: #7a6f63;
+  border: 1px solid var(--line); background: #fff; color: var(--ink-soft);
   border-radius: 999px; padding: 6px 14px; font-size: .82rem; cursor: pointer;
 }
 .wiz-steps button.on { border-color: var(--teal); background: var(--teal); color: #fff; }
 .wiz-source { display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
-.wiz-source label { display: flex; flex-direction: column; gap: 4px; font-size: .8rem; color: #7a6f63; }
+.wiz-source label { display: flex; flex-direction: column; gap: 4px; font-size: .8rem; color: var(--ink-soft); }
 .wiz-source select { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: inherit; background: #fff; min-width: 220px; }
-.wiz-hint { font-size: .78rem; color: #9a9186; margin: 4px 0 12px; }
-.wiz-grid { display: grid; grid-template-columns: 1fr 1.1fr; gap: 18px; align-items: start; }
-.wz-right { position: sticky; top: 10px; }
-.row-right { display: flex; gap: 8px; }
-.opt-list { list-style: none; padding: 0; margin: 12px 0; }
-.opt-list li { padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; margin-bottom: 6px; background: #fff; font-size: .85rem; }
-.opt-list li[data-st="done"] { border-left: 3px solid #0e8a16; }
-.opt-list li[data-st="error"] { border-left: 3px solid #b3402a; }
+.wiz-hint { font-size: .78rem; color: var(--mute); margin: 4px 0 12px; }
+
+/* 工作台三柱：区块导航 | A4 画布 | 上下文面板 */
+.wiz-work { display: flex; gap: 18px; align-items: flex-start; }
+.wz-nav {
+  flex: none; width: 200px; display: flex; flex-direction: column; gap: 6px;
+  position: sticky; top: 14px;
+}
+.wz-nav-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 6px;
+  padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px;
+  background: #fff; font-size: .85rem; color: var(--ink); cursor: pointer; text-align: left;
+}
+.wz-nav-item:hover { border-color: var(--teal); }
+.wz-nav-item.on { border-color: var(--teal); background: var(--hover-teal); }
+.wz-nav-item.gap { border-left: 3px solid var(--warn-line); }
+.wz-nav-badge { flex: none; font-size: .68rem; color: var(--good); }
+.wz-nav-badge.warn { color: var(--warn); }
+.wz-nav-badge.dim { color: var(--mute); }
+.wz-canvas { flex: 1; min-width: 0; }
+.wz-panel {
+  flex: none; width: 340px; position: sticky; top: 14px;
+  max-height: calc(100vh - 130px); overflow-y: auto;
+  background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px;
+}
+.wz-panel-title { margin: 0 0 10px; font-size: .9rem; color: var(--teal); }
+.row-right { display: flex; gap: 8px; flex-wrap: wrap; }
+.wz-actions { margin-top: 14px; }
+.primary { border-color: var(--accent) !important; background: var(--accent) !important; color: #fff !important; }
+
+/* 优化导航列 */
+.opt-run { margin-bottom: 10px; }
+.opt-list { list-style: none; padding: 0; margin: 0 0 10px; }
+.opt-list li {
+  padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px;
+  margin-bottom: 6px; background: #fff; font-size: .85rem; cursor: pointer;
+}
+.opt-list li.on { border-color: var(--teal); background: var(--hover-teal); }
+.opt-list li[data-st="done"] { border-left: 3px solid var(--good); }
+.opt-list li[data-st="error"] { border-left: 3px solid var(--err); }
 .opt-list li[data-st="running"] { border-left: 3px solid var(--accent); }
-.opt-list .st { margin-left: 8px; font-size: .75rem; color: #9a9186; }
-.opt-list .rs { display: block; font-size: .72rem; color: #9a9186; }
-.opt-steps { display: flex; flex-direction: column; font-size: .72rem; color: #7a6f63; margin-top: 4px; }
-@media (max-width: 900px) {
-  .wiz-grid { grid-template-columns: 1fr; }
-  .wz-right { position: static; }
+.opt-list .st { margin-left: 8px; font-size: .75rem; color: var(--mute); }
+.opt-list .rs { display: block; font-size: .72rem; color: var(--mute); }
+.wz-nav .back { margin-top: 4px; }
+
+@media (max-width: 1100px) {
+  .wiz-work { flex-direction: column; }
+  .wz-nav {
+    width: 100%; flex-direction: row; flex-wrap: nowrap; overflow-x: auto;
+    position: static; padding-bottom: 4px;
+  }
+  .wz-nav-item { flex: none; white-space: nowrap; }
+  .wz-panel { width: 100%; position: static; max-height: none; }
 }
 </style>

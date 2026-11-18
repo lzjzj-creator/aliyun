@@ -38,6 +38,6 @@ onMounted(async () => {
 
 <style scoped>
 .cd-title { color: var(--teal); font-size: 1.05rem; margin: 0 0 4px; }
-.cd-hint { font-size: .75rem; color: #9a9186; margin: 0 0 10px; }
+.cd-hint { font-size: .75rem; color: var(--mute); margin: 0 0 10px; }
 .contract-demo { max-width: 820px; margin: 0 auto; }
 </style>

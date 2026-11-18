@@ -13,7 +13,7 @@ import {
 } from "../storage";
 import { toMirrorHref } from "../kbSource.mjs";
 
-const emit = defineEmits(["goto-resume"]);
+const emit = defineEmits(["goto-resume", "session-created"]);
 
 const md = new MarkdownIt({ linkify: true, html: false, breaks: true });
 const renderMd = (t) => md.render(t || "");
@@ -25,6 +25,8 @@ const profile = reactive({ coverage: null, gaps: [], updates: [] });
 const slotLabels = reactive({});   // 模板契约 slot→label（ProfilePanel 展示用）
 const stage = ref("greeting");
 const input = ref("");
+const inputEl = ref(null);
+const chips = ref([]);         // 建议回复：归位到输入框上方，不留在消息流里
 const busy = ref(false);
 const slow = ref(false);
 const dead = ref("");         // 致命错误提示（引擎未开放/会话丢失）
@@ -97,6 +99,7 @@ function wireTurn(turn, lastUserText, demo = false) {
           sessionId.value = d.session_id;
           setCurrentSessionId(d.session_id);
           history.replaceState(null, "", `#/chat/${d.session_id}`);
+          emit("session-created", d.session_id);
         }
         if (d.stage) stage.value = d.stage;
       },
@@ -112,7 +115,10 @@ function wireTurn(turn, lastUserText, demo = false) {
       reasoning_summary(d) { turn.reasoning = d; scroll(); },
       token(d) { turn.text += d; scroll(); },
       sources(d) { turn.sources = d; scroll(); },
-      card(d) { turn.cards.push(d); scroll(); },
+      card(d) {
+        if (d.type === "suggest_reply") { chips.value = d.payload?.replies || []; scroll(); return; }
+        turn.cards.push(d); scroll();
+      },
       profile(d) {
         profile.coverage = d.coverage ?? profile.coverage;
         profile.gaps = d.gaps || profile.gaps;
@@ -186,6 +192,7 @@ function send(text) {
   const query = (text ?? input.value).trim();
   if (!query || busy.value || dead.value || demoLoading.value) return;
   input.value = "";
+  chips.value = [];
   items.value.push({ role: "user", text: query, _k: ++itemKey });
   stream({ sessionId: sessionId.value || null, message: query,
            clientMsgId: newClientMsgId(), userText: query });
@@ -208,6 +215,12 @@ function retry(turn) {
 
 function onCard(card) {
   if (card.type === "goto_resume") emit("goto-resume");
+}
+
+// 画像面板「待补充」点击 → 回填引导句并聚焦输入框
+function onAskGap(label) {
+  input.value = `关于${label}：`;
+  inputEl.value?.focus();
 }
 
 // ---------- #24 离线演示回放：demo/v2 stream fixture 逐条回放，不走真实接口 ----------
@@ -296,10 +309,8 @@ onMounted(boot);
 </script>
 
 <template>
-  <section class="chat interview">
-    <ProfilePanel :coverage="profile.coverage" :gaps="profile.gaps"
-                  :updates="profile.updates" :labels="slotLabels" />
-
+  <section class="chat interview iv-grid">
+    <div class="iv-main">
     <div v-if="dead" class="dead-banner">
       {{ dead }}
       <a v-if="deadFallbackV1" href="#/chat-v1">去问答模式 →</a>
@@ -338,10 +349,6 @@ onMounted(boot);
             <template v-for="(c, ci) in m.cards" :key="ci">
               <button v-if="c.type === 'goto_resume'" class="coach-card go"
                       @click="onCard(c)">{{ c.payload?.label || "去一键填写简历" }} →</button>
-              <div v-else-if="c.type === 'suggest_reply'" class="suggest-replies">
-                <button v-for="r in c.payload?.replies || []" :key="r"
-                        :disabled="busy" @click="send(r)">{{ r }}</button>
-              </div>
             </template>
           </div>
 
@@ -362,21 +369,28 @@ onMounted(boot);
 
     <p v-if="stage === 'done'" class="stage-done">访谈已收尾，素材画像已就绪。</p>
 
+    <div v-if="chips.length" class="suggest-replies" :class="{ hero: stage === 'greeting' }">
+      <button v-for="r in chips" :key="r" :disabled="busy" @click="send(r)">{{ r }}</button>
+    </div>
     <form class="composer" @submit.prevent="send()">
-      <input v-model="input" :disabled="busy || !!dead"
+      <input ref="inputEl" v-model="input" :disabled="busy || !!dead"
              :placeholder="busy ? (slow ? '首次唤醒服务，约 3–8 秒…' : '思考中…') : '聊聊你的经历，或直接提问…'" />
       <button type="submit" :disabled="busy || !input.trim() || !!dead">发送</button>
     </form>
+    </div>
+
+    <ProfilePanel class="iv-side" :coverage="profile.coverage" :gaps="profile.gaps"
+                  :updates="profile.updates" :labels="slotLabels" @ask="onAskGap" />
   </section>
 </template>
 
 <style scoped>
 .dead-banner {
   margin: 0 0 10px; padding: 10px 14px; border-radius: 10px;
-  background: #fdf3ee; border: 1px solid #f0cdb9; color: #b3402a; font-size: .85rem;
+  background: var(--accent-bg); border: 1px solid var(--accent-line); color: var(--err); font-size: .85rem;
 }
 .dead-banner a { color: var(--accent); margin-left: 6px; }
-.turn-error { margin-top: 8px; color: #b3402a; font-size: .82rem; }
+.turn-error { margin-top: 8px; color: var(--err); font-size: .82rem; }
 .turn-error .retry {
   margin-left: 8px; padding: 2px 12px; font-size: .78rem; border-radius: 999px;
   border: 1px solid var(--accent); color: var(--accent); background: #fff; cursor: pointer;
@@ -384,21 +398,30 @@ onMounted(boot);
 .coach-cards { margin-top: 10px; }
 .coach-card.go {
   width: 100%; padding: 10px; border-radius: 10px; border: 1px solid var(--accent);
-  background: #fdf3ee; color: var(--accent); font-size: .9rem; cursor: pointer;
+  background: var(--accent-bg); color: var(--accent); font-size: .9rem; cursor: pointer;
 }
-.coach-card.go:hover { background: #f9e7dd; }
+.coach-card.go:hover { background: var(--accent-hover); }
 .suggest-replies { display: flex; flex-wrap: wrap; gap: 8px; }
 .suggest-replies button {
   padding: 6px 14px; border-radius: 999px; font-size: .82rem; cursor: pointer;
   border: 1px dashed var(--teal); background: #fff; color: var(--teal);
 }
-.suggest-replies button:hover:not(:disabled) { background: #eef4f4; }
+.suggest-replies button:hover:not(:disabled) { background: var(--hover-teal); }
 .suggest-replies button:disabled { opacity: .5; cursor: default; }
-.stage-done { margin: 6px 0 0; font-size: .78rem; color: #9a9186; text-align: center; }
+/* greeting 阶段：入口级双卡（开始访谈 / 直接提问），不是普通快捷回复 */
+.suggest-replies.hero { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.suggest-replies.hero button {
+  padding: 16px; font-size: .92rem; text-align: left; line-height: 1.5;
+  border-radius: 12px; border-style: solid; border-color: var(--teal);
+}
+@media (max-width: 640px) {
+  .suggest-replies.hero { grid-template-columns: 1fr; }
+}
+.stage-done { margin: 6px 0 0; font-size: .78rem; color: var(--mute); text-align: center; }
 .demo-link {
   margin-left: 8px; padding: 2px 12px; font-size: .78rem; border-radius: 999px;
   border: 1px solid var(--accent); color: var(--accent); background: #fff; cursor: pointer;
 }
 .empty { padding: 24px 0 8px; }
-.empty-hint { color: #7a6f63; font-size: .85rem; margin: 4px 0 12px; }
+.empty-hint { color: var(--ink-soft); font-size: .85rem; margin: 4px 0 12px; }
 </style>

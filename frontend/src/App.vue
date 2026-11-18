@@ -11,8 +11,9 @@ import { setCurrentSessionId } from "./storage";
 
 // hash 路由：#chat | #chat/:id | #chat-v1 | #resume | #resume-v1 | #demo | #admin（不引 vue-router）
 const view = ref("chat");
-const sidebar = ref(false);
+const sidebar = ref(false);          // 移动端会话抽屉
 const chatSid = ref("");   // 作为 InterviewView 的 key：切会话即重挂载走 boot()
+const sessionListRef = ref(null);
 
 function syncRoute() {
   const h = location.hash || "#/chat";
@@ -42,6 +43,10 @@ function onNewSession() {
   nav("#/chat");
 }
 
+function onSessionCreated() {
+  sessionListRef.value?.reload?.();
+}
+
 onMounted(() => {
   if (!location.hash) location.hash = "#/chat";
   syncRoute();
@@ -55,40 +60,48 @@ onUnmounted(() => window.removeEventListener("hashchange", syncRoute));
     <AdminView />
   </div>
 
-  <div v-else class="shell">
-    <header class="top">
-      <div class="brand">
-        <h1>知脉 · 简历成长助手</h1>
-        <p class="tagline">先聊出你的经历，再长出一份简历——所有内容都要有出处。</p>
-      </div>
-      <nav class="tabs">
-        <button class="hamburger" title="会话" @click="sidebar = true">☰</button>
-        <button :class="{ on: view === 'chat' }" @click="nav('#/chat')">访谈</button>
-        <button :class="{ on: view === 'resume' }" @click="nav('#/resume')">建简历</button>
-      </nav>
-    </header>
+  <div v-else class="workbench">
+    <nav class="rail" aria-label="主导航">
+      <div class="rail-logo" title="知脉">知</div>
+      <button class="rail-item" :class="{ on: view === 'chat' || view === 'chatV1' }"
+              @click="nav('#/chat')">
+        <span class="rail-ico">◈</span><span>访谈</span>
+      </button>
+      <button class="rail-item" :class="{ on: view === 'resume' || view === 'resumeV1' }"
+              @click="nav('#/resume')">
+        <span class="rail-ico">▤</span><span>简历</span>
+      </button>
+    </nav>
 
-    <section class="intro">
-      <p class="slogan">证据优先的大学规划与简历助手</p>
-      <div class="intro-entries">
-        <span><b>访谈</b>：AI 主动追问你的经历与目标，顺带可问知识库里的规划/求职问题，全程可见思考过程。</span>
-        <span><b>建简历</b>：一键把访谈素材填进优秀模板，人工修改后可预览导出，还能逐段安全优化。</span>
-      </div>
-    </section>
+    <div class="stage">
+      <header class="topbar">
+        <div class="tb-left">
+          <span class="tb-title">知脉 · 简历成长助手</span>
+          <span class="tb-sub">先聊出你的经历，再长出一份简历</span>
+        </div>
+        <button v-if="view === 'chat'" class="tb-sessions" @click="sidebar = true">☰ 会话</button>
+        <span class="tb-privacy">对话留存可删 · 简历只在本机</span>
+      </header>
 
-    <p class="privacy">
-      对话将保存用于历史记录，可随时在会话列表删除；简历成稿只存本机浏览器，不上传服务器。
-      建议不要在对话中发送姓名、电话等敏感信息。
-    </p>
+      <main class="main-area">
+        <!-- 访谈：会话栏 | 消息流 | 画像栏 三柱工作台 -->
+        <div v-if="view === 'chat'" class="iv-workbench">
+          <SessionList ref="sessionListRef" class="iv-side-col" inline :active-id="chatSid"
+                       @select="onSelectSession" @new="onNewSession" />
+          <InterviewView class="iv-main-col" :key="chatSid"
+                         @goto-resume="nav('#/resume')"
+                         @session-created="onSessionCreated" />
+        </div>
+        <div v-else-if="view === 'chatV1' || view === 'resumeV1' || view === 'contractDemo'" class="v1-wrap">
+          <ChatView v-if="view === 'chatV1'" @goto-resume="nav('#/resume')" />
+          <ContractDemoView v-else-if="view === 'contractDemo'" />
+          <ResumeView v-else />
+        </div>
+        <ResumeWizardView v-else-if="view === 'resume'" />
+      </main>
+    </div>
 
-    <SessionList v-if="sidebar" @close="sidebar = false" @select="onSelectSession" @new="onNewSession" />
-
-    <main>
-      <InterviewView v-if="view === 'chat'" :key="chatSid" @goto-resume="nav('#/resume')" />
-      <ChatView v-else-if="view === 'chatV1'" @goto-resume="nav('#/resume')" />
-      <ContractDemoView v-else-if="view === 'contractDemo'" />
-      <ResumeWizardView v-else-if="view === 'resume'" />
-      <ResumeView v-else-if="view === 'resumeV1'" />
-    </main>
+    <SessionList v-if="sidebar" :active-id="chatSid" @close="sidebar = false"
+                 @select="onSelectSession" @new="onNewSession" />
   </div>
 </template>

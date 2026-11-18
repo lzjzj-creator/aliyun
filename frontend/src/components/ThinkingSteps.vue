@@ -33,7 +33,7 @@ const kindCn = (k) => KIND_CN[k] || k || "步骤";
 <style scoped>
 .tsteps { margin: 0 0 8px; font-size: .8rem; }
 .tsteps-body summary {
-  cursor: pointer; color: #9a9186; font-size: .75rem; list-style: none;
+  cursor: pointer; color: var(--mute); font-size: .75rem; list-style: none;
   padding: 2px 0;
 }
 .tsteps-body summary::before { content: "▸ "; }
@@ -42,11 +42,12 @@ const kindCn = (k) => KIND_CN[k] || k || "步骤";
 .tsteps-list { list-style: none; margin: 6px 0 4px; padding: 0; }
 .tstep {
   display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap;
-  padding: 3px 0 3px 14px; position: relative; color: #5d564c; line-height: 1.5;
+  padding: 2px 0 2px 14px; position: relative; color: var(--ink-soft); line-height: 1.45;
 }
+.tstep + .tstep { border-top: 1px dashed var(--line); }
 .tstep-dot {
   position: absolute; left: 0; top: .62em; width: 7px; height: 7px;
-  border-radius: 50%; background: var(--line);
+  border-radius: 50%; background: var(--step-idle);
 }
 .tstep.done .tstep-dot { background: var(--teal); }
 .tstep.running .tstep-dot {
@@ -59,9 +60,9 @@ const kindCn = (k) => KIND_CN[k] || k || "步骤";
   border: 1px solid rgba(20, 82, 90, .18);
 }
 .tstep-title { font-weight: 600; color: var(--ink); }
-.tstep-detail { color: #8a7f70; font-size: .75rem; overflow-wrap: anywhere; }
+.tstep-detail { color: var(--mute); font-size: .75rem; overflow-wrap: anywhere; }
 .tstep-reasoning {
   margin: 4px 0 0; padding: 6px 10px; border-left: 3px solid var(--accent);
-  background: #fdf3ee; border-radius: 0 8px 8px 0; color: #7a6f63; font-size: .78rem;
+  background: var(--accent-bg); border-radius: 0 8px 8px 0; color: var(--ink-soft); font-size: .78rem;
 }
 </style>

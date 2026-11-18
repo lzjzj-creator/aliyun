@@ -166,22 +166,22 @@ const isOptSec = (sec) => sec.required === false;
 <style scoped>
 .rff-sec { margin-bottom: 18px; }
 .rff-title { color: var(--teal); font-size: .95rem; margin: 0 0 8px; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-.rff-opt { font-size: .68rem; color: #9a9186; border: 1px solid var(--line); border-radius: 999px; padding: 0 6px; }
-.rff-rule { font-size: .68rem; color: #9a9186; font-weight: normal; }
+.rff-opt { font-size: .68rem; color: var(--mute); border: 1px solid var(--line); border-radius: 999px; padding: 0 6px; }
+.rff-rule { font-size: .68rem; color: var(--mute); font-weight: normal; }
 .rff-kv { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
 .rff-field { display: flex; flex-direction: column; gap: 3px; margin-bottom: 6px; }
-.rff-field > span { font-size: .78rem; color: #7a6f63; }
-.req { color: #b3402a; font-style: normal; }
+.rff-field > span { font-size: .78rem; color: var(--ink-soft); }
+.req { color: var(--err); font-style: normal; }
 .rff-field input, .rff-field textarea {
   border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px;
   font: inherit; font-size: .88rem; background: #fff; width: 100%;
 }
-.rff-field.gap input, .rff-field.gap textarea { border-color: #e0a83a; background: #fffdf3; }
+.rff-field.gap input, .rff-field.gap textarea { border-color: var(--warn); background: var(--warn-bg); }
 .rff-entry { border: 1px dashed var(--line); border-radius: 10px; padding: 10px; margin-bottom: 8px; background: #fff; }
-.rff-entry-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: .75rem; color: #9a9186; }
+.rff-entry-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: .75rem; color: var(--mute); }
 .rff-entry-head .grp-name { flex: 1; border: 1px solid var(--line); border-radius: 8px; padding: 5px 9px; font-size: .85rem; margin-right: 8px; }
-.mini { border: 1px solid var(--line); background: #fff; color: #9a9186; border-radius: 6px; padding: 2px 8px; font-size: .72rem; cursor: pointer; }
-.mini:hover { color: #b3402a; border-color: #b3402a; }
+.mini { border: 1px solid var(--line); background: #fff; color: var(--mute); border-radius: 6px; padding: 2px 8px; font-size: .72rem; cursor: pointer; }
+.mini:hover { color: var(--err); border-color: var(--err); }
 .rff-add {
   border: 1px dashed var(--teal); background: #fff; color: var(--teal);
   border-radius: 999px; padding: 5px 14px; font-size: .8rem; cursor: pointer;
@@ -190,7 +190,7 @@ const isOptSec = (sec) => sec.required === false;
 .rff-line input { border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; font-size: .85rem; }
 .rff-line .grow { flex: 1; }
 .rff-line .per { width: 90px; }
-.rff-gap-hint { font-size: .78rem; color: #8a6d00; background: #fff3cd; border-radius: 8px; padding: 6px 10px; margin: 4px 0 8px; }
+.rff-gap-hint { font-size: .78rem; color: var(--warn); background: var(--warn-bg); border-radius: 8px; padding: 6px 10px; margin: 4px 0 8px; }
 @media (max-width: 640px) {
   .rff-kv { grid-template-columns: 1fr; }
 }
