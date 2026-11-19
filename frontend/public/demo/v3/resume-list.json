@@ -1,0 +1,21 @@
+{
+  "protocol": 3,
+  "documents": [
+    {
+      "id": "d0c0ffee-2222-4000-8000-000000000001",
+      "title": "后端开发-暑期实习",
+      "target_role": "后端开发工程师",
+      "status": "draft",
+      "completeness": 0.72,
+      "updated_at": "2026-11-20T10:02:00+00:00"
+    },
+    {
+      "id": "d0c0ffee-2222-4000-8000-000000000002",
+      "title": "产品经理-校招",
+      "target_role": "产品经理",
+      "status": "ready",
+      "completeness": 0.9,
+      "updated_at": "2026-11-19T16:44:00+00:00"
+    }
+  ]
+}
