@@ -269,6 +269,18 @@ def merge_evidence(existing: list, new_items: list, cap: int = EVIDENCE_CAP) -> 
     return out[:cap]
 
 
+def get_fact_by_hash(owner_id: str, value_hash: str) -> dict | None:
+    """Any live fact with this value_hash (any status—rejected and superseded
+    rows must also block re-insertion of the identical value)."""
+    if not isinstance(value_hash, str) or len(value_hash) != 64:
+        return None
+    return _one(_json(_request("GET", "/v3_facts", params={
+        "owner_id": f"eq.{_check_owner_id(owner_id)}",
+        "value_hash": f"eq.{value_hash}", "deleted_at": "is.null",
+        "select": "*", "limit": 1,
+    })))
+
+
 def get_fact(owner_id: str, fact_id: str) -> dict | None:
     return _one(_json(_request("GET", "/v3_facts", params={
         "id": f"eq.{_uuid(fact_id)}", "owner_id": f"eq.{_check_owner_id(owner_id)}",
