@@ -95,6 +95,15 @@ def get_owner_by_key_hash(owner_key_hash: str) -> dict | None:
     })))
 
 
+def get_owner_by_recovery_hash(recovery_hash: str) -> dict | None:
+    if not isinstance(recovery_hash, str) or len(recovery_hash) != 64:
+        return None
+    return _one(_json(_request("GET", "/v3_owner", params={
+        "recovery_hash": f"eq.{recovery_hash}", "deleted_at": "is.null",
+        "select": "id,recovery_hash," + OWNER_FIELDS, "limit": 1,
+    })))
+
+
 def get_owner(owner_id: str) -> dict | None:
     return _one(_json(_request("GET", "/v3_owner", params={
         "id": f"eq.{_check_owner_id(owner_id)}", "deleted_at": "is.null",
