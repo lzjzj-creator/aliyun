@@ -54,9 +54,10 @@ if os.getenv("V3_MEMORY_ENABLED", "0") == "1":
 origins = [o.strip() for o in os.getenv("ALLOWED_ORIGINS",
            "http://localhost:5173,http://127.0.0.1:5173").split(",") if o.strip()]
 app.add_middleware(CORSMiddleware, allow_origins=origins,
-                   allow_methods=["POST", "GET", "DELETE", "OPTIONS"],
+                   allow_methods=["POST", "GET", "PATCH", "DELETE", "OPTIONS"],
                    allow_headers=["Content-Type", "X-File-Name", "Authorization",
-                                  "X-Anon-Id", "X-Session-Token", "X-Owner-Token"],
+                                  "X-Anon-Id", "X-Session-Token", "X-Owner-Token",
+                                  "If-Match"],
                    expose_headers=["Retry-After"])
 
 MIN_SCORE = float(os.getenv("MIN_RETRIEVE_SCORE", "0.25"))

@@ -374,61 +374,105 @@ def soft_delete_fact(owner_id: str, fact_id: str) -> bool:
     return bool(rows)
 
 
+def _owner_rows(table: str, owner_id: str, *, select: str = "*",
+                live_only: bool = False):
+    """Scan every owner row, including server-capped pages.
+
+    Order/membership must stay stable while callers scrub JSON/source pointers.
+    Advance by the actual page length, not the requested limit: PostgREST may
+    apply a smaller max-rows cap. An empty page is the only end-of-scan signal.
+    """
+    offset = 0
+    while True:
+        params = {"owner_id": f"eq.{owner_id}", "select": select,
+                  "order": "id.asc", "limit": 500, "offset": offset}
+        if live_only:
+            params["deleted_at"] = "is.null"
+        rows = _json(_request("GET", f"/{table}", params=params))
+        if not rows:
+            return
+        yield from rows
+        offset += len(rows)
+
+
+def _without_session(evidence: list, session_id: str) -> list:
+    return [e for e in evidence if not (isinstance(e, dict)
+                                      and e.get("session_id") == session_id)]
+
+
+def _scrub_evidence_map(evidence_map: dict, session_id: str) -> dict:
+    cleaned = copy.deepcopy(evidence_map)
+    for path, evs in list(cleaned.items()):
+        if not isinstance(evs, list):
+            continue
+        kept = _without_session(evs, session_id)
+        if kept != evs:
+            if kept:
+                cleaned[path] = kept
+            else:
+                del cleaned[path]
+    return cleaned
+
+
 def detach_session_facts(owner_id: str, session_id: str) -> int:
-    """Forget-this-session: null the source pointer AND strip that session's
-    evidence entries (the session's原话 must not survive its deletion)."""
+    """Strip this session's evidence even when it is not the primary source.
+
+    Include soft-deleted facts: forgetting must erase retained raw quotes too.
+    Other sessions' primary pointers/evidence and fact values stay untouched.
+    """
     owner_id = _check_owner_id(owner_id)
     session_id = _uuid(session_id)
-    rows = _json(_request("GET", "/v3_facts", params={
-        "owner_id": f"eq.{owner_id}", "source_session_id": f"eq.{session_id}",
-        "deleted_at": "is.null", "select": "id,evidence", "limit": 2000,
-    }))
     count = 0
-    for row in rows:
-        kept = [e for e in (row.get("evidence") or [])
-                if not (isinstance(e, dict) and e.get("session_id") == session_id)]
+    for row in _owner_rows("v3_facts", owner_id,
+                           select="id,source_session_id,evidence"):
+        evidence = row.get("evidence") or []
+        kept = _without_session(evidence, session_id)
+        updates = {}
+        if kept != evidence:
+            updates["evidence"] = kept
+        if row.get("source_session_id") == session_id:
+            updates.update(source_session_id=None, source_message_id=None)
+        if not updates:
+            continue
         patched = _json(_request("PATCH", "/v3_facts", params={
-            "id": f"eq.{row['id']}", "select": "id",
-        }, headers={"Prefer": "return=representation"}, json={
-            "source_session_id": None, "source_message_id": None,
-            "evidence": kept,
-        }))
+            "id": f"eq.{row['id']}", "owner_id": f"eq.{owner_id}", "select": "id",
+        }, headers={"Prefer": "return=representation"}, json=updates))
         count += len(patched)
     return count
 
 
 def forget_session(owner_id: str, session_id: str) -> dict:
-    """§9 level-2 delete "忘掉这个会话": detach fact pointers/evidence AND
-    scrub document evidence_map entries so no verbatim quote from that
-    session survives anywhere."""
+    """Erase session evidence from all retained facts/documents/history.
+
+    History (including that of soft-deleted documents) must be scrubbed so a
+    later version restore cannot resurrect forgotten quotes. Keep fact values
+    and document fields: this action forgets provenance, not user-authored CVs.
+    """
     owner_id = _check_owner_id(owner_id)
     session_id = _uuid(session_id)
     detached = detach_session_facts(owner_id, session_id)
-    docs = _json(_request("GET", "/v3_resume_documents", params={
-        "owner_id": f"eq.{owner_id}", "deleted_at": "is.null",
-        "select": "id,evidence_map", "limit": 500,
-    }))
     scrubbed = 0
-    for d in docs:
-        em = d.get("evidence_map") or {}
-        changed = False
-        for path, evs in list(em.items()):
-            if not isinstance(evs, list):
+    for table in ("v3_resume_documents", "v3_document_versions"):
+        history = table == "v3_document_versions"
+        select = "id,snapshot" if history else "id,evidence_map"
+        for row in _owner_rows(table, owner_id, select=select):
+            container = (row.get("snapshot") or {}) if history else row
+            em = container.get("evidence_map") or {}
+            cleaned = _scrub_evidence_map(em, session_id)
+            if cleaned == em:
                 continue
-            kept = [e for e in evs if not (isinstance(e, dict)
-                                          and e.get("session_id") == session_id)]
-            if len(kept) != len(evs):
-                changed = True
-                if kept:
-                    em[path] = kept
-                else:
-                    del em[path]
-        if changed:
-            _json(_request("PATCH", "/v3_resume_documents", params={
-                "id": f"eq.{d['id']}", "select": "id",
-            }, headers={"Prefer": "return=representation"},
-                json={"evidence_map": em}))
-            scrubbed += 1
+            if history:
+                snapshot = copy.deepcopy(container)
+                snapshot["evidence_map"] = cleaned
+                updates = {"snapshot": snapshot}
+            else:
+                updates = {"evidence_map": cleaned}
+            patched = _json(_request("PATCH", f"/{table}", params={
+                "id": f"eq.{row['id']}", "owner_id": f"eq.{owner_id}",
+                "select": "id",
+            }, headers={"Prefer": "return=representation"}, json=updates))
+            if not history:
+                scrubbed += len(patched)
     return {"facts_detached": detached, "documents_scrubbed": scrubbed}
 
 
@@ -693,13 +737,7 @@ def export_owner(owner_id: str) -> dict:
     owner = get_owner(owner_id)
     if owner is None:
         raise V3NotFound("Owner not found")
-    facts = _json(_request("GET", "/v3_facts", params={
-        "owner_id": f"eq.{owner_id}", "select": "*",
-        "order": "created_at.asc,id.asc", "limit": 5000,
-    }))
-    documents = _json(_request("GET", "/v3_resume_documents", params={
-        "owner_id": f"eq.{owner_id}", "deleted_at": "is.null", "select": "*",
-        "order": "created_at.asc,id.asc", "limit": 500,
-    }))
+    facts = list(_owner_rows("v3_facts", owner_id, live_only=True))
+    documents = list(_owner_rows("v3_resume_documents", owner_id, live_only=True))
     return {"schema_version": 1, "owner": _public_owner(owner),
             "facts": facts, "documents": documents}

@@ -124,7 +124,9 @@ class ResumesV3Test(unittest.TestCase):
         self._patch("patch_document",
                     lambda oid, did, u, ev, **kw: seen.update(u) or DOC)
         new_fields = {"basics": {"name": "张明", "phone": "138",
-                                 "email": "", "city": "上海", "site": ""}}
+                                 "email": "", "city": "杭州", "site": ""}}
+        # Omit _meta deliberately: the server must retain prior manual markers
+        # even when their values are unchanged by this PATCH.
         h = {**H, "If-Match": "3"}
         r = self.client.patch(f"/api/v3/resumes/{DID}", headers=h,
                               json={"fields": new_fields})
@@ -132,6 +134,22 @@ class ResumesV3Test(unittest.TestCase):
         mo = set(seen["fields"]["_meta"]["manual_override"])
         self.assertIn("basics.city", mo)     # prior manual kept
         self.assertIn("basics.phone", mo)    # newly hand-edited leaf
+
+    def test_patch_fields_clears_generated_provenance(self):
+        self._patch("get_document", lambda oid, did: DOC)
+        self._patch("facts_for_generation", lambda oid: [])
+        self._patch("stale_sources", lambda d, f: [])
+        seen = {}
+        self._patch("patch_document",
+                    lambda oid, did, u, ev, **kw: seen.update(u) or DOC)
+        h = {**H, "If-Match": "3"}
+        r = self.client.patch(f"/api/v3/resumes/{DID}", headers=h,
+                              json={"fields": {"basics": {"name": "手改"}}})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(seen["evidence_map"], {})
+        self.assertEqual(seen["fact_snapshot"], [])
+        self.assertTrue(seen["gaps"])
+        self.assertIn("手工填写", seen["gaps"][0]["reason"])
 
     def test_patch_conflict_409(self):
         self._patch("get_document", lambda oid, did: DOC)

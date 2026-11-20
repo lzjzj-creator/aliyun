@@ -1,7 +1,8 @@
 """v3 owner-memory routes (/api/v3/*) — contract §8, guarded by V3_MEMORY_ENABLED.
 
-Auth is X-Owner-Token only (never anon_id). Invalid owner credentials share the
-v2 IDOR convention: a uniform 404, never distinguishing absent vs forbidden.
+Auth is X-Owner-Token for owner data; importing a v2 session additionally
+requires its X-Anon-Id and session token. anon_id alone never authorizes access.
+Invalid credentials share the v2 IDOR convention: a uniform 404.
 """
 import time
 
@@ -121,19 +122,34 @@ class ExtractReq(BaseModel):
 
 class BackfillReq(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    # 不传则用 owner.anon_id 名下的全部 v2 会话；显式传入时上限 30
+    # Without explicit ids, only import sessions whose credentials were supplied.
+    # owner.anon_id is a provenance hint, NOT proof of access to historical chats.
     session_ids: list[str] | None = Field(default=None, max_length=30)
+    session_tokens: dict[str, str] = Field(default_factory=dict, max_length=30)
+
+    @field_validator("session_tokens")
+    @classmethod
+    def tokens_bounded(cls, value):
+        from uuid import UUID
+        result = {}
+        for sid, token in value.items():
+            try:
+                sid = str(UUID(sid))
+            except (ValueError, AttributeError):
+                raise ValueError("invalid session_id") from None
+            if not 1 <= len(token) <= 256:
+                raise ValueError("invalid session token")
+            result[sid] = token
+        return result
 
     @field_validator("session_ids")
     @classmethod
     def ids_bounded(cls, value):
         import uuid
-        for sid in value or []:
-            try:
-                uuid.UUID(sid)
-            except (ValueError, AttributeError):
-                raise ValueError("invalid session_id") from None
-        return value
+        try:
+            return list(dict.fromkeys(str(uuid.UUID(sid)) for sid in value)) if value is not None else None
+        except (ValueError, AttributeError):
+            raise ValueError("invalid session_id") from None
 
 
 BACKFILL_PER_HOUR = 6
@@ -179,7 +195,8 @@ RETENTION_WARN_DAYS = 30
 @router.get("/memory")
 def memory_status(request: Request,
                   x_owner_token: str | None = Header(default=None)):
-    owner = _owner(request, x_owner_token)
+    security.enforce_ip(request)
+    owner = security_v3.require_owner(x_owner_token, allow_disabled=True)
     counts = _storage(lambda: memory_v3.fact_counts(owner["id"]))
     # 保留期站内提示（§9/D4）：last_seen_at 距今 ≥335 天提示将到期
     warn = False
@@ -286,11 +303,15 @@ def forget_session(request: Request, session_id: str,
 
 @router.post("/facts/extract")
 def extract_facts(request: Request, req: ExtractReq,
-                  x_owner_token: str | None = Header(default=None)):
+                  x_owner_token: str | None = Header(default=None),
+                  x_anon_id: str | None = Header(default=None),
+                  x_session_token: str | None = Header(default=None)):
     owner = _owner(request, x_owner_token)
+    anon = security.require_anon(x_anon_id)
+    sid = security.require_owner(req.session_id, anon, x_session_token)
     _extract_limit(owner["id"])
     try:
-        result = fact_extractor.extract_incremental(owner["id"], req.session_id)
+        result = fact_extractor.extract_incremental(owner["id"], sid)
     except memory_v3.V3NotFound:
         raise security.not_found() from None
     except memory_v3.MemoryStoreError:
@@ -311,30 +332,34 @@ def recover_memory(request: Request, req: RecoverReq):
         bundle = security_v3.redeem_recovery(req.recovery_code)
     except memory_v3.MemoryStoreError:
         raise HTTPException(503, "存储暂时不可用") from None
-    return {"protocol": 3, "enabled": True, "owner_id": bundle["owner"]["id"],
+    return {"protocol": 3, "enabled": bool(bundle["owner"].get("memory_enabled")),
+            "owner_id": bundle["owner"]["id"],
             "owner_token": bundle["owner_token"],
             "recovery_code": bundle["recovery_code"]}
 
 
 @router.post("/memory/backfill")
 def backfill_memory(request: Request, req: BackfillReq,
-                  x_owner_token: str | None = Header(default=None)):
-    """P3 历史回填：逐会话跑增量抽取；每会话独立水位，失败单列不阻断整体。"""
+                  x_owner_token: str | None = Header(default=None),
+                  x_anon_id: str | None = Header(default=None)):
+    """Import only v2 sessions for which the caller proves possession of a token.
+
+    Never enumerate/import by owner.anon_id: that value is caller-supplied
+    provenance, not a credential. Validate before charging quota or reading chats.
+    """
     owner = _owner(request, x_owner_token)
+    anon = security.require_anon(x_anon_id)
     _backfill_limit(owner["id"])
-    session_ids = req.session_ids
-    if session_ids is None:
-        anon = owner.get("anon_id")
-        if not anon:
-            raise HTTPException(422, "请求参数无效")
-        try:
-            import memory
-            session_ids = [s["id"] for s in
-                           memory.list_sessions(anon)[:30]]
-        except Exception:
-            raise HTTPException(503, "存储暂时不可用") from None
+    session_ids = req.session_ids if req.session_ids is not None else list(req.session_tokens)
     results = []
     for sid in session_ids:
+        try:
+            security.require_owner(sid, anon, req.session_tokens.get(sid))
+        except HTTPException as exc:
+            if exc.status_code != 404:
+                raise
+            results.append({"session_id": sid, "error": "not_found"})
+            continue
         if _daily_spend(owner["id"], "extract", EXTRACT_PER_DAY) < 0:
             results.append({"session_id": sid, "error": "daily_quota"})
             continue

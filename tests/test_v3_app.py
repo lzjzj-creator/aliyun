@@ -28,6 +28,16 @@ with patch.object(httpx.HTTPTransport, 'handle_request', side_effect=AssertionEr
             'Access-Control-Request-Method': 'GET',
             'Access-Control-Request-Headers': 'X-Owner-Token',
         })
+        cors_patch = client.options('/api/v3/resumes/example', headers={
+            'Origin': 'http://localhost:5173',
+            'Access-Control-Request-Method': 'PATCH',
+            'Access-Control-Request-Headers': 'Content-Type,X-Owner-Token,If-Match,X-Anon-Id',
+        })
+        cors_fact_patch = client.options('/api/v3/facts/example', headers={
+            'Origin': 'http://localhost:5173',
+            'Access-Control-Request-Method': 'PATCH',
+            'Access-Control-Request-Headers': 'Content-Type,X-Owner-Token',
+        })
         v2 = client.get('/api/v2/sessions')
     print(json.dumps({
         'memory': memory,
@@ -38,6 +48,9 @@ with patch.object(httpx.HTTPTransport, 'handle_request', side_effect=AssertionEr
         'versions_path': '/api/v3/resumes/{doc_id}/versions' in paths,
         'batch_path': '/api/v3/resumes/batch' in paths,
         'cors': cors.status_code,
+        'cors_patch': cors_patch.status_code,
+        'cors_fact_patch': cors_fact_patch.status_code,
+        'cors_patch_headers': cors_patch.headers.get('access-control-allow-headers', '').lower(),
         'cors_headers': cors.headers.get('access-control-allow-headers', '').lower(),
         'v2_status': v2.status_code,
     }))
@@ -64,6 +77,12 @@ class V3FlagSmokeTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         return json.loads(result.stdout)
 
+    def test_fc_template_forwards_flag_and_allows_browser_write_methods(self):
+        template = (ROOT / 'deploy/fc/zhimai-api/s.yaml').read_text(encoding='utf-8')
+        self.assertIn('V3_MEMORY_ENABLED: ${env(V3_MEMORY_ENABLED)}', template)
+        for method in ('GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'):
+            self.assertIn('- ' + method, template)
+
     def test_disabled_mounts_nothing(self):
         data = self.inspect('0')
         for key in V3_PATHS:
@@ -77,6 +96,9 @@ class V3FlagSmokeTest(unittest.TestCase):
         # X-Owner-Token must survive browser preflight (found missing in #89)
         self.assertEqual(data['cors'], 200)
         self.assertIn('x-owner-token', data['cors_headers'])
+        self.assertEqual(data['cors_patch'], 200)
+        self.assertEqual(data['cors_fact_patch'], 200)
+        self.assertIn('if-match', data['cors_patch_headers'])
 
 
 if __name__ == '__main__':

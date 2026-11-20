@@ -98,6 +98,15 @@ class IssueRequireTest(unittest.TestCase):
                     security_v3.require_owner(security_v3.new_owner_token())
                 self.assertEqual(ctx.exception.status_code, 404)
 
+    def test_disabled_status_opt_in_does_not_enable_data_access(self):
+        disabled = dict(OWNER, memory_enabled=False)
+        with patch.object(security_v3.memory_v3, "get_owner_by_key_hash", return_value=disabled), \
+             patch.object(security_v3.memory_v3, "touch_owner", return_value=True):
+            self.assertFalse(security_v3.require_owner("valid-token", allow_disabled=True)["memory_enabled"])
+            with self.assertRaises(HTTPException) as ctx:
+                security_v3.require_owner("valid-token")
+            self.assertEqual(ctx.exception.status_code, 404)
+
     def test_require_owner_storage_error_is_503_not_404(self):
         def down(_hash):
             raise memory_v3.MemoryStoreError("down")

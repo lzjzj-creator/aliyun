@@ -26,7 +26,9 @@ FACT = {"id": "aaaaaaaa-0000-4000-8000-000000000001", "owner_id": OID,
         "source_message_id": 5,
         "evidence": [{"session_id": "s", "msg_id": 5, "quote": "会 Python"}],
         "created_at": "2026-11-20T00:00:00+00:00", "deleted_at": None}
-H = {"X-Owner-Token": "t" * 40}
+ANON = "aaaaaaaa-1234-4234-8234-123456789abc"
+H = {"X-Owner-Token": "t" * 40, "X-Anon-Id": ANON,
+     "X-Session-Token": "session-token"}
 
 
 class RouterV3Test(unittest.TestCase):
@@ -38,7 +40,9 @@ class RouterV3Test(unittest.TestCase):
 
     def setUp(self):
         ps = [patch.object(rv3.security, "enforce_ip", lambda r: None),
-              patch.object(rv3.security_v3, "require_owner", lambda t: OWNER),
+              patch.object(rv3.security_v3, "require_owner", lambda t, **kw: OWNER),
+              patch.object(rv3.security.memory, "verify_session",
+                           lambda sid, anon, token: anon == ANON and token == "session-token"),
               # 默认日额度充足，避免 RPC 触网；限额用例各自覆盖
               patch.object(rv3.memory_v3, "spend_daily_quota",
                            lambda oid, kind, cap: 1)]
@@ -130,7 +134,7 @@ class RouterV3Test(unittest.TestCase):
         r = self.client.get("/api/v3/memory", headers=H)
         self.assertFalse(r.json()["retention_warning"])
         old = {**OWNER, "last_seen_at": "2024-01-01T00:00:00+00:00"}
-        with patch.object(rv3.security_v3, "require_owner", lambda t: old):
+        with patch.object(rv3.security_v3, "require_owner", lambda t, **kw: old):
             r = self.client.get("/api/v3/memory", headers=H)
         self.assertTrue(r.json()["retention_warning"])
         self.assertEqual(r.json()["retention_days"], 365)
@@ -249,7 +253,10 @@ class RouterV3Test(unittest.TestCase):
                                             "conflicts": [], "skipped": 0}):
             r = self.client.post("/api/v3/memory/backfill", headers=H, json={
                 "session_ids": ["87654321-4321-4321-8321-cba987654321",
-                                "87654321-4321-4321-8321-cba987654322"]})
+                                "87654321-4321-4321-8321-cba987654322"],
+                "session_tokens": {sid: "session-token" for sid in [
+                    "87654321-4321-4321-8321-cba987654321",
+                    "87654321-4321-4321-8321-cba987654322"]}})
         res = r.json()["results"]
         self.assertEqual(res[0].get("added"), 1)
         self.assertEqual(res[1]["error"], "daily_quota")
@@ -301,6 +308,7 @@ class RouterV3Test(unittest.TestCase):
                 "87654321-4321-4321-8321-cba987650001",
                 "87654321-4321-4321-8321-cba987650002",
                 "87654321-4321-4321-8321-cba987650003"]}
+            body["session_tokens"] = {sid: "session-token" for sid in body["session_ids"]}
             r = self.client.post("/api/v3/memory/backfill", headers=H,
                                  json=body)
         self.assertEqual(r.status_code, 200)
@@ -325,6 +333,22 @@ class RouterV3Test(unittest.TestCase):
                                  json={"recovery_code": "OKCODE"})
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.json()["owner_token"], "nt")
+
+    def test_recover_disabled_owner_preserves_disabled_consent(self):
+        disabled = {**OWNER, "memory_enabled": False}
+        with patch.object(rv3.security_v3, "redeem_recovery", return_value={
+                "owner": disabled, "owner_token": "new-token", "recovery_code": "new-code"}):
+            r = self.client.post("/api/v3/memory/recover", json={"recovery_code": "valid-code"})
+        self.assertEqual(r.status_code, 200)
+        self.assertFalse(r.json()["enabled"])
+        self.assertEqual(r.json()["owner_token"], "new-token")
+        self._patch("fact_counts", lambda oid: {"total": 0, "by_kind": {}, "by_status": {}})
+        self._patch("last_extracted_at", lambda oid: None)
+        with patch.object(rv3.security_v3, "require_owner", return_value=disabled) as auth:
+            r = self.client.get("/api/v3/memory", headers=H)
+            self.assertEqual(r.status_code, 200)
+            self.assertFalse(r.json()["enabled"])
+            auth.assert_called_once_with(H["X-Owner-Token"], allow_disabled=True)
 
     def test_extract_per_owner_cap(self):
         rv3._extract_hits.clear()

@@ -167,6 +167,54 @@ class BuilderTest(unittest.TestCase):
                           lambda oid: self.facts):
             built2 = rb.regenerate_fields(doc, TPL, keep_manual=False)
         self.assertEqual(built2["fields"]["basics"]["name"], "")
+    def test_merge_manual_override_grows_shortened_array(self):
+        old = {"projects": [{"name": "旧一"}, {"name": "手工项目"}],
+               "_meta": {"manual_override": ["projects.1.name"]}}
+        new = {"projects": [{"name": "模型项目"}]}
+        merged = rb.merge_manual_overrides(old, new)
+        self.assertEqual(merged["projects"][1]["name"], "手工项目")
+        self.assertEqual(merged["_meta"]["manual_override"],
+                         ["projects.1.name"])
+
+    def test_merge_manual_override_keeps_only_leaf_in_new_array(self):
+        old = {"projects": [{"name": "Alice", "bullets": ["a"]},
+                           {"name": "Bob", "bullets": ["b", "手改"]},
+                           {"name": "Carol"}],
+               "_meta": {"manual_override": ["projects.2.name",
+                                               "projects.1.bullets.1"]}}
+        new = {"projects": []}
+        merged = rb.merge_manual_overrides(old, new)
+        self.assertEqual(merged["projects"][2], {"name": "Carol"})
+        self.assertEqual(merged["projects"][1],
+                         {"bullets": ["", "手改"]})
+
+    def test_manual_evidence_filters_unused_fact_snapshot(self):
+        built = {"evidence_map": {
+                     "basics.name": [{"fact_id": "f1"}],
+                     "projects.0.name": [{"fact_id": "f2"}]},
+                 "gaps": [],
+                 "fact_snapshot": [{"fact_id": "f1", "value_hash": "a"},
+                                   {"fact_id": "f2", "value_hash": "b"}]}
+        fields = {"_meta": {"manual_override": ["basics.name"]}}
+        out = rb.clear_manual_evidence(built, fields)
+        self.assertEqual(out["evidence_map"],
+                         {"projects.0.name": [{"fact_id": "f2"}]})
+        self.assertEqual(out["fact_snapshot"],
+                         [{"fact_id": "f2", "value_hash": "b"}])
+
+        doc = {"owner_id": OID, "target_role": "后端",
+               "fields": {"basics": {"name": "手改", "email": ""},
+                           "_meta": {"manual_override": ["basics.name"]}}}
+        self.out = model_out(
+            fields={"basics": {"name": "模型名", "email": ""}},
+            evidence_map={"basics.name": ["f1"]})
+        with patch.object(rb.memory_v3, "facts_for_generation",
+                          lambda oid: self.facts):
+            built = rb.regenerate_fields(doc, TPL)
+        self.assertEqual(built["evidence_map"], {})
+        self.assertEqual(built["fields"]["basics"]["name"], "手改")
+        self.assertTrue(any("手工填写" in g["reason"]
+                            for g in built["gaps"]))
 
 
 if __name__ == "__main__":

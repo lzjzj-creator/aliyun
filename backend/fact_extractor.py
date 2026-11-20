@@ -138,6 +138,9 @@ def _valid_candidate(item, fed_ids, user_by_id, whitelist):
 def extract_incremental(owner_id: str, session_id: str) -> dict:
     """Run one incremental extraction for (owner, session).
 
+    Internal service: HTTP callers must first prove v2 session access with
+    session_security.require_owner (anon id AND session token). An owner token
+    authorizes the destination memory only, never access to a source chat.
     Returns {added, merged, conflicts, skipped, denied, blocked?}.
     Raises V3NotFound (owner/session) or ExtractionFailed (model/storage)."""
     owner = memory_v3.get_owner(owner_id)

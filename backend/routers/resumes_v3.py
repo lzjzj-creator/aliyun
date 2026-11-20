@@ -239,11 +239,21 @@ def patch_resume(request: Request, doc_id: str, req: PatchDocReq,
         fields = dict(req.fields)
         changed = _manual_paths(doc.get("fields") or {}, fields)
         meta = dict((fields.get("_meta") or {}))
-        prior = [p for p in (meta.get("manual_override") or [])
+        saved_meta = (doc.get("fields") or {}).get("_meta") or {}
+        prior = [p for source in (saved_meta, meta)
+                 for p in (source.get("manual_override") or [])
                  if isinstance(p, str)]
         meta["manual_override"] = sorted(set(prior) | set(changed))
         fields["_meta"] = meta
         updates["fields"] = fields
+        # A hand edit invalidates generated provenance for this document. Keep
+        # the explicit manual paths, but never claim the old evidence/snapshot
+        # still backs the edited content.
+        updates["evidence_map"] = {}
+        updates["fact_snapshot"] = []
+        updates["gaps"] = [{"field_path": p, "label": p,
+                             "reason": "手工填写，未由事实证据背书"}
+                            for p in meta["manual_override"]]
     if not updates:
         raise HTTPException(422, "请求参数无效")
     doc = _storage(lambda: memory_v3.patch_document(

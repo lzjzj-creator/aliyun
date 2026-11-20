@@ -1,7 +1,8 @@
 """v3 owner-level auth: owner_token issuance/verification + recovery codes.
 
-X-Owner-Token is the ONLY credential for /api/v3/*. anon_id is forgeable
-plaintext and is never consulted for authorization. Every lookup failure
+X-Owner-Token authorizes owner memory. Importing v2 sessions additionally needs
+v2 session credentials; anon_id alone is forgeable plaintext and never grants
+access. Every lookup failure
 collapses to 404 per the v2 IDOR convention—"does not exist" and "not yours"
 are indistinguishable. No tokens, recovery codes or request bodies are logged.
 """
@@ -69,16 +70,20 @@ def issue_owner(anon_id: str | None) -> dict:
             "recovery_code": recovery_code}
 
 
-def require_owner(x_owner_token) -> dict:
-    """X-Owner-Token -> live enabled owner row, or 404/503. Best-effort bumps
-    last_seen_at (the 365-day retention clock) without failing the request."""
+def require_owner(x_owner_token, *, allow_disabled: bool = False) -> dict:
+    """X-Owner-Token -> live owner row, or 404/503.
+
+    Disabled owners may inspect status only when explicitly allowed; extraction
+    and owner-data routes retain the enabled-owner requirement by default.
+    Best-effort bumps last_seen_at without failing the request.
+    """
     if not isinstance(x_owner_token, str) or not 1 <= len(x_owner_token) <= TOKEN_MAX_LEN:
         raise security.not_found()
     try:
         owner = memory_v3.get_owner_by_key_hash(hash_token(x_owner_token))
     except memory_v3.MemoryStoreError:
         raise HTTPException(503, "存储暂时不可用") from None
-    if owner is None or not owner.get("memory_enabled"):
+    if owner is None or (not allow_disabled and not owner.get("memory_enabled")):
         raise security.not_found()
     memory_v3.touch_owner(owner["id"])
     return owner

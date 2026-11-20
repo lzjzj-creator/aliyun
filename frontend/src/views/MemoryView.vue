@@ -4,8 +4,8 @@ import { computed, onMounted, ref } from "vue";
 import { listSessions } from "../api/sessions";
 import {
   deleteAllMemory, deleteFact, disableMemory, enableMemory, exportMemory,
-  backfill, extractFacts, forgetSession, getMemory, getOwnerToken, listFacts,
-  patchFact, setOwnerToken,
+  backfill, hasSessionCredential, forgetSession, getMemory, getOwnerToken, listFacts,
+  patchFact, recoverMemory, setOwnerToken,
 } from "../api/v3";
 
 const enabled = ref(false);
@@ -20,6 +20,10 @@ const error = ref("");
 const onboarding = ref(null);      // {owner_token, recovery_code} 一次性展示
 const confirmingWipe = ref(false);
 const showConsent = ref(false);    // 开启前的明示同意弹窗
+const recoveryCode = ref("");
+const recoveryError = ref("");
+const disabledMemory = ref(false);
+const showRecovery = ref(false);
 const sessionTitles = ref({});     // session_id -> v2 会话标题
 
 function sessionTitle(sid) {
@@ -50,6 +54,10 @@ const backfillTotal = ref(0);
 const backfillResults = ref([]);   // 每会话 {session_id, added/.../error}
 
 function togglePick(sid) {
+  if (!hasSessionCredential(sid)) {
+    error.value = "缺少该会话的本地凭据，无法回填；请使用原浏览器。";
+    return;
+  }
   const s = new Set(picked.value);
   if (s.has(sid)) s.delete(sid); else s.add(sid);
   picked.value = s;
@@ -58,6 +66,11 @@ function togglePick(sid) {
 async function onBackfill() {
   const ids = [...picked.value];
   if (!ids.length) return;
+  error.value = "";
+  if (ids.some((sid) => !hasSessionCredential(sid))) {
+    error.value = "所选会话缺少本地凭据，无法回填；请重新选择。";
+    return;
+  }
   backfilling.value = true;
   backfillDone.value = 0;
   backfillTotal.value = ids.length;
@@ -69,8 +82,8 @@ async function onBackfill() {
       backfillResults.value.push(...(res.results || []));
       backfillDone.value += (res.results || []).length;
     }
-  } catch {
-    error.value = "回填中断，已完成部分已生效";
+  } catch (e) {
+    error.value = `回填中断，已完成部分已生效：${e.message}`;
   } finally {
     backfilling.value = false;
     picked.value = new Set();
@@ -102,7 +115,9 @@ async function boot() {
   if (!getOwnerToken()) { enabled.value = false; booted.value = true; return; }
   try {
     status.value = await getMemory();
-    enabled.value = true;
+    enabled.value = status.value.enabled === true;
+    disabledMemory.value = status.value.enabled === false;
+    if (!enabled.value) { facts.value = []; return; }
     // 会话标题映射用于事实卡片来源标注；拿不到（无 v2 会话）不阻塞
     listSessions().then((list) => {
       const map = {};
@@ -112,8 +127,12 @@ async function boot() {
     }).catch(() => {});
     await reload();
   } catch (e) {
-    enabled.value = false;          // 404：令牌失效/未开启 → 回到引导
-    if (e.status !== 404) error.value = "记忆服务暂时不可用";
+    enabled.value = false;
+    facts.value = [];
+    status.value = null;
+    error.value = e.status === 404
+      ? "当前令牌无效或记忆已停用。可用原令牌重新开启，或用恢复码换发新凭据。"
+      : "记忆服务暂时不可用，请稍后重试";
   } finally {
     booted.value = true;
   }
@@ -131,6 +150,27 @@ async function onEnable() {
     await boot();
   } catch {
     error.value = "开启失败，请稍后重试";
+  } finally {
+    busy.value = false;
+  }
+}
+
+async function onRecover() {
+  recoveryError.value = "";
+  if (!recoveryCode.value.trim()) { recoveryError.value = "请输入恢复码"; return; }
+  busy.value = true;
+  try {
+    const res = await recoverMemory(recoveryCode.value);
+    onboarding.value = res;
+    recoveryCode.value = "";
+    showRecovery.value = false;
+    disabledMemory.value = false;
+    await boot();
+  } catch (e) {
+    recoveryError.value = e.status === 404 ? "恢复码无效或已使用，请核对最新保存的恢复码。"
+      : e.status === 429 ? "尝试过于频繁，请稍后重试。"
+      : e.status === 422 ? "恢复码格式不正确，请检查输入。"
+      : "恢复失败，请稍后重试；原有本地令牌未被清除。";
   } finally {
     busy.value = false;
   }
@@ -235,6 +275,11 @@ async function onDisable() {
   try {
     await disableMemory();
     enabled.value = false;
+    disabledMemory.value = true;
+    facts.value = [];
+    status.value = null;
+    picked.value = new Set();
+    onboarding.value = null;
   } catch {
     error.value = "操作失败";
   } finally {
@@ -260,6 +305,8 @@ async function onWipe() {
   try {
     await deleteAllMemory();
     setOwnerToken("");
+    onboarding.value = null;
+    disabledMemory.value = false;
     facts.value = [];
     status.value = null;
     enabled.value = false;
@@ -278,6 +325,27 @@ onMounted(boot);
   <div class="mem-page">
     <h2 class="mem-title">长期记忆</h2>
 
+    <div v-if="onboarding" class="mem-onboard">
+      <p><b>请立即保存以下新凭据，关闭后不再显示；换发后旧令牌与旧恢复码失效：</b></p>
+      <p>访问令牌：<code>{{ onboarding.owner_token }}</code></p>
+      <p v-if="onboarding.recovery_code">恢复码：<code>{{ onboarding.recovery_code }}</code></p>
+      <div class="mem-ops">
+        <button class="mem-btn" @click="copyCredentials">复制</button>
+        <button class="mem-btn" @click="downloadCredentials">下载保存</button>
+        <button class="mem-btn" @click="dismissOnboarding">我已保存</button>
+      </div>
+    </div>
+
+    <div class="mem-card">
+      <button class="mem-btn" :disabled="busy" @click="showRecovery = !showRecovery">使用恢复码换发凭据</button>
+      <form v-if="showRecovery" @submit.prevent="onRecover">
+        <p class="mem-sub">换发后旧令牌及旧恢复码失效，请保存新凭据。恢复记忆不会自动恢复本机缺失的会话凭据。</p>
+        <label>恢复码 <input v-model="recoveryCode" type="password" autocomplete="off" :disabled="busy" /></label>
+        <button class="mem-btn primary" type="submit" :disabled="busy || !recoveryCode.trim()">确认兑换</button>
+        <p v-if="recoveryError" class="mem-err" role="alert">{{ recoveryError }}</p>
+      </form>
+    </div>
+
     <div v-if="!booted" class="mem-hint">加载中…</div>
 
     <!-- 未开启：引导而非空壳 -->
@@ -286,8 +354,9 @@ onMounted(boot);
       <p class="mem-sub">默认关闭，需明示开启；事实可逐条查看、确认、拒绝或删除。</p>
       <button class="mem-btn primary" :disabled="busy"
               @click="showConsent = true">
-        开启长期记忆
+        {{ disabledMemory ? '重新开启长期记忆' : '开启长期记忆' }}
       </button>
+      <p v-if="disabledMemory" class="mem-sub">长期记忆已停用，已有事实保留。重新开启将使用本机原令牌恢复同一份记忆。</p>
       <p v-if="error" class="mem-err">{{ error }}</p>
 
       <!-- 明示同意弹窗（§9：确认后才调 enable 接口） -->
@@ -311,19 +380,6 @@ onMounted(boot);
     </div>
 
     <template v-else>
-      <!-- 一次性凭据展示 -->
-      <div v-if="onboarding" class="mem-onboard">
-        <p><b>请立即保存以下凭据，关闭后不再显示：</b></p>
-        <p>访问令牌：<code>{{ onboarding.owner_token }}</code></p>
-        <p v-if="onboarding.recovery_code">
-          恢复码：<code>{{ onboarding.recovery_code }}</code>
-        </p>
-        <div class="mem-ops">
-          <button class="mem-btn" @click="copyCredentials">复制</button>
-          <button class="mem-btn" @click="downloadCredentials">下载保存</button>
-          <button class="mem-btn" @click="dismissOnboarding">我已保存</button>
-        </div>
-      </div>
 
       <div v-if="status?.retention_warning" class="mem-stale">
         你的记忆已 {{ status.retention_days }} 天保留期临近到期（30 天内无活动将删除），
@@ -361,8 +417,9 @@ onMounted(boot);
         <div class="bf-list">
           <label v-for="s in allSessions" :key="s.id" class="bf-item">
             <input type="checkbox" :checked="picked.has(s.id)"
-                   :disabled="backfilling" @change="togglePick(s.id)" />
+                   :disabled="backfilling || !hasSessionCredential(s.id)" @change="togglePick(s.id)" />
             {{ s.title || s.id.slice(0, 8) }}
+            <span v-if="!hasSessionCredential(s.id)" class="mem-sub">（缺少本地会话凭据，无法回填，请使用原浏览器）</span>
           </label>
         </div>
         <div class="mem-ops">

@@ -9,6 +9,7 @@ FC 的访问日志由 uvicorn 访问日志承担，只记录请求行（方法 +
 import json
 import os
 import re
+import sys
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -17,6 +18,7 @@ import httpx
 
 ROOT = Path(__file__).resolve().parent.parent
 BACKEND = ROOT / "backend"
+sys.path.insert(0, str(BACKEND))
 FORBIDDEN_LOG_CALLS = ("logging", "logger.", "traceback", "pprint", "print(", "sys.stderr")
 CANARY = "sk-CANARY-upstream-echo-of-request-body"
 
@@ -129,7 +131,7 @@ class V3HygieneTest(unittest.TestCase):
             with patch.object(memory, "_client", failing), \
                     patch.object(rv3.security, "enforce_ip", lambda r: None), \
                     patch.object(rv3.security_v3, "require_owner",
-                                 lambda t: {"id": ANON, "memory_enabled": True}):
+                                 lambda t, **kw: {"id": ANON, "memory_enabled": True}):
                 r = TestClient(app).get("/api/v3/memory",
                                         headers={"X-Owner-Token": "t" * 40})
         finally:

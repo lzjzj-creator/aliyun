@@ -7,6 +7,7 @@ value occurs word-for-word inside a real fact's quote. The v2 guard helpers
 import hashlib
 import json
 import re
+from copy import deepcopy
 from pathlib import Path
 
 try:
@@ -195,37 +196,116 @@ def jd_coverage(fields: dict, jd_text: str | None) -> dict:
             "ratio": round(len(covered) / len(jd_tokens), 2)}
 
 
+def _path_value(root, path):
+    cur = root
+    for part in path.split("."):
+        if isinstance(cur, dict):
+            if part not in cur:
+                return None, False
+            cur = cur[part]
+        elif isinstance(cur, list):
+            try:
+                cur = cur[int(part)]
+            except (ValueError, IndexError):
+                return None, False
+        else:
+            return None, False
+    return cur, True
+
+
+def _set_manual_leaf(out, old, path):
+    """Set a previously valid manual path, growing only empty containers."""
+    value, exists = _path_value(old, path)
+    if not exists:
+        return False
+    parts = path.split(".")
+    cur = out
+    for i, part in enumerate(parts[:-1]):
+        next_part = parts[i + 1]
+        if isinstance(cur, dict):
+            child = cur.get(part)
+            if not isinstance(child, (dict, list)):
+                child = [] if next_part.isdigit() else {}
+                cur[part] = child
+            cur = child
+        elif isinstance(cur, list):
+            try:
+                index = int(part)
+            except (ValueError, TypeError):
+                return False
+            if index < 0:
+                return False
+            while len(cur) <= index:
+                cur.append([] if next_part.isdigit() else {})
+            cur = cur[index]
+        else:
+            return False
+    last = parts[-1]
+    if isinstance(cur, dict):
+        cur[last] = deepcopy(value)
+        return True
+    if isinstance(cur, list):
+        try:
+            index = int(last)
+        except (ValueError, TypeError):
+            return False
+        if index < 0:
+            return False
+        while len(cur) <= index:
+            cur.append("")
+        cur[index] = deepcopy(value)
+        return True
+    return False
+
+
 def merge_manual_overrides(old_fields: dict, new_fields: dict) -> dict:
-    """Reapply every field the user hand-edited onto a regenerated draft;
-    _meta.manual_override travels with fields, never silently dropped."""
-    meta = (new_fields.get("_meta") or {}) if isinstance(new_fields, dict) else {}
-    old_meta = (old_fields or {}).get("_meta") or {}
-    paths = [p for p in (old_meta.get("manual_override") or [])
-             if isinstance(p, str)]
+    """Reapply manual values, growing truncated arrays from the old shape.
+
+    ``manual_override`` is an explicit source marker; paths that cannot be
+    recovered remain marked rather than being silently discarded.
+    """
+    old_fields = old_fields if isinstance(old_fields, dict) else {}
+    new_fields = new_fields if isinstance(new_fields, dict) else {}
+    meta = dict(new_fields.get("_meta") or {})
+    old_meta = old_fields.get("_meta") or {}
+    paths = sorted({p for p in (old_meta.get("manual_override") or [])
+                    if isinstance(p, str) and p})
     merged = dict(meta)
     merged["manual_override"] = paths
-    out = dict(new_fields)
+    out = deepcopy(new_fields)
     out["_meta"] = merged
+    lost = []
     for path in paths:
-        cur = old_fields
-        ok = True
-        for part in path.split("."):
-            if isinstance(cur, list):
-                try:
-                    cur = cur[int(part)]
-                except (ValueError, IndexError):
-                    ok = False
-                    break
-            elif isinstance(cur, dict):
-                cur = cur.get(part)
-            else:
-                ok = False
-                break
-        if ok:
-            try:
-                _set_leaf(out, path, cur)
-            except (KeyError, IndexError, TypeError, ValueError):
-                pass
+        if not _set_manual_leaf(out, old_fields, path):
+            lost.append(path)
+    if lost:
+        merged["manual_unavailable"] = lost
+    else:
+        merged.pop("manual_unavailable", None)
+    return out
+
+
+def clear_manual_evidence(built: dict, fields: dict) -> dict:
+    """Remove generated backing from manual paths and mark their source."""
+    out = dict(built)
+    paths = [p for p in ((fields.get("_meta") or {}).get("manual_override") or [])
+             if isinstance(p, str)]
+    evidence = {p: entries for p, entries in (out.get("evidence_map") or {}).items()
+                if p not in paths}
+    gaps = [g for g in (out.get("gaps") or [])
+            if not isinstance(g, dict) or g.get("field_path") not in paths]
+    for path in paths:
+        gaps.append({"field_path": path, "label": path,
+                     "reason": "手工填写，未由事实证据背书"})
+    out["evidence_map"] = evidence
+    out["gaps"] = gaps
+    used_fact_ids = {entry.get("fact_id")
+                     for entries in evidence.values()
+                     for entry in entries if isinstance(entry, dict)
+                     and isinstance(entry.get("fact_id"), str)}
+    out["fact_snapshot"] = [row for row in (out.get("fact_snapshot") or [])
+                             if isinstance(row, dict)
+                             and row.get("fact_id") in used_fact_ids]
     return out
 
 
@@ -259,6 +339,5 @@ def regenerate_fields(doc: dict, tpl, *, target_role: str | None = None,
     if keep_manual:
         built["fields"] = merge_manual_overrides(doc.get("fields") or {},
                                                  built["fields"])
-        # Reattach evidence for fields that regained a fact-backed value is
-        # unnecessary—manual fields keep no evidence by design.
+        built = clear_manual_evidence(built, built["fields"])
     return built
