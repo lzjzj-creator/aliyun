@@ -3,7 +3,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import ResumeFieldsForm from "../components/ResumeFieldsForm.vue";
 import ResumePreview from "../components/ResumePreview.vue";
-import { getTemplate } from "../api/resume";
+import { getTemplate, optimizePlan, optimizeSection } from "../api/resume";
 import {
   createResume, deleteResume, getOwnerToken, getResume, listResumes,
   patchResume, regenerateResume,
@@ -26,6 +26,61 @@ const regenJd = ref("");
 const keepManual = ref(true);
 const staleList = computed(() => doc.value?.stale_sources || []);
 const dirty = ref(false);
+
+// —— 优化（复用 v2 黑箱逐段优化 + diff 视图）——
+const optBusy = ref(false);
+const optPlan = ref(null);
+const optResults = ref({});
+const optFields = ref(null);
+const compareMap = computed(() => {
+  const m = {};
+  for (const r of Object.values(optResults.value)) {
+    for (const c of r.change_log || []) m[c.field_path] = c.before;
+  }
+  return m;
+});
+const placeholders = computed(() =>
+  Object.values(optResults.value).flatMap((r) => r.placeholders || []));
+
+async function onOptimize() {
+  if (!tpl.value || !doc.value) return;
+  optBusy.value = true;
+  errMsg.value = "";
+  optPlan.value = null; optResults.value = {}; optFields.value = null;
+  try {
+    const ver = doc.value.template_version || tpl.value.template_version;
+    optPlan.value = await optimizePlan({
+      template_version: ver, fields: fields.value });
+    optFields.value = JSON.parse(JSON.stringify(fields.value));
+    for (const s of optPlan.value.sections || []) {
+      if (!(s.optimizable && s.status === "pending")) continue;
+      s.status = "running";
+      try {
+        const r = await optimizeSection({
+          template_version: ver, section: s.key, fields: fields.value });
+        optResults.value = { ...optResults.value, [s.key]: r };
+        if (r.status === "done" && r.optimized != null) {
+          optFields.value = { ...optFields.value, [s.key]: r.optimized };
+        }
+        s.status = r.status === "error" ? "error" : "done";
+      } catch (e) {
+        optResults.value = { ...optResults.value, [s.key]: {
+          status: "error", change_log: [], placeholders: [], error: e.message } };
+        s.status = "error";
+      }
+    }
+  } catch (e) {
+    errMsg.value = `优化失败：${e.message}`;
+  } finally {
+    optBusy.value = false;
+  }
+}
+
+function adoptOptimized() {
+  if (!optFields.value) return;
+  fields.value = JSON.parse(JSON.stringify(optFields.value));   // → dirty → PATCH 保存
+  optResults.value = {}; optFields.value = null; optPlan.value = null;
+}
 
 async function loadTpl() {
   try { tpl.value = await getTemplate(); }
@@ -219,6 +274,9 @@ onMounted(async () => {
         <input v-model="regenRole" placeholder="目标岗位（可选改）" maxlength="80" />
         <label><input type="checkbox" v-model="keepManual" /> 保留手工修改</label>
         <button class="lib-btn" :disabled="busy" @click="onRegenerate">重新生成</button>
+        <button class="lib-btn" :disabled="busy || optBusy" @click="onOptimize">
+          {{ optBusy ? "优化中…" : "智能优化" }}
+        </button>
         <button class="lib-btn primary" :disabled="busy || !dirty" @click="onSave">
           {{ dirty ? "保存修改" : "已保存" }}
         </button>
@@ -231,8 +289,30 @@ onMounted(async () => {
 
       <div class="lib-cols">
         <ResumeFieldsForm v-model="fields" :template="tpl" :gaps="doc.gaps || []" />
-        <ResumePreview :template="tpl" :fields="fields"
-                       :evidence="doc.evidence_map || {}" :gaps="doc.gaps || []" />
+        <ResumePreview :template="tpl"
+                       :fields="optFields || fields"
+                       :evidence="doc.evidence_map || {}" :gaps="doc.gaps || []"
+                       :compare="optFields ? compareMap : null" />
+      </div>
+
+      <div v-if="Object.keys(optResults).length" class="lib-opt">
+        <template v-for="(r, key) in optResults" :key="key">
+          <div v-if="r.change_log?.length" class="lo-sec">
+            <h3>改动 · {{ key }}</h3>
+            <div v-for="(c, i) in r.change_log" :key="i" class="lo-pair">
+              <p class="lo-before">{{ c.before }}</p>
+              <p class="lo-after">{{ c.after }}</p>
+            </div>
+          </div>
+          <p v-if="r.error" class="lib-err">{{ key }}：{{ r.error }}</p>
+        </template>
+        <div v-if="placeholders.length" class="lo-ph">
+          {{ placeholders.length }} 处待补充占位：
+          {{ placeholders.map((p) => p.field_path).join("、") }}
+        </div>
+        <button v-if="optFields" class="lib-btn primary" @click="adoptOptimized">
+          采纳优化稿（再点保存生效）
+        </button>
       </div>
       <p v-if="errMsg" class="lib-err">{{ errMsg }}</p>
     </template>
@@ -277,6 +357,13 @@ onMounted(async () => {
 .lib-btn:disabled { opacity: 0.5; cursor: default; }
 .lib-hint { color: #9ca3af; font-size: 13px; }
 .lib-err { color: #b91c1c; font-size: 13px; }
+.lib-opt { margin-top: 14px; border-top: 1px solid #e5e7eb; padding-top: 10px; }
+.lo-sec h3 { font-size: 13px; margin: 10px 0 6px; }
+.lo-pair { border-left: 3px solid #d1d5db; padding-left: 10px; margin-bottom: 8px; }
+.lo-before { color: #9ca3af; font-size: 12px; margin: 0;
+  text-decoration: line-through; }
+.lo-after { color: #047857; font-size: 13px; margin: 2px 0 0; }
+.lo-ph { font-size: 12px; color: #b45309; margin: 8px 0; }
 @media (max-width: 720px) { .lib-cols { grid-template-columns: 1fr; } }
 @media (max-width: 420px) { .lib-page { padding: 14px 10px 40px; } }
 </style>
