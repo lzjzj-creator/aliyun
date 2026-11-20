@@ -1,0 +1,16 @@
+{
+  "protocol": 3,
+  "results": [
+    {
+      "session_id": "87654321-4321-4321-8321-cba987654321",
+      "added": 4,
+      "merged": 1,
+      "conflicts": 0,
+      "skipped": 2
+    },
+    {
+      "session_id": "76543210-4321-4321-8321-cba987654321",
+      "error": "daily_quota"
+    }
+  ]
+}

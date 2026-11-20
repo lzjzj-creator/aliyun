@@ -1,0 +1,22 @@
+{
+  "protocol": 3,
+  "document": {
+    "id": "a1b2c3d4-0000-4000-8000-0000000000d2",
+    "title": "后端工程师-秋招（副本）",
+    "target_role": "后端工程师",
+    "template_version": "tpl-x",
+    "status": "draft",
+    "version": 0,
+    "fields": {
+      "basics": {
+        "name": "林小满"
+      }
+    },
+    "evidence_map": {},
+    "gaps": [],
+    "fact_snapshot": {},
+    "stale_sources": [],
+    "created_at": "2026-11-23T08:00:00Z",
+    "updated_at": "2026-11-23T08:00:00Z"
+  }
+}
