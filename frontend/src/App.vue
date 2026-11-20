@@ -4,6 +4,7 @@ import AdminView from "./views/AdminView.vue";
 import ChatView from "./views/ChatView.vue";
 import ContractDemoView from "./views/ContractDemoView.vue";
 import InterviewView from "./views/InterviewView.vue";
+import MemoryView from "./views/MemoryView.vue";
 import ResumeView from "./views/ResumeView.vue";
 import ResumeWizardView from "./views/ResumeWizardView.vue";
 import SessionList from "./components/SessionList.vue";
@@ -19,6 +20,7 @@ function syncRoute() {
   const h = location.hash || "#/chat";
   if (/^#\/?admin\/?$/.test(h)) { view.value = "admin"; return; }
   if (/^#\/?demo/.test(h)) { view.value = "contractDemo"; return; }
+  if (/^#\/?memory\/?$/.test(h)) { view.value = "memory"; return; }
   if (/^#\/?resume-v1/.test(h)) { view.value = "resumeV1"; return; }
   if (/^#\/?resume/.test(h)) { view.value = "resume"; return; }
   if (/^#\/?chat-v1/.test(h)) { view.value = "chatV1"; return; }
@@ -71,6 +73,10 @@ onUnmounted(() => window.removeEventListener("hashchange", syncRoute));
               @click="nav('#/resume')">
         <span class="rail-ico">▤</span><span>简历</span>
       </button>
+      <button class="rail-item" :class="{ on: view === 'memory' }"
+              @click="nav('#/memory')">
+        <span class="rail-ico">◉</span><span>记忆</span>
+      </button>
     </nav>
 
     <div class="stage">
@@ -98,6 +104,7 @@ onUnmounted(() => window.removeEventListener("hashchange", syncRoute));
           <ResumeView v-else />
         </div>
         <ResumeWizardView v-else-if="view === 'resume'" />
+        <MemoryView v-else-if="view === 'memory'" />
       </main>
     </div>
 
