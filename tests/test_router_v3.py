@@ -246,6 +246,20 @@ class RouterV3Test(unittest.TestCase):
             "/api/v3/memory/backfill", headers=H,
             json={"session_ids": ["bogus"]}).status_code, 422)
 
+    def test_recover_wrong_code_404_and_success_once(self):
+        with patch.object(rv3.security_v3, "redeem_recovery",
+                          side_effect=rv3.security.not_found()):
+            r = self.client.post("/api/v3/memory/recover",
+                                 json={"recovery_code": "WRONG"})
+            self.assertEqual(r.status_code, 404)
+        bundle = {"owner": OWNER, "owner_token": "nt", "recovery_code": "nr"}
+        with patch.object(rv3.security_v3, "redeem_recovery",
+                          lambda code: bundle):
+            r = self.client.post("/api/v3/memory/recover",
+                                 json={"recovery_code": "OKCODE"})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["owner_token"], "nt")
+
     def test_extract_per_owner_cap(self):
         rv3._extract_hits.clear()
         with patch.object(rv3.fact_extractor, "extract_incremental",
