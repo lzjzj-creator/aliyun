@@ -139,14 +139,14 @@ def build_fields_from_facts(facts: list, tpl, *,
                                     "session_id": e.get("session_id"),
                                     "msg_id": e.get("msg_id"),
                                     "quote": quote,
-                                    "status": fact["status"]})
+                                    "fact_status": fact["status"]})
                     break
             else:  # value maybe equals fact value without a quote match
                 fv = fact.get("value")
                 if isinstance(fv, str) and value in fv:
                     entries.append({"fact_id": fid, "session_id": None,
                                     "msg_id": fact.get("source_message_id"),
-                                    "quote": fv, "status": fact["status"]})
+                                    "quote": fv, "fact_status": fact["status"]})
         if entries:
             evidence_map[path] = entries[:4]
             used_fact_ids.update(e["fact_id"] for e in entries)
