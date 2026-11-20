@@ -399,6 +399,41 @@ def detach_session_facts(owner_id: str, session_id: str) -> int:
     return count
 
 
+def forget_session(owner_id: str, session_id: str) -> dict:
+    """§9 level-2 delete "忘掉这个会话": detach fact pointers/evidence AND
+    scrub document evidence_map entries so no verbatim quote from that
+    session survives anywhere."""
+    owner_id = _check_owner_id(owner_id)
+    session_id = _uuid(session_id)
+    detached = detach_session_facts(owner_id, session_id)
+    docs = _json(_request("GET", "/v3_resume_documents", params={
+        "owner_id": f"eq.{owner_id}", "deleted_at": "is.null",
+        "select": "id,evidence_map", "limit": 500,
+    }))
+    scrubbed = 0
+    for d in docs:
+        em = d.get("evidence_map") or {}
+        changed = False
+        for path, evs in list(em.items()):
+            if not isinstance(evs, list):
+                continue
+            kept = [e for e in evs if not (isinstance(e, dict)
+                                          and e.get("session_id") == session_id)]
+            if len(kept) != len(evs):
+                changed = True
+                if kept:
+                    em[path] = kept
+                else:
+                    del em[path]
+        if changed:
+            _json(_request("PATCH", "/v3_resume_documents", params={
+                "id": f"eq.{d['id']}", "select": "id",
+            }, headers={"Prefer": "return=representation"},
+                json={"evidence_map": em}))
+            scrubbed += 1
+    return {"facts_detached": detached, "documents_scrubbed": scrubbed}
+
+
 def fact_counts(owner_id: str) -> dict:
     """by_kind / by_status / total over live facts (owner-scale: one projection)."""
     rows = _json(_request("GET", "/v3_facts", params={

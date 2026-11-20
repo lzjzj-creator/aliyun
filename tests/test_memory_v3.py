@@ -312,6 +312,32 @@ class FactTest(V3StoreTest):
         self.assertEqual(stored["evidence"], [{"session_id": "other",
                                                "msg_id": 2, "quote": "b"}])
 
+    def test_forget_session_scrubs_doc_evidence_too(self):
+        # 事实：混合证据 → 该会话条目被剥掉，事实保留
+        self.fact(evidence=[
+            {"session_id": SID, "msg_id": 1, "quote": "会话原话"},
+            {"session_id": "other", "msg_id": 2, "quote": "b"}])
+        doc = memory_v3.create_document(
+            OID, title="t", template_version="tpl-v1",
+            evidence_map={
+                "skills.0": [
+                    {"fact_id": "f1", "session_id": SID, "quote": "会话原话"},
+                    {"fact_id": "f1", "session_id": "other", "quote": "b"}],
+                "goal": [{"fact_id": "f1", "session_id": SID,
+                          "quote": "会话原话"}],
+            })
+        res = memory_v3.forget_session(OID, SID)
+        self.assertEqual(res["facts_detached"], 1)
+        self.assertEqual(res["documents_scrubbed"], 1)
+        em = self.store.rows["v3_resume_documents"][0]["evidence_map"]
+        # SID 的 quote 全剥掉；另一会话的保留；全空的 path 被移除
+        self.assertEqual(em, {"skills.0": [
+            {"fact_id": "f1", "session_id": "other", "quote": "b"}]})
+        # 事实本身保留（§9：用户逐条决定去留）
+        self.assertEqual(len(self.store.rows["v3_facts"]), 1)
+        self.assertIsNone(
+            self.store.rows["v3_facts"][0].get("deleted_at"))
+
     def test_fact_counts_by_kind_and_status(self):
         self.fact(kind="skill", status="confirmed")
         self.fact(kind="skill", status="proposed")

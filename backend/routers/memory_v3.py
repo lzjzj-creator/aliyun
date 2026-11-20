@@ -259,6 +259,17 @@ def delete_fact(request: Request, fact_id: str,
     return {"protocol": 3, "deleted": fact_id}
 
 
+@router.delete("/memory/sessions/{session_id}")
+def forget_session(request: Request, session_id: str,
+                   x_owner_token: str | None = Header(default=None)):
+    """§9 level-2 "忘掉这个会话": strip that session's source pointers,
+    evidence quotes and document evidence entries — no quote residue."""
+    owner = _owner(request, x_owner_token)
+    result = _storage(lambda: memory_v3.forget_session(
+        owner["id"], session_id))
+    return {"protocol": 3, **result}
+
+
 @router.post("/facts/extract")
 def extract_facts(request: Request, req: ExtractReq,
                   x_owner_token: str | None = Header(default=None)):

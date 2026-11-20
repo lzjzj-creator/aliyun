@@ -82,6 +82,9 @@ export const deleteFact = (id) =>
 export const extractFacts = (sessionId) =>
   req3("/api/v3/facts/extract", { method: "POST", body: { session_id: sessionId } });
 
+export const forgetSession = (sessionId) =>
+  req3(`/api/v3/memory/sessions/${sessionId}`, { method: "DELETE" });
+
 // --- resume library ---------------------------------------------------------
 
 export const listResumes = () => req3("/api/v3/resumes");

@@ -1,9 +1,9 @@
 <script setup>
 // v3 #memory 页：长期记忆总览 + 事实确认/拒绝/删除 + 导出/清空（§9）
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import {
   deleteAllMemory, deleteFact, disableMemory, enableMemory, exportMemory,
-  extractFacts, getMemory, getOwnerToken, listFacts, patchFact,
+  extractFacts, forgetSession, getMemory, getOwnerToken, listFacts, patchFact,
   setOwnerToken,
 } from "../api/v3";
 
@@ -28,11 +28,28 @@ const STATUS_LABELS = {
   rejected: "已拒绝", superseded: "已取代",
 };
 
-// D6：v2 会话清理后 source_session_id 置空，证据 quote 保留但标「来源已过期」
+// 来源已删：证据被清空（忘掉会话）或证据会话指针全部置空（D6 清理）
 function sourceExpired(fact) {
   const evs = fact.evidence || [];
-  return evs.length > 0 && evs.every((e) => e.session_id == null);
+  return evs.length === 0 || evs.every((e) => e.session_id == null);
 }
+
+// 事实证据里出现过的会话列表（§9 来源级删除入口）
+const sessions = computed(() => {
+  const map = new Map();
+  for (const f of facts.value) {
+    for (const e of f.evidence || []) {
+      if (e && e.session_id) {
+        const cur = map.get(e.session_id) || { session_id: e.session_id, count: 0 };
+        cur.count += 1;
+        map.set(e.session_id, cur);
+      }
+    }
+  }
+  return [...map.values()];
+});
+
+const forgetting = ref(null);   // 待确认忘掉的 session_id
 
 async function boot() {
   booted.value = false;
@@ -134,6 +151,19 @@ async function onDisable() {
   }
 }
 
+async function onForgetSession(sid) {
+  busy.value = true;
+  try {
+    await forgetSession(sid);
+    forgetting.value = null;
+    await reload();
+  } catch (e) {
+    error.value = e.status === 404 ? "会话不存在" : "操作失败，请重试";
+  } finally {
+    busy.value = false;
+  }
+}
+
 async function onWipe() {
   busy.value = true;
   try {
@@ -208,6 +238,27 @@ onMounted(boot);
         将永久删除全部事实与简历文档，不可恢复。
         <button class="mem-btn danger" :disabled="busy" @click="onWipe">确认清空</button>
         <button class="mem-btn" @click="confirmingWipe = false">取消</button>
+      </div>
+
+      <!-- 来源级删除：忘掉某个会话 -->
+      <div v-if="sessions.length" class="mem-card mem-sessions">
+        <div class="mem-sec-title">来源会话</div>
+        <div v-for="s in sessions" :key="s.session_id" class="mem-session-row">
+          <span class="mem-session-id">会话 {{ s.session_id.slice(0, 8) }}…</span>
+          <span class="mem-sub">{{ s.count }} 条证据</span>
+          <button v-if="forgetting !== s.session_id" class="mem-btn"
+                  :disabled="busy" @click="forgetting = s.session_id">
+            忘掉这个会话
+          </button>
+          <template v-else>
+            <button class="mem-btn danger" :disabled="busy"
+                    @click="onForgetSession(s.session_id)">确认忘掉</button>
+            <button class="mem-btn" @click="forgetting = null">取消</button>
+          </template>
+        </div>
+        <p class="mem-sub">
+          忘掉后将清除该会话的来源指针与证据原话（含简历中的引用），事实本身保留，可逐条决定去留。
+        </p>
       </div>
 
       <!-- 筛选 + 事实列表 -->

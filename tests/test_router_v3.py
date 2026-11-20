@@ -219,6 +219,16 @@ class RouterV3Test(unittest.TestCase):
             self.client.delete(f"/api/v3/facts/{FACT['id']}", headers=H)
             .status_code, 404)
 
+    def test_forget_session(self):
+        """#64：来源级删除——清会话指针/证据/文档引用，返回计数。"""
+        sid = "87654321-4321-4321-8321-cba987654321"
+        self._patch("forget_session", lambda oid, s:
+                    {"facts_detached": 3, "documents_scrubbed": 1})
+        r = self.client.delete(f"/api/v3/memory/sessions/{sid}", headers=H)
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json(), {"protocol": 3, "facts_detached": 3,
+                                    "documents_scrubbed": 1})
+
     # --- extract ---------------------------------------------------------------
     def test_extract_passthrough_and_errors(self):
         result = {"added": 1, "merged": 0, "conflicts": [], "skipped": 2}
