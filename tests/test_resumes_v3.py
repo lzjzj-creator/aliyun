@@ -169,6 +169,37 @@ class ResumesV3Test(unittest.TestCase):
         self.assertEqual(self.client.delete(f"/api/v3/resumes/{DID}",
                                             headers=H).status_code, 404)
 
+    def test_batch_isolated_and_coverage(self):
+        docs = []
+        def fake_create(oid, **kw):
+            if kw["title"] == "失败项":
+                raise rb.BuildFailed("x")
+            d = {**DOC, "id": f"doc-{len(docs)}", "title": kw["title"],
+                 "fields": {"skills": {"groups": [{"name": "后端",
+                                                 "items": ["Python"]}]}}}
+            docs.append(d)
+            return d
+        self._patch("facts_for_generation", lambda oid: [])
+        self._patch("stale_sources", lambda d, f: [])
+        with patch.object(rv3.resume_builder_v3, "create_document",
+                          fake_create):
+            r = self.client.post("/api/v3/resumes/batch", headers=H, json={
+                "items": [
+                    {"title": "后端稿", "jd_text": "需要 Python 和 PostgreSQL"},
+                    {"title": "失败项"},
+                ]})
+        self.assertEqual(r.status_code, 200)
+        res = r.json()["results"]
+        self.assertEqual(res[0]["document"]["title"], "后端稿")
+        cov = res[0]["jd_coverage"]
+        self.assertIn("python", cov["covered"])
+        self.assertIn("postgresql", cov["missing"])
+        self.assertEqual(res[1]["error"], "build_failed")
+        # 空批/超上限 → 422
+        self.assertEqual(self.client.post(
+            "/api/v3/resumes/batch", headers=H, json={"items": []}).status_code,
+            422)
+
     def test_regenerate_draft_and_cas(self):
         self._patch("get_document", lambda oid, did: DOC)
         self._patch("facts_for_generation", lambda oid: [])

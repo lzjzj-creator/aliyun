@@ -183,6 +183,18 @@ def build_fields_from_facts(facts: list, tpl, *,
             "gaps": gaps, "fact_snapshot": snapshot}
 
 
+def jd_coverage(fields: dict, jd_text: str | None) -> dict:
+    """JD 关键词覆盖报告：jd_text tokens 出现在字段值里的比例与清单。"""
+    jd_tokens = _tokens(jd_text)
+    if not jd_tokens:
+        return {"covered": [], "missing": [], "ratio": None}
+    hay = json.dumps(fields or {}, ensure_ascii=False).lower()
+    covered = sorted(t for t in jd_tokens if t.lower() in hay or t in hay)
+    missing = sorted(jd_tokens - set(covered))
+    return {"covered": covered[:60], "missing": missing[:60],
+            "ratio": round(len(covered) / len(jd_tokens), 2)}
+
+
 def merge_manual_overrides(old_fields: dict, new_fields: dict) -> dict:
     """Reapply every field the user hand-edited onto a regenerated draft;
     _meta.manual_override travels with fields, never silently dropped."""
