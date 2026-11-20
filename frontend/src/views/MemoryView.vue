@@ -180,6 +180,11 @@ onMounted(boot);
         <button class="mem-btn" @click="dismissOnboarding">我已保存</button>
       </div>
 
+      <div v-if="status?.retention_warning" class="mem-stale">
+        你的记忆已 {{ status.retention_days }} 天保留期临近到期（30 天内无活动将删除），
+        建议先「导出 JSON」备份。
+      </div>
+
       <!-- 状态卡 -->
       <div v-if="status" class="mem-card">
         <div class="mem-stats">
@@ -290,6 +295,8 @@ onMounted(boot);
 .mf-quote { font-size: 12px; color: #6b7280; margin: 2px 0; }
 .mf-ops { display: flex; gap: 8px; margin-top: 8px; }
 .mem-wipe { border-color: #fca5a5; color: #b91c1c; font-size: 13px; }
+.mem-stale { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px;
+  padding: 10px 12px; font-size: 13px; color: #92400e; margin-bottom: 14px; }
 code { background: #f3f4f6; padding: 2px 6px; border-radius: 4px;
   word-break: break-all; font-size: 12px; }
 @media (max-width: 420px) { .mem-page { padding: 14px 10px 40px; } }

@@ -577,6 +577,14 @@ def stale_sources(doc: dict, current_facts: list) -> list:
     return out
 
 
+def prune_inactive_owners(days: int = 365, dry_run: bool = True) -> int:
+    """Owner retention sweep (§9/D4): dry-run report first, then explicit run."""
+    if type(days) is not int or days < 365:
+        raise ValueError("days must be an integer >= 365")
+    return int(_json(_request("POST", "/rpc/v3_prune_inactive_owners",
+                              json={"days": days, "dry_run": dry_run})))
+
+
 def export_owner(owner_id: str) -> dict:
     """Full portable dump: live facts (with evidence) + live documents."""
     owner_id = _check_owner_id(owner_id)

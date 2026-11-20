@@ -114,17 +114,46 @@ def enable_memory(request: Request, req: EnableReq | None = None,
             "recovery_code": bundle["recovery_code"]}
 
 
+RETENTION_DAYS = 365
+RETENTION_WARN_DAYS = 30
+
+
 @router.get("/memory")
 def memory_status(request: Request,
                   x_owner_token: str | None = Header(default=None)):
     owner = _owner(request, x_owner_token)
     counts = _storage(lambda: memory_v3.fact_counts(owner["id"]))
-    return {"enabled": owner["memory_enabled"],
+    # 保留期站内提示（§9/D4）：last_seen_at 距今 ≥335 天提示将到期
+    warn = False
+    last_seen = owner.get("last_seen_at") or owner.get("updated_at")
+    if isinstance(last_seen, str):
+        try:
+            from datetime import datetime, timezone
+            seen = datetime.fromisoformat(last_seen.replace("Z", "+00:00"))
+            age = (datetime.now(timezone.utc) - seen).days
+            warn = age >= RETENTION_DAYS - RETENTION_WARN_DAYS
+        except ValueError:
+            pass
+    return {"protocol": 3, "enabled": owner["memory_enabled"],
             "consent_at": owner.get("consent_at"),
             "fact_count": counts["total"], "by_kind": counts["by_kind"],
             "by_status": counts["by_status"],
             "last_extracted_at": _storage(
-                lambda: memory_v3.last_extracted_at(owner["id"]))}
+                lambda: memory_v3.last_extracted_at(owner["id"])),
+            "retention_days": RETENTION_DAYS, "retention_warning": warn}
+
+
+@router.get("/memory/export")
+def memory_export(request: Request,
+                  x_owner_token: str | None = Header(default=None)):
+    owner = _owner(request, x_owner_token)
+    payload = _storage(lambda: memory_v3.export_owner(owner["id"]))
+    payload["protocol"] = 3
+    from fastapi.responses import JSONResponse
+    return JSONResponse(
+        payload,
+        headers={"Content-Disposition":
+                 'attachment; filename="zhimai-memory.json"'})
 
 
 @router.post("/memory/disable")

@@ -90,7 +90,7 @@ onUnmounted(() => window.removeEventListener("hashchange", syncRoute));
           <span class="tb-sub">先聊出你的经历，再长出一份简历</span>
         </div>
         <button v-if="view === 'chat'" class="tb-sessions" @click="sidebar = true">☰ 会话</button>
-        <span class="tb-privacy">对话留存可删 · 简历只在本机</span>
+        <span class="tb-privacy">对话留存可删 · 记忆默认关闭可导出可清空</span>
       </header>
 
       <main class="main-area">
