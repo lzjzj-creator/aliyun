@@ -140,6 +140,17 @@ class ResumesV3Test(unittest.TestCase):
                               json={"title": "x"})
         self.assertEqual(r.status_code, 409)
 
+    def test_protocol3_on_resume_endpoints(self):
+        self._patch("list_documents", lambda oid: [DOC])
+        self._patch("get_document", lambda oid, did: DOC)
+        self._patch("facts_for_generation", lambda oid: [])
+        self._patch("stale_sources", lambda d, f: [])
+        self._patch("soft_delete_document", lambda oid, did: True)
+        for r in [self.client.get("/api/v3/resumes", headers=H),
+                  self.client.get(f"/api/v3/resumes/{DID}", headers=H),
+                  self.client.delete(f"/api/v3/resumes/{DID}", headers=H)]:
+            self.assertEqual(r.json().get("protocol"), 3, r.url)
+
     def test_stale_flow_fact_deleted_then_banner(self):
         """#42 链路：evidence 引用的事实被删 → 详情 stale_sources 标 deleted。"""
         doc = {**DOC,
