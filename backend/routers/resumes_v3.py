@@ -9,7 +9,7 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 try:
-    from .. import memory_v3, resume_builder_v3
+    from .. import memory_v3, resume_builder_v3, model_budget
     from .. import session_security as security
     from .. import session_security_v3 as security_v3
     from ..resume_template import load
@@ -17,6 +17,7 @@ try:
 except ImportError:  # FC starts with backend on sys.path
     import memory_v3
     import resume_builder_v3
+    import model_budget
     import session_security as security
     import session_security_v3 as security_v3
     from resume_template import load
@@ -172,6 +173,8 @@ def create_resume(request: Request, req: CreateDocReq,
         doc = resume_builder_v3.create_document(
             owner["id"], title=req.title, target_role=req.target_role,
             jd_text=req.jd_text, template_version=req.template_version)
+    except model_budget.BudgetUnavailable:
+        raise security.throttled(86400) from None
     except resume_builder_v3.BuildFailed:
         raise HTTPException(503, "简历生成服务暂时不可用") from None
     except ValueError:
@@ -205,6 +208,8 @@ def create_batch(request: Request, req: BatchReq,
                 entry["jd_coverage"] = resume_builder_v3.jd_coverage(
                     doc.get("fields") or {}, item.jd_text)
             results.append(entry)
+        except model_budget.BudgetUnavailable:
+            results.append({"title": item.title, "error": "daily_quota"})
         except resume_builder_v3.BuildFailed:
             results.append({"title": item.title, "error": "build_failed"})
         except (ValueError, memory_v3.MemoryStoreError):
@@ -329,6 +334,8 @@ def regenerate_resume(request: Request, doc_id: str, req: RegenReq,
         built = resume_builder_v3.regenerate_fields(
             doc, tpl, target_role=req.target_role, jd_text=req.jd_text,
             keep_manual=req.keep_manual)
+    except model_budget.BudgetUnavailable:
+        raise security.throttled(86400) from None
     except resume_builder_v3.BuildFailed:
         raise HTTPException(503, "简历生成服务暂时不可用") from None
     updates = {"fields": built["fields"],

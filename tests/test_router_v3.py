@@ -222,6 +222,15 @@ class RouterV3Test(unittest.TestCase):
             self.client.delete(f"/api/v3/facts/{FACT['id']}", headers=H)
             .status_code, 404)
 
+    def test_extract_budget_exhausted_429(self):
+        """#88：全局 token 预算尽 → 429（非 503），不穿透到模型。"""
+        with patch.object(rv3.fact_extractor, "extract_incremental",
+                          lambda oid, sid: (_ for _ in ()).throw(
+                              rv3.fact_extractor.BudgetExhausted("x"))):
+            r = self.client.post("/api/v3/facts/extract", headers=H, json={
+                "session_id": "87654321-4321-4321-8321-cba987654321"})
+        self.assertEqual(r.status_code, 429)
+
     def test_extract_daily_quota_429(self):
         """#67：owner 日抽取额度尽 → 429，不进抽取器。"""
         self._patch("spend_daily_quota", lambda oid, kind, cap: -1)
