@@ -121,6 +121,19 @@ class PatchDocReq(BaseModel):
         return value
 
 
+class BatchItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    title: str = Field(min_length=1, max_length=80)
+    target_role: str | None = Field(default=None, max_length=80)
+    jd_text: str | None = Field(default=None, max_length=MAX_JD_TEXT)
+
+
+class BatchReq(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    items: list[BatchItem] = Field(min_length=1, max_length=5)
+    template_version: str | None = Field(default=None, max_length=64)
+
+
 class RegenReq(BaseModel):
     model_config = ConfigDict(extra="forbid")
     target_role: str | None = Field(default=None, max_length=80)
@@ -151,6 +164,30 @@ def create_resume(request: Request, req: CreateDocReq,
     except memory_v3.MemoryStoreError:
         raise HTTPException(503, "存储暂时不可用") from None
     return {"document": _detail_public(owner["id"], doc)}
+
+
+@router.post("/batch")
+def create_batch(request: Request, req: BatchReq,
+                 x_owner_token: str | None = Header(default=None)):
+    """P3 多岗位批量生成：逐项独立，单项失败不拖垮整批；带 JD 时附覆盖报告。"""
+    owner = _owner(request, x_owner_token)
+    results = []
+    for item in req.items:
+        try:
+            doc = resume_builder_v3.create_document(
+                owner["id"], title=item.title, target_role=item.target_role,
+                jd_text=item.jd_text, template_version=req.template_version)
+            entry = {"title": item.title, "document": _detail_public(
+                owner["id"], doc)}
+            if item.jd_text:
+                entry["jd_coverage"] = resume_builder_v3.jd_coverage(
+                    doc.get("fields") or {}, item.jd_text)
+            results.append(entry)
+        except resume_builder_v3.BuildFailed:
+            results.append({"title": item.title, "error": "build_failed"})
+        except (ValueError, memory_v3.MemoryStoreError):
+            results.append({"title": item.title, "error": "failed"})
+    return {"protocol": 3, "results": results}
 
 
 @router.get("/{doc_id}")
