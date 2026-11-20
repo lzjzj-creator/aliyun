@@ -87,6 +87,19 @@ class PatchFactReq(BaseModel):
         return value
 
 
+class RecoverReq(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    recovery_code: str = Field(min_length=1, max_length=64)
+    revoke_old: bool = True      # 单哈希 schema 下旧令牌必然失效；字段保留契约位
+
+    @field_validator("recovery_code")
+    @classmethod
+    def not_blank(cls, value):
+        if not value.strip():
+            raise ValueError("must not be blank")
+        return value
+
+
 class ExtractReq(BaseModel):
     model_config = ConfigDict(extra="forbid")
     session_id: str = Field(min_length=36, max_length=36)
@@ -259,6 +272,20 @@ def extract_facts(request: Request, req: ExtractReq,
     except fact_extractor.ExtractionFailed:
         raise HTTPException(503, "抽取暂时不可用") from None
     return result
+
+
+@router.post("/memory/recover")
+def recover_memory(request: Request, req: RecoverReq):
+    """恢复码换发新 owner_token（明文仅此一次）；单哈希 schema 下旧令牌即刻
+    失效——不存在平key模式，所以 revoke_old 只作契约位。错误一律 404。"""
+    security.enforce_ip(request)
+    try:
+        bundle = security_v3.redeem_recovery(req.recovery_code)
+    except memory_v3.MemoryStoreError:
+        raise HTTPException(503, "存储暂时不可用") from None
+    return {"enabled": True, "owner_id": bundle["owner"]["id"],
+            "owner_token": bundle["owner_token"],
+            "recovery_code": bundle["recovery_code"]}
 
 
 @router.post("/memory/backfill")
