@@ -146,7 +146,7 @@ def list_resumes(request: Request,
                  x_owner_token: str | None = Header(default=None)):
     owner = _owner(request, x_owner_token)
     docs = _storage(lambda: memory_v3.list_documents(owner["id"]))
-    return {"documents": [_list_public(d) for d in docs]}
+    return {"protocol": 3, "documents": [_list_public(d) for d in docs]}
 
 
 @router.post("")
@@ -163,7 +163,7 @@ def create_resume(request: Request, req: CreateDocReq,
         raise HTTPException(422, "请求参数无效") from None
     except memory_v3.MemoryStoreError:
         raise HTTPException(503, "存储暂时不可用") from None
-    return {"document": _detail_public(owner["id"], doc)}
+    return {"protocol": 3, "document": _detail_public(owner["id"], doc)}
 
 
 @router.post("/batch")
@@ -194,7 +194,7 @@ def create_batch(request: Request, req: BatchReq,
 def get_resume(request: Request, doc_id: str,
                x_owner_token: str | None = Header(default=None)):
     owner, doc = _doc(request, x_owner_token, doc_id)
-    return _detail_public(owner["id"], doc)
+    return {"protocol": 3, **_detail_public(owner["id"], doc)}
 
 
 @router.patch("/{doc_id}")
@@ -221,7 +221,7 @@ def patch_resume(request: Request, doc_id: str, req: PatchDocReq,
         raise HTTPException(422, "请求参数无效")
     doc = _storage(lambda: memory_v3.patch_document(
         owner["id"], doc_id, updates, expected))
-    return {"document": _detail_public(owner["id"], doc)}
+    return {"protocol": 3, "document": _detail_public(owner["id"], doc)}
 
 
 @router.delete("/{doc_id}")
@@ -231,7 +231,7 @@ def delete_resume(request: Request, doc_id: str,
     ok = _storage(lambda: memory_v3.soft_delete_document(owner["id"], doc_id))
     if not ok:
         raise security.not_found()
-    return {"deleted": doc_id}
+    return {"protocol": 3, "deleted": doc_id}
 
 
 @router.post("/{doc_id}/regenerate")
@@ -256,4 +256,4 @@ def regenerate_resume(request: Request, doc_id: str, req: RegenReq,
         updates["jd_digest"] = resume_builder_v3._jd_digest(req.jd_text)
     doc = _storage(lambda: memory_v3.patch_document(
         owner["id"], doc_id, updates, doc["version"]))
-    return {"document": _detail_public(owner["id"], doc)}
+    return {"protocol": 3, "document": _detail_public(owner["id"], doc)}

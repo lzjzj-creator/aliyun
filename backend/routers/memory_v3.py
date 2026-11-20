@@ -149,10 +149,11 @@ def enable_memory(request: Request, req: EnableReq | None = None,
         if not issued.get("memory_enabled"):
             issued = _storage(
                 lambda: memory_v3.set_memory_enabled(issued["id"], True))
-        return {"enabled": True, "owner_id": issued["id"], "reactivated": True}
+        return {"protocol": 3, "enabled": True, "owner_id": issued["id"],
+            "reactivated": True}
     bundle = _storage(lambda: security_v3.issue_owner(
         x_anon_id if isinstance(x_anon_id, str) else None))
-    return {"enabled": True, "owner_id": bundle["owner"]["id"],
+    return {"protocol": 3, "enabled": True, "owner_id": bundle["owner"]["id"],
             "owner_token": bundle["owner_token"],
             "recovery_code": bundle["recovery_code"]}
 
@@ -204,7 +205,7 @@ def disable_memory(request: Request,
                    x_owner_token: str | None = Header(default=None)):
     owner = _owner(request, x_owner_token)
     row = _storage(lambda: memory_v3.set_memory_enabled(owner["id"], False))
-    return {"enabled": row["memory_enabled"], "owner_id": row["id"]}
+    return {"protocol": 3, "enabled": row["memory_enabled"], "owner_id": row["id"]}
 
 
 @router.delete("/memory")
@@ -212,7 +213,7 @@ def delete_memory(request: Request, req: DeleteAllReq,
                   x_owner_token: str | None = Header(default=None)):
     owner = _owner(request, x_owner_token)
     deleted = _storage(lambda: memory_v3.delete_owner(owner["id"]))
-    return {"deleted": deleted}
+    return {"protocol": 3, "deleted": deleted}
 
 
 @router.get("/facts")
@@ -226,7 +227,7 @@ def list_facts(request: Request,
     owner = _owner(request, x_owner_token)
     page = _storage(lambda: memory_v3.list_facts(
         owner["id"], kind=kind, status=status, cursor=cursor, limit=limit))
-    return {"facts": [_fact_public(f) for f in page["facts"]],
+    return {"protocol": 3, "facts": [_fact_public(f) for f in page["facts"]],
             "next_cursor": page["next_cursor"]}
 
 
@@ -245,7 +246,7 @@ def patch_fact(request: Request, fact_id: str, req: PatchFactReq,
     elif req.status is not None:
         row = _storage(lambda: memory_v3.set_fact_status(
             owner["id"], fact_id, req.status))
-    return {"fact": _fact_public(row)}
+    return {"protocol": 3, "fact": _fact_public(row)}
 
 
 @router.delete("/facts/{fact_id}")
@@ -255,7 +256,7 @@ def delete_fact(request: Request, fact_id: str,
     ok = _storage(lambda: memory_v3.soft_delete_fact(owner["id"], fact_id))
     if not ok:
         raise security.not_found()
-    return {"deleted": fact_id}
+    return {"protocol": 3, "deleted": fact_id}
 
 
 @router.post("/facts/extract")
@@ -283,7 +284,7 @@ def recover_memory(request: Request, req: RecoverReq):
         bundle = security_v3.redeem_recovery(req.recovery_code)
     except memory_v3.MemoryStoreError:
         raise HTTPException(503, "存储暂时不可用") from None
-    return {"enabled": True, "owner_id": bundle["owner"]["id"],
+    return {"protocol": 3, "enabled": True, "owner_id": bundle["owner"]["id"],
             "owner_token": bundle["owner_token"],
             "recovery_code": bundle["recovery_code"]}
 

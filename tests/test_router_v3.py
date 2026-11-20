@@ -132,6 +132,27 @@ class RouterV3Test(unittest.TestCase):
         self.assertTrue(r.json()["retention_warning"])
         self.assertEqual(r.json()["retention_days"], 365)
 
+    def test_protocol3_on_all_endpoints(self):
+        """#65：每个 v3 端点成功响应顶层都带 protocol=3。"""
+        bundle = {"owner": OWNER, "owner_token": "t", "recovery_code": "r"}
+        self._patch("get_owner_by_key_hash", lambda h: None)
+        self._patch("fact_counts", lambda oid:
+                    {"total": 0, "by_kind": {}, "by_status": {}})
+        self._patch("last_extracted_at", lambda oid: None)
+        self._patch("list_facts", lambda oid, **kw:
+                    {"facts": [], "next_cursor": None})
+        self._patch("export_owner", lambda oid: {})
+        calls = [
+            self.client.get("/api/v3/memory", headers=H),
+            self.client.get("/api/v3/facts", headers=H),
+            self.client.get("/api/v3/memory/export", headers=H),
+        ]
+        with patch.object(rv3.security_v3, "issue_owner", lambda a: bundle):
+            calls.append(self.client.post("/api/v3/memory/enable",
+                                          json={"recovery": True}))
+        for r in calls:
+            self.assertEqual(r.json().get("protocol"), 3, r.url)
+
     # --- facts ----------------------------------------------------------------
     def test_facts_list_projection_no_leak(self):
         self._patch("list_facts", lambda oid, **kw:
