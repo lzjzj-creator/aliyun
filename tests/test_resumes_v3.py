@@ -140,6 +140,27 @@ class ResumesV3Test(unittest.TestCase):
                               json={"title": "x"})
         self.assertEqual(r.status_code, 409)
 
+    def test_stale_flow_fact_deleted_then_banner(self):
+        """#42 链路：evidence 引用的事实被删 → 详情 stale_sources 标 deleted。"""
+        doc = {**DOC,
+               "evidence_map": {"projects.0.name": [
+                   {"fact_id": "f1", "quote": "做过小程序"}]},
+               "fact_snapshot": [{"fact_id": "f1", "value_hash": "h1"}]}
+        self._patch("get_document", lambda oid, did: doc)
+        # 事实已删：facts_for_generation 不再包含 f1
+        self._patch("facts_for_generation", lambda oid: [])
+        r = self.client.get(f"/api/v3/resumes/{DID}", headers=H)
+        stale = r.json()["stale_sources"]
+        self.assertEqual(stale, [{"field_path": "projects.0.name",
+                                  "fact_id": "f1", "change": "deleted"}])
+        # 事实值变了（hash 不同）→ updated
+        live = [{"id": "f1", "value_hash": "h2", "status": "confirmed",
+                 "deleted_at": None}]
+        self._patch("facts_for_generation", lambda oid: live)
+        stale = self.client.get(f"/api/v3/resumes/{DID}", headers=H) \
+            .json()["stale_sources"]
+        self.assertEqual(stale[0]["change"], "updated")
+
     def test_delete_soft(self):
         self._patch("soft_delete_document", lambda oid, did: True)
         r = self.client.delete(f"/api/v3/resumes/{DID}", headers=H)
