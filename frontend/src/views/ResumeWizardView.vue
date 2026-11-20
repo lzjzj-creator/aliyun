@@ -43,6 +43,7 @@ const placeholders = computed(() =>
 const pendingQuestions = computed(() =>
   Object.values(results.value).flatMap((r) => r.pending_questions || []));
 
+const emit = defineEmits(["goto-library"]);
 const STEP_CN = { 1: "① 一键填写", 2: "② 修改预览", 3: "③ 一键优化" };
 
 // —— 工作台：区块导航 + 点击定位 ——
@@ -240,6 +241,7 @@ function exportPrint() {
     <nav class="wiz-steps">
       <button v-for="n in [1, 2, 3]" :key="n" :class="{ on: step === n }"
               :disabled="n > 1 && !filled" @click="step = n">{{ STEP_CN[n] }}</button>
+      <button class="wiz-lib" @click="emit('goto-library')">简历库 →</button>
     </nav>
     <p v-if="errMsg" class="warn">{{ errMsg }}</p>
 
@@ -431,3 +433,5 @@ function exportPrint() {
   .wz-panel { width: 100%; position: static; max-height: none; }
 }
 </style>
+
+.wiz-steps .wiz-lib { margin-left: auto; color: var(--teal); }
