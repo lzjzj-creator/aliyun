@@ -61,8 +61,16 @@ class _LeaseResponse(StreamingResponse):
         super().__init__(*args, **kwargs)
 
     async def __call__(self, scope, receive, send):
+        from starlette.requests import ClientDisconnect
         try:
             await super().__call__(scope, receive, send)
+        except BaseException as exc:
+            # anyio task groups may wrap the send failure in an ExceptionGroup;
+            # either shape means the client went away mid-write.
+            leaves = getattr(exc, "exceptions", (exc,))
+            if any(isinstance(e, OSError) for e in leaves):
+                raise ClientDisconnect() from None
+            raise
         finally:
             try:
                 self._iterator.close()

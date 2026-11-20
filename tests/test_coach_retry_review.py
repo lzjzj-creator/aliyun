@@ -207,8 +207,11 @@ class CoachRetryReviewTest(unittest.TestCase):
         async def send(message):
             if message.get("type") == "http.response.body" and b"event: token" in message.get("body", b""):
                 raise OSError("connection closed")
+        # Block forever: the OSError on the token send IS the disconnect signal.
+        # Returning http.disconnect instantly races the stream and cancels it
+        # before the token chunk is ever sent (observed: no exception raised).
         async def receive():
-            return {"type": "http.disconnect"}
+            await asyncio.Event().wait()
         with patch.object(coach, "turn_events", side_effect=events):
             response = self.response()
             with self.assertRaises(ClientDisconnect):
