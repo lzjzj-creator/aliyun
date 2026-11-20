@@ -221,6 +221,31 @@ class RouterV3Test(unittest.TestCase):
                 json={"session_id":
                       "87654321-4321-4321-8321-cba987654321"}).status_code, 503)
 
+    def test_backfill_explicit_and_auto(self):
+        rv3._backfill_hits.clear()
+        calls = []
+        def fake_extract(oid, sid):
+            calls.append(sid)
+            if sid.endswith("0002"):
+                raise mv3.V3NotFound("x")
+            return {"added": 1}
+        with patch.object(rv3.fact_extractor, "extract_incremental",
+                          fake_extract):
+            body = {"session_ids": [
+                "87654321-4321-4321-8321-cba987650001",
+                "87654321-4321-4321-8321-cba987650002",
+                "87654321-4321-4321-8321-cba987650003"]}
+            r = self.client.post("/api/v3/memory/backfill", headers=H,
+                                 json=body)
+        self.assertEqual(r.status_code, 200)
+        res = r.json()
+        self.assertEqual(res["processed"], 3)
+        self.assertEqual(res["results"][1]["error"], "not_found")
+        # 无效 session_id → 422
+        self.assertEqual(self.client.post(
+            "/api/v3/memory/backfill", headers=H,
+            json={"session_ids": ["bogus"]}).status_code, 422)
+
     def test_extract_per_owner_cap(self):
         rv3._extract_hits.clear()
         with patch.object(rv3.fact_extractor, "extract_incremental",

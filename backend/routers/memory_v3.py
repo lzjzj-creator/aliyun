@@ -92,6 +92,36 @@ class ExtractReq(BaseModel):
     session_id: str = Field(min_length=36, max_length=36)
 
 
+class BackfillReq(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    # 不传则用 owner.anon_id 名下的全部 v2 会话；显式传入时上限 30
+    session_ids: list[str] | None = Field(default=None, max_length=30)
+
+    @field_validator("session_ids")
+    @classmethod
+    def ids_bounded(cls, value):
+        import uuid
+        for sid in value or []:
+            try:
+                uuid.UUID(sid)
+            except (ValueError, AttributeError):
+                raise ValueError("invalid session_id") from None
+        return value
+
+
+BACKFILL_PER_HOUR = 6
+_backfill_hits: dict[str, list] = {}
+
+
+def _backfill_limit(owner_id: str):
+    now = time.monotonic()
+    hits = [t for t in _backfill_hits.get(owner_id, []) if now - t < 3600]
+    if len(hits) >= BACKFILL_PER_HOUR:
+        raise security.throttled(int(3600 - (now - hits[0])))
+    hits.append(now)
+    _backfill_hits[owner_id] = hits[-BACKFILL_PER_HOUR:]
+
+
 @router.post("/memory/enable")
 def enable_memory(request: Request, req: EnableReq | None = None,
                   x_owner_token: str | None = Header(default=None),
@@ -229,3 +259,32 @@ def extract_facts(request: Request, req: ExtractReq,
     except fact_extractor.ExtractionFailed:
         raise HTTPException(503, "抽取暂时不可用") from None
     return result
+
+
+@router.post("/memory/backfill")
+def backfill_memory(request: Request, req: BackfillReq,
+                  x_owner_token: str | None = Header(default=None)):
+    """P3 历史回填：逐会话跑增量抽取；每会话独立水位，失败单列不阻断整体。"""
+    owner = _owner(request, x_owner_token)
+    _backfill_limit(owner["id"])
+    session_ids = req.session_ids
+    if session_ids is None:
+        anon = owner.get("anon_id")
+        if not anon:
+            raise HTTPException(422, "请求参数无效")
+        try:
+            import memory
+            session_ids = [s["id"] for s in
+                           memory.list_sessions(anon)[:30]]
+        except Exception:
+            raise HTTPException(503, "存储暂时不可用") from None
+    results = []
+    for sid in session_ids:
+        try:
+            r = fact_extractor.extract_incremental(owner["id"], sid)
+            results.append({"session_id": sid, **r})
+        except memory_v3.V3NotFound:
+            results.append({"session_id": sid, "error": "not_found"})
+        except (memory_v3.MemoryStoreError, fact_extractor.ExtractionFailed):
+            results.append({"session_id": sid, "error": "failed"})
+    return {"protocol": 3, "processed": len(results), "results": results}
