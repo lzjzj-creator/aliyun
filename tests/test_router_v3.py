@@ -109,6 +109,29 @@ class RouterV3Test(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.json()["deleted"]["v3_facts"], 4)
 
+    def test_export_attachment(self):
+        self._patch("export_owner", lambda oid: {
+            "schema_version": 1, "owner": {"id": OID}, "facts": [FACT],
+            "documents": []})
+        r = self.client.get("/api/v3/memory/export", headers=H)
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("attachment", r.headers["content-disposition"])
+        body = r.json()
+        self.assertEqual(body["protocol"], 3)
+        self.assertEqual(body["facts"][0]["id"], FACT["id"])
+
+    def test_retention_warning_flag(self):
+        self._patch("fact_counts", lambda oid:
+                    {"total": 0, "by_kind": {}, "by_status": {}})
+        self._patch("last_extracted_at", lambda oid: None)
+        r = self.client.get("/api/v3/memory", headers=H)
+        self.assertFalse(r.json()["retention_warning"])
+        old = {**OWNER, "last_seen_at": "2024-01-01T00:00:00+00:00"}
+        with patch.object(rv3.security_v3, "require_owner", lambda t: old):
+            r = self.client.get("/api/v3/memory", headers=H)
+        self.assertTrue(r.json()["retention_warning"])
+        self.assertEqual(r.json()["retention_days"], 365)
+
     # --- facts ----------------------------------------------------------------
     def test_facts_list_projection_no_leak(self):
         self._patch("list_facts", lambda oid, **kw:
