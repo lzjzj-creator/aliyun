@@ -87,21 +87,19 @@ def enable_owner(anon_id: str | None, owner_key_hash: str,
 
 
 def get_owner_by_key_hash(owner_key_hash: str) -> dict | None:
+    """Lookup via RPC body, never a URL filter: the hash is a verifier and
+    must not land in access logs."""
     if not isinstance(owner_key_hash, str) or len(owner_key_hash) != 64:
         return None
-    return _one(_json(_request("GET", "/v3_owner", params={
-        "owner_key_hash": f"eq.{owner_key_hash}", "deleted_at": "is.null",
-        "select": "id,owner_key_hash,recovery_hash," + OWNER_FIELDS, "limit": 1,
-    })))
+    return _one(_json(_request("POST", "/rpc/v3_find_owner",
+                              json={"p_key_hash": owner_key_hash})))
 
 
 def get_owner_by_recovery_hash(recovery_hash: str) -> dict | None:
     if not isinstance(recovery_hash, str) or len(recovery_hash) != 64:
         return None
-    return _one(_json(_request("GET", "/v3_owner", params={
-        "recovery_hash": f"eq.{recovery_hash}", "deleted_at": "is.null",
-        "select": "id,recovery_hash," + OWNER_FIELDS, "limit": 1,
-    })))
+    return _one(_json(_request("POST", "/rpc/v3_find_owner",
+                              json={"p_recovery_hash": recovery_hash})))
 
 
 def get_owner(owner_id: str) -> dict | None:
