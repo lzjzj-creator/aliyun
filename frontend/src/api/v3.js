@@ -104,3 +104,10 @@ export const deleteResume = (id) =>
 
 export const regenerateResume = (id, body = {}) =>
   req3(`/api/v3/resumes/${id}/regenerate`, { method: "POST", body });
+
+export const listVersions = (id) =>
+  req3(`/api/v3/resumes/${id}/versions`);
+
+export const restoreVersion = (id, version) =>
+  req3(`/api/v3/resumes/${id}/versions/${version}/restore`,
+       { method: "POST" });

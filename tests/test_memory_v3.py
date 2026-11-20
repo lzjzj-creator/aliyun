@@ -411,6 +411,21 @@ class DocumentTest(V3StoreTest):
             memory_v3.create_document(OID, title="x", template_version="tpl-v1",
                                       status="published")
 
+    def test_version_history_snapshot_prune_and_get(self):
+        """#68：写入前快照、列表倒序、超出 10 版剪枝。"""
+        doc = self.doc(fields={"a": 1})
+        for i in range(12):
+            doc = memory_v3.patch_document(
+                OID, doc["id"], {"title": f"v{i+1}"},
+                expected_version=doc["version"], snapshot=doc)
+        vers = memory_v3.list_document_versions(OID, doc["id"])
+        self.assertEqual(len(vers), 10)
+        self.assertEqual([v["version"] for v in vers],
+                         list(range(11, 1, -1)))  # 2..11，最旧的 0,1 被剪掉
+        old = memory_v3.get_document_version(OID, doc["id"], 2)
+        self.assertEqual(old["snapshot"]["title"], "v2")
+        self.assertIsNone(memory_v3.get_document_version(OID, doc["id"], 0))
+
     def test_patch_document_cas_conflict(self):
         doc = self.doc()
         patched = memory_v3.patch_document(OID, doc["id"], {"title": "产品经理"},

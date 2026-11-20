@@ -552,12 +552,54 @@ def list_documents(owner_id: str) -> list:
     }))
 
 
+DOC_VERSIONS_KEEP = 10
+_SNAPSHOT_KEYS = ("title", "target_role", "status", "fields",
+                  "evidence_map", "gaps", "fact_snapshot")
+
+
+def snapshot_document_version(owner_id: str, doc: dict) -> None:
+    """Persist a pre-update snapshot and prune to the latest 10 per doc."""
+    owner_id = _check_owner_id(owner_id)
+    snap = {k: doc.get(k) for k in _SNAPSHOT_KEYS}
+    _request("POST", "/v3_document_versions",
+             headers={"Prefer": "resolution=ignore-duplicates"},
+             json={"doc_id": doc["id"], "owner_id": owner_id,
+                   "version": doc["version"], "snapshot": snap})
+    stale = _json(_request("GET", "/v3_document_versions", params={
+        "doc_id": f"eq.{doc['id']}", "select": "id",
+        "order": "version.desc,id.desc",
+        "offset": DOC_VERSIONS_KEEP, "limit": 100,
+    }))
+    if stale:
+        _request("DELETE", "/v3_document_versions", params={
+            "id": f"in.({','.join(r['id'] for r in stale)})"})
+
+
+def list_document_versions(owner_id: str, doc_id: str) -> list:
+    return _json(_request("GET", "/v3_document_versions", params={
+        "owner_id": f"eq.{_check_owner_id(owner_id)}",
+        "doc_id": f"eq.{_uuid(doc_id)}",
+        "select": "id,version,created_at",
+        "order": "version.desc", "limit": DOC_VERSIONS_KEEP,
+    }))
+
+
+def get_document_version(owner_id: str, doc_id: str, version: int) -> dict | None:
+    return _one(_json(_request("GET", "/v3_document_versions", params={
+        "owner_id": f"eq.{_check_owner_id(owner_id)}",
+        "doc_id": f"eq.{_uuid(doc_id)}", "version": f"eq.{int(version)}",
+        "select": "*", "limit": 1,
+    })))
+
+
 def patch_document(owner_id: str, doc_id: str, updates: dict,
-                   expected_version: int) -> dict:
+                   expected_version: int, *, snapshot: dict | None = None) -> dict:
     """CAS update; version filter makes concurrent writers conflict instead of
-    silently overwriting each other."""
+    silently overwriting each other. Pass snapshot=doc to record history."""
     if type(expected_version) is not int or expected_version < 0:
         raise ValueError("expected_version must be a nonnegative integer")
+    if snapshot is not None:
+        snapshot_document_version(owner_id, snapshot)
     allowed = {"title", "target_role", "jd_digest", "fields", "evidence_map",
                "gaps", "fact_snapshot", "status"}
     payload = {k: v for k, v in updates.items() if k in allowed}

@@ -242,7 +242,37 @@ def patch_resume(request: Request, doc_id: str, req: PatchDocReq,
     if not updates:
         raise HTTPException(422, "请求参数无效")
     doc = _storage(lambda: memory_v3.patch_document(
-        owner["id"], doc_id, updates, expected))
+        owner["id"], doc_id, updates, expected, snapshot=doc))
+    return {"protocol": 3, "document": _detail_public(owner["id"], doc)}
+
+
+@router.get("/{doc_id}/versions")
+def list_versions(request: Request, doc_id: str,
+                  x_owner_token: str | None = Header(default=None)):
+    owner, doc = _doc(request, x_owner_token, doc_id)
+    versions = _storage(lambda: memory_v3.list_document_versions(
+        owner["id"], doc_id))
+    return {"protocol": 3, "versions": versions}
+
+
+@router.post("/{doc_id}/versions/{version}/restore")
+def restore_version(request: Request, doc_id: str, version: int,
+                    x_owner_token: str | None = Header(default=None)):
+    """Restore a kept snapshot as a NEW version (snapshot first → undoable)."""
+    owner, doc = _doc(request, x_owner_token, doc_id)
+    row = _storage(lambda: memory_v3.get_document_version(
+        owner["id"], doc_id, version))
+    if row is None:
+        raise security.not_found()
+    snap = row.get("snapshot") or {}
+    updates = {k: snap[k] for k in
+               ("title", "target_role", "status", "fields",
+                "evidence_map", "gaps", "fact_snapshot")
+               if k in snap}
+    if not updates:
+        raise HTTPException(422, "请求参数无效")
+    doc = _storage(lambda: memory_v3.patch_document(
+        owner["id"], doc_id, updates, doc["version"], snapshot=doc))
     return {"protocol": 3, "document": _detail_public(owner["id"], doc)}
 
 
@@ -278,5 +308,5 @@ def regenerate_resume(request: Request, doc_id: str, req: RegenReq,
     if req.jd_text:
         updates["jd_digest"] = resume_builder_v3._jd_digest(req.jd_text)
     doc = _storage(lambda: memory_v3.patch_document(
-        owner["id"], doc_id, updates, doc["version"]))
+        owner["id"], doc_id, updates, doc["version"], snapshot=doc))
     return {"protocol": 3, "document": _detail_public(owner["id"], doc)}
