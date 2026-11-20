@@ -1,6 +1,7 @@
 <script setup>
 // v3 #memory 页：长期记忆总览 + 事实确认/拒绝/删除 + 导出/清空（§9）
 import { computed, onMounted, ref } from "vue";
+import { listSessions } from "../api/sessions";
 import {
   deleteAllMemory, deleteFact, disableMemory, enableMemory, exportMemory,
   extractFacts, forgetSession, getMemory, getOwnerToken, listFacts, patchFact,
@@ -18,6 +19,12 @@ const busy = ref(false);
 const error = ref("");
 const onboarding = ref(null);      // {owner_token, recovery_code} 一次性展示
 const confirmingWipe = ref(false);
+const showConsent = ref(false);    // 开启前的明示同意弹窗
+const sessionTitles = ref({});     // session_id -> v2 会话标题
+
+function sessionTitle(sid) {
+  return sessionTitles.value[sid] || `会话 ${String(sid).slice(0, 8)}…`;
+}
 
 const KIND_LABELS = {
   identity: "身份", education: "教育", experience: "经历",
@@ -58,6 +65,12 @@ async function boot() {
   try {
     status.value = await getMemory();
     enabled.value = true;
+    // 会话标题映射用于事实卡片来源标注；拿不到（无 v2 会话）不阻塞
+    listSessions().then((list) => {
+      const map = {};
+      for (const s of list || []) if (s && s.id) map[s.id] = s.title;
+      sessionTitles.value = map;
+    }).catch(() => {});
     await reload();
   } catch (e) {
     enabled.value = false;          // 404：令牌失效/未开启 → 回到引导
@@ -68,6 +81,7 @@ async function boot() {
 }
 
 async function onEnable() {
+  showConsent.value = false;
   busy.value = true;
   try {
     const res = await enableMemory({ recovery: true });
@@ -78,6 +92,44 @@ async function onEnable() {
     await boot();
   } catch {
     error.value = "开启失败，请稍后重试";
+  } finally {
+    busy.value = false;
+  }
+}
+
+function copyCredentials() {
+  const o = onboarding.value;
+  if (!o) return;
+  const text = `知脉长期记忆凭据\n访问令牌: ${o.owner_token}\n` +
+    (o.recovery_code ? `恢复码: ${o.recovery_code}\n` : "");
+  navigator.clipboard?.writeText(text).catch(() => {});
+}
+
+function downloadCredentials() {
+  const o = onboarding.value;
+  if (!o) return;
+  const text = `知脉长期记忆凭据（请离线保存，勿泄露）\n\n` +
+    `访问令牌: ${o.owner_token}\n` +
+    (o.recovery_code ? `恢复码: ${o.recovery_code}\n` : "") +
+    `\n令牌与恢复码只显示这一次，丢失后可用恢复码换发新令牌。`;
+  const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "zhimai-credentials.txt";
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+async function confirmAll() {
+  busy.value = true;
+  try {
+    for (const f of facts.value.filter((x) => x.status === "proposed")) {
+      await patchFact(f.id, { status: "confirmed" });
+    }
+    await reload();
+    status.value = await getMemory();
+  } catch {
+    error.value = "批量确认中断，请重试剩余项";
   } finally {
     busy.value = false;
   }
@@ -193,10 +245,30 @@ onMounted(boot);
     <div v-else-if="!enabled" class="mem-empty">
       <p>长期记忆会在会话间记住你的经历、技能与成果，用于生成多份岗位简历。</p>
       <p class="mem-sub">默认关闭，需明示开启；事实可逐条查看、确认、拒绝或删除。</p>
-      <button class="mem-btn primary" :disabled="busy" @click="onEnable">
+      <button class="mem-btn primary" :disabled="busy"
+              @click="showConsent = true">
         开启长期记忆
       </button>
       <p v-if="error" class="mem-err">{{ error }}</p>
+
+      <!-- 明示同意弹窗（§9：确认后才调 enable 接口） -->
+      <div v-if="showConsent" class="mem-consent">
+        <div class="mem-consent-box">
+          <h3>开启长期记忆前请确认</h3>
+          <ul>
+            <li>将跨会话记住你主动说出的经历、技能与成果，用于生成岗位简历。</li>
+            <li>每条事实都带原话证据，可随时查看、确认、拒绝、删除或导出。</li>
+            <li>数据保留 365 天，可随时一键清空全部；关闭后不再抽取。</li>
+            <li>令牌与恢复码只显示一次，请妥善保存；丢失可用恢复码找回。</li>
+          </ul>
+          <div class="mem-ops">
+            <button class="mem-btn primary" :disabled="busy" @click="onEnable">
+              我同意，开启长期记忆
+            </button>
+            <button class="mem-btn" @click="showConsent = false">再想想</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <template v-else>
@@ -207,7 +279,11 @@ onMounted(boot);
         <p v-if="onboarding.recovery_code">
           恢复码：<code>{{ onboarding.recovery_code }}</code>
         </p>
-        <button class="mem-btn" @click="dismissOnboarding">我已保存</button>
+        <div class="mem-ops">
+          <button class="mem-btn" @click="copyCredentials">复制</button>
+          <button class="mem-btn" @click="downloadCredentials">下载保存</button>
+          <button class="mem-btn" @click="dismissOnboarding">我已保存</button>
+        </div>
       </div>
 
       <div v-if="status?.retention_warning" class="mem-stale">
@@ -244,7 +320,7 @@ onMounted(boot);
       <div v-if="sessions.length" class="mem-card mem-sessions">
         <div class="mem-sec-title">来源会话</div>
         <div v-for="s in sessions" :key="s.session_id" class="mem-session-row">
-          <span class="mem-session-id">会话 {{ s.session_id.slice(0, 8) }}…</span>
+          <span class="mem-session-id">{{ sessionTitle(s.session_id) }}</span>
           <span class="mem-sub">{{ s.count }} 条证据</span>
           <button v-if="forgetting !== s.session_id" class="mem-btn"
                   :disabled="busy" @click="forgetting = s.session_id">
@@ -268,6 +344,10 @@ onMounted(boot);
                 @click="filter = f; reload()">
           {{ f ? STATUS_LABELS[f] : "全部" }}
         </button>
+        <button v-if="status?.by_status?.proposed" class="mem-chip"
+                :disabled="busy" @click="confirmAll">
+          全部确认（{{ status.by_status.proposed }}）
+        </button>
       </div>
 
       <ul class="mem-facts">
@@ -282,6 +362,9 @@ onMounted(boot);
           </div>
           <div class="mf-value">{{ typeof f.value === 'string' ? f.value : JSON.stringify(f.value) }}</div>
           <div v-for="(e, i) in f.evidence" :key="i" class="mf-quote">
+            <span v-if="e.session_id" class="mf-src">
+              {{ sessionTitle(e.session_id) }}<template v-if="e.msg_id != null"> · 第{{ e.msg_id }}条</template>
+            </span>
             “{{ e.quote }}”
           </div>
           <div class="mf-ops">
@@ -344,6 +427,22 @@ onMounted(boot);
 .mf-expired { color: #b45309; font-size: 11px; }
 .mf-value { font-size: 14px; margin: 6px 0; }
 .mf-quote { font-size: 12px; color: #6b7280; margin: 2px 0; }
+.mf-src { display: block; font-size: 11px; color: #9ca3af; }
+.mem-consent {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 50;
+  display: flex; align-items: center; justify-content: center; padding: 16px;
+}
+.mem-consent-box {
+  background: #fff; border-radius: 12px; padding: 20px;
+  max-width: 480px; width: 100%;
+}
+.mem-consent-box h3 { margin: 0 0 10px; font-size: 16px; }
+.mem-consent-box ul { margin: 0 0 14px; padding-left: 20px; font-size: 13px;
+  color: #374151; }
+.mem-consent-box li { margin: 6px 0; }
+.mem-session-row { display: flex; gap: 10px; align-items: center;
+  font-size: 13px; margin: 6px 0; }
+.mem-sec-title { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
 .mf-ops { display: flex; gap: 8px; margin-top: 8px; }
 .mem-wipe { border-color: #fca5a5; color: #b91c1c; font-size: 13px; }
 .mem-stale { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px;
