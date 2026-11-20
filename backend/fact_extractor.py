@@ -12,7 +12,7 @@ from pathlib import Path
 
 try:
     from .llm import llm, QWEN_ROUTER
-    from . import memory, memory_v3
+    from . import memory, memory_v3, model_budget
     from .resume_template import load as load_template, TemplateError
 except ImportError:  # FC runs with backend as root
     from llm import llm, QWEN_ROUTER
@@ -42,6 +42,10 @@ DENY_PATTERNS = [
 
 class ExtractionFailed(RuntimeError):
     """Model/pipeline failure after attempt bookkeeping; callers map to 502."""
+
+
+class BudgetExhausted(ExtractionFailed):
+    """Daily shared model budget refused the call; callers map to 429."""
 
 
 def _norm(text) -> str:
@@ -167,6 +171,9 @@ def extract_incremental(owner_id: str, session_id: str) -> dict:
         data = llm.chat_json(
             [{"role": "system", "content": _prompt_text(user_msgs, confirmed_slots)}],
             model=QWEN_ROUTER, temperature=0.1)
+    except model_budget.BudgetUnavailable:
+        memory_v3.mark_extraction_error(owner_id, session_id, "BUDGET_EXHAUSTED")
+        raise BudgetExhausted("daily model budget exhausted") from None
     except Exception:
         memory_v3.mark_extraction_error(owner_id, session_id, "MODEL_FAILED")
         raise ExtractionFailed("extraction model failed") from None

@@ -224,6 +224,21 @@ class ResumesV3Test(unittest.TestCase):
             self.client.post(f"/api/v3/resumes/{DID}/versions/9/restore",
                              headers=H).status_code, 404)
 
+    def test_create_budget_exhausted_429(self):
+        """#88：全局 token 预算尽 → 429；批量项标 daily_quota。"""
+        self._patch("get_document", lambda oid, did: dict(DOC))
+        self._patch("stale_sources", lambda d, f: [])
+        self._patch("facts_for_generation", lambda oid: [])
+        with patch.object(rv3.resume_builder_v3, "create_document",
+                          lambda oid, **kw: (_ for _ in ()).throw(
+                              rv3.model_budget.BudgetUnavailable("x"))):
+            r = self.client.post("/api/v3/resumes", headers=H, json={
+                "title": "x", "template_version": "tpl-x"})
+            self.assertEqual(r.status_code, 429)
+            rb = self.client.post("/api/v3/resumes/batch", headers=H,
+                                  json={"items": [{"title": "a"}]})
+        self.assertEqual(rb.json()["results"][0]["error"], "daily_quota")
+
     def test_create_daily_quota_429(self):
         """#67：日生成额度尽 → 429，不调生成器。"""
         self._patch("spend_daily_quota", lambda oid, kind, cap: -1)

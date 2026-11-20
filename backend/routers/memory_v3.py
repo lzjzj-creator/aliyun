@@ -295,6 +295,8 @@ def extract_facts(request: Request, req: ExtractReq,
         raise security.not_found() from None
     except memory_v3.MemoryStoreError:
         raise HTTPException(503, "存储暂时不可用") from None
+    except fact_extractor.BudgetExhausted:
+        raise security.throttled(86400) from None
     except fact_extractor.ExtractionFailed:
         raise HTTPException(503, "抽取暂时不可用") from None
     return result
@@ -341,6 +343,8 @@ def backfill_memory(request: Request, req: BackfillReq,
             results.append({"session_id": sid, **r})
         except memory_v3.V3NotFound:
             results.append({"session_id": sid, "error": "not_found"})
+        except fact_extractor.BudgetExhausted:
+            results.append({"session_id": sid, "error": "daily_quota"})
         except (memory_v3.MemoryStoreError, fact_extractor.ExtractionFailed):
             results.append({"session_id": sid, "error": "failed"})
     return {"protocol": 3, "processed": len(results), "results": results}

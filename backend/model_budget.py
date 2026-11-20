@@ -11,7 +11,8 @@ import time
 import importlib
 
 ENABLED = (os.getenv("V2_MEMORY_ENABLED", "0") == "1"
-           or os.getenv("COACH_ENABLED", "0") == "1")
+           or os.getenv("COACH_ENABLED", "0") == "1"
+           or os.getenv("V3_MEMORY_ENABLED", "0") == "1")
 SHARED = os.getenv("V2_SHARED_QUOTA", "0") == "1"
 try:
     DAILY_LIMIT = int(os.getenv("COACH_DAILY_TOKEN_BUDGET", "200000"))
