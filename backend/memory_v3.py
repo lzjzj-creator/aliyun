@@ -612,6 +612,19 @@ def stale_sources(doc: dict, current_facts: list) -> list:
     return out
 
 
+def spend_daily_quota(owner_id: str, kind: str, cap: int) -> int:
+    """Atomic persistent daily quota (§10). Returns new count, or -1 when
+    the day's allowance is exhausted (nothing was deducted)."""
+    owner_id = _check_owner_id(owner_id)
+    if kind not in ("extract", "resume_gen"):
+        raise ValueError("invalid quota kind")
+    if type(cap) is not int or cap < 1:
+        raise ValueError("cap must be a positive integer")
+    return int(_json(_request("POST", "/rpc/v3_spend_daily_quota",
+                              json={"p_owner": owner_id, "p_kind": kind,
+                                    "p_cap": cap})))
+
+
 def prune_inactive_owners(days: int = 365, dry_run: bool = True) -> int:
     """Owner retention sweep (§9/D4): dry-run report first, then explicit run."""
     if type(days) is not int or days < 365:

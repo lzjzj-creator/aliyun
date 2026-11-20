@@ -38,7 +38,10 @@ class RouterV3Test(unittest.TestCase):
 
     def setUp(self):
         ps = [patch.object(rv3.security, "enforce_ip", lambda r: None),
-              patch.object(rv3.security_v3, "require_owner", lambda t: OWNER)]
+              patch.object(rv3.security_v3, "require_owner", lambda t: OWNER),
+              # 默认日额度充足，避免 RPC 触网；限额用例各自覆盖
+              patch.object(rv3.memory_v3, "spend_daily_quota",
+                           lambda oid, kind, cap: 1)]
         for p in ps:
             p.start()
             self.addCleanup(p.stop)
@@ -218,6 +221,29 @@ class RouterV3Test(unittest.TestCase):
         self.assertEqual(
             self.client.delete(f"/api/v3/facts/{FACT['id']}", headers=H)
             .status_code, 404)
+
+    def test_extract_daily_quota_429(self):
+        """#67：owner 日抽取额度尽 → 429，不进抽取器。"""
+        self._patch("spend_daily_quota", lambda oid, kind, cap: -1)
+        r = self.client.post("/api/v3/facts/extract", headers=H,
+                             json={"session_id":
+                                   "87654321-4321-4321-8321-cba987654321"})
+        self.assertEqual(r.status_code, 429)
+
+    def test_backfill_counts_sessions_against_daily_quota(self):
+        """#67：回填每会话消耗一次日抽取额度，尽后逐项标 daily_quota。"""
+        spends = iter([1, -1])
+        self._patch("spend_daily_quota",
+                    lambda oid, kind, cap: next(spends, -1))
+        with patch.object(rv3.fact_extractor, "extract_incremental",
+                          lambda oid, sid: {"added": 1, "merged": 0,
+                                            "conflicts": [], "skipped": 0}):
+            r = self.client.post("/api/v3/memory/backfill", headers=H, json={
+                "session_ids": ["87654321-4321-4321-8321-cba987654321",
+                                "87654321-4321-4321-8321-cba987654322"]})
+        res = r.json()["results"]
+        self.assertEqual(res[0].get("added"), 1)
+        self.assertEqual(res[1]["error"], "daily_quota")
 
     def test_forget_session(self):
         """#64：来源级删除——清会话指针/证据/文档引用，返回计数。"""
