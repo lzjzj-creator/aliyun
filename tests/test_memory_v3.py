@@ -411,6 +411,17 @@ class DocumentTest(V3StoreTest):
             memory_v3.create_document(OID, title="x", template_version="tpl-v1",
                                       status="published")
 
+    def test_duplicate_document_fresh_draft_deepcopy(self):
+        doc = self.doc(fields={"a": {"b": 1}}, evidence_map={"x": [1]})
+        dup = memory_v3.duplicate_document(OID, doc)
+        self.assertNotEqual(dup["id"], doc["id"])
+        self.assertEqual(dup["status"], "draft")
+        self.assertTrue(dup["title"].endswith("（副本）"))
+        # 深拷贝：改副本不回写原件
+        dup["fields"]["a"]["b"] = 99
+        self.assertEqual(
+            self.store.rows["v3_resume_documents"][0]["fields"]["a"]["b"], 1)
+
     def test_version_history_snapshot_prune_and_get(self):
         """#68：写入前快照、列表倒序、超出 10 版剪枝。"""
         doc = self.doc(fields={"a": 1})

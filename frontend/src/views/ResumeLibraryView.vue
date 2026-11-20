@@ -5,7 +5,8 @@ import ResumeFieldsForm from "../components/ResumeFieldsForm.vue";
 import ResumePreview from "../components/ResumePreview.vue";
 import { getTemplate, optimizePlan, optimizeSection } from "../api/resume";
 import {
-  createResume, deleteResume, getOwnerToken, getResume, listResumes,
+  createResume, deleteResume, duplicateResume, getOwnerToken, getResume,
+  listResumes,
   listVersions, patchResume, regenerateResume, restoreVersion,
 } from "../api/v3";
 
@@ -212,6 +213,31 @@ async function onRestore(v) {
   }
 }
 
+function onExport() {
+  // 占位符红线：导出前必须列出待补充清单二次确认（与 v2 向导同口径）
+  const gaps = doc.value?.gaps || [];
+  if (gaps.length) {
+    const list = gaps.map((g) => `· ${g.field_path}（${g.reason || "待补充"}）`)
+      .join("\n");
+    if (!window.confirm(`还有 ${gaps.length} 处待补充：\n${list}\n\n仍要导出吗？`))
+      return;
+  }
+  window.print();
+}
+
+async function onDuplicate() {
+  if (!doc.value) return;
+  busy.value = true;
+  try {
+    const res = await duplicateResume(doc.value.id);
+    openDoc(res.document.id);
+  } catch {
+    errMsg.value = "复制失败，请重试";
+  } finally {
+    busy.value = false;
+  }
+}
+
 async function onDelete() {
   if (!doc.value || !confirm(`删除「${doc.value.title}」？此操作不可恢复。`)) return;
   busy.value = true;
@@ -309,6 +335,8 @@ onMounted(async () => {
         <button class="lib-btn primary" :disabled="busy || !dirty" @click="onSave">
           {{ dirty ? "保存修改" : "已保存" }}
         </button>
+        <button class="lib-btn" :disabled="busy" @click="onDuplicate">复制为新稿</button>
+        <button class="lib-btn" :disabled="busy" @click="onExport">导出 PDF</button>
         <button class="lib-btn danger" :disabled="busy" @click="onDelete">删除</button>
       </div>
 
@@ -328,7 +356,7 @@ onMounted(async () => {
 
       <div class="lib-cols">
         <ResumeFieldsForm v-model="fields" :template="tpl" :gaps="doc.gaps || []" />
-        <ResumePreview :template="tpl"
+        <ResumePreview class="print-area" :template="tpl"
                        :fields="optFields || fields"
                        :evidence="doc.evidence_map || {}" :gaps="doc.gaps || []"
                        :compare="optFields ? compareMap : null" />
@@ -411,5 +439,11 @@ onMounted(async () => {
 .lo-after { color: #047857; font-size: 13px; margin: 2px 0 0; }
 .lo-ph { font-size: 12px; color: #b45309; margin: 8px 0; }
 @media (max-width: 720px) { .lib-cols { grid-template-columns: 1fr; } }
+/* 库详情导出：只出预览稿，隐藏列表/表单/操作区 */
+@media print {
+  .lib-list, .lib-bar, .lib-new, .ld-head, .lib-stale, .lib-gaps,
+  .lib-versions, .lib-detail-ops, .lib-opt, .rff { display: none !important; }
+  .lib-cols { display: block !important; }
+}
 @media (max-width: 420px) { .lib-page { padding: 14px 10px 40px; } }
 </style>

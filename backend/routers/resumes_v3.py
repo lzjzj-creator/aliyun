@@ -276,6 +276,15 @@ def restore_version(request: Request, doc_id: str, version: int,
     return {"protocol": 3, "document": _detail_public(owner["id"], doc)}
 
 
+@router.post("/{doc_id}/duplicate")
+def duplicate_resume(request: Request, doc_id: str,
+                     x_owner_token: str | None = Header(default=None)):
+    """P3 一稿多投：整稿复制为新草稿（含字段/证据/快照），version 归零。"""
+    owner, doc = _doc(request, x_owner_token, doc_id)
+    dup = _storage(lambda: memory_v3.duplicate_document(owner["id"], doc))
+    return {"protocol": 3, "document": _detail_public(owner["id"], dup)}
+
+
 @router.delete("/{doc_id}")
 def delete_resume(request: Request, doc_id: str,
                   x_owner_token: str | None = Header(default=None)):
