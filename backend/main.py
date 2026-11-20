@@ -56,7 +56,7 @@ origins = [o.strip() for o in os.getenv("ALLOWED_ORIGINS",
 app.add_middleware(CORSMiddleware, allow_origins=origins,
                    allow_methods=["POST", "GET", "DELETE", "OPTIONS"],
                    allow_headers=["Content-Type", "X-File-Name", "Authorization",
-                                  "X-Anon-Id", "X-Session-Token"],
+                                  "X-Anon-Id", "X-Session-Token", "X-Owner-Token"],
                    expose_headers=["Retry-After"])
 
 MIN_SCORE = float(os.getenv("MIN_RETRIEVE_SCORE", "0.25"))
