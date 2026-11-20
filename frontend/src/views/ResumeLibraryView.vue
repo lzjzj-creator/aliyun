@@ -6,7 +6,7 @@ import ResumePreview from "../components/ResumePreview.vue";
 import { getTemplate, optimizePlan, optimizeSection } from "../api/resume";
 import {
   createResume, deleteResume, getOwnerToken, getResume, listResumes,
-  patchResume, regenerateResume,
+  listVersions, patchResume, regenerateResume, restoreVersion,
 } from "../api/v3";
 
 const props = defineProps({ docId: { type: String, default: "" } });
@@ -116,6 +116,7 @@ async function loadDoc(id) {
   try {
     doc.value = await getResume(id);
     fields.value = doc.value.fields || {};
+    loadVersions(id);
   } catch (e) {
     if (e.status === 404) { doc.value = null; errMsg.value = "文档不存在或已删除"; }
     else if (import.meta.env.DEV) {
@@ -178,6 +179,34 @@ async function onRegenerate() {
     dirty.value = false;
   } catch (e) {
     errMsg.value = e.status === 503 ? "生成服务暂时不可用" : "重新生成失败";
+  } finally {
+    busy.value = false;
+  }
+}
+
+const versions = ref([]);
+
+async function loadVersions(id) {
+  try {
+    const res = await listVersions(id);
+    versions.value = res.versions || [];
+  } catch {
+    versions.value = [];
+  }
+}
+
+async function onRestore(v) {
+  if (!doc.value) return;
+  if (!confirm(`恢复到 v${v.version} 的快照？当前状态会先存入历史，可再回退。`)) return;
+  busy.value = true;
+  try {
+    const res = await restoreVersion(doc.value.id, v.version);
+    doc.value = res.document;
+    fields.value = res.document.fields || {};
+    dirty.value = false;
+    loadVersions(doc.value.id);
+  } catch (e) {
+    errMsg.value = e.status === 404 ? "该历史版本不存在" : "恢复失败，请重试";
   } finally {
     busy.value = false;
   }
@@ -287,6 +316,16 @@ onMounted(async () => {
         {{ doc.gaps.length }} 处待补充
       </div>
 
+      <div v-if="versions.length" class="lib-versions">
+        <span class="lv-title">历史版本：</span>
+        <span v-for="v in versions" :key="v.id" class="lv-item">
+          v{{ v.version }}
+          <button class="lv-restore" :disabled="busy"
+                  @click="onRestore(v)">恢复</button>
+        </span>
+        <span class="lv-hint">仅保留最近 10 版</span>
+      </div>
+
       <div class="lib-cols">
         <ResumeFieldsForm v-model="fields" :template="tpl" :gaps="doc.gaps || []" />
         <ResumePreview :template="tpl"
@@ -341,6 +380,13 @@ onMounted(async () => {
 .ld-status[data-s="ready"] { color: #047857; }
 .lib-detail-head { display: flex; align-items: center; gap: 10px;
   margin-bottom: 12px; }
+.lib-versions { font-size: 12px; color: #6b7280; margin: 8px 0;
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.lv-title { font-weight: 600; }
+.lv-item { background: #f3f4f6; border-radius: 999px; padding: 2px 8px; }
+.lv-restore { border: 0; background: none; color: #2563eb; cursor: pointer;
+  font-size: 12px; padding: 0 0 0 4px; }
+.lv-hint { color: #9ca3af; }
 .lib-stale { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px;
   padding: 10px 12px; font-size: 13px; color: #92400e; margin-bottom: 12px; }
 .ls-item { font-family: monospace; }

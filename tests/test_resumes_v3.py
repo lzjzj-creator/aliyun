@@ -107,7 +107,7 @@ class ResumesV3Test(unittest.TestCase):
         self.assertEqual(r.status_code, 422)
         seen = {}
         self._patch("patch_document",
-                    lambda oid, did, u, ev: seen.update(
+                    lambda oid, did, u, ev, **kw: seen.update(
                         {"updates": u, "ev": ev}) or {**DOC, **u, "version": 4})
         h = {**H, "If-Match": "3"}
         r = self.client.patch(f"/api/v3/resumes/{DID}", headers=h,
@@ -122,7 +122,7 @@ class ResumesV3Test(unittest.TestCase):
         self._patch("stale_sources", lambda d, f: [])
         seen = {}
         self._patch("patch_document",
-                    lambda oid, did, u, ev: seen.update(u) or DOC)
+                    lambda oid, did, u, ev, **kw: seen.update(u) or DOC)
         new_fields = {"basics": {"name": "张明", "phone": "138",
                                  "email": "", "city": "上海", "site": ""}}
         h = {**H, "If-Match": "3"}
@@ -182,6 +182,33 @@ class ResumesV3Test(unittest.TestCase):
         self._patch("soft_delete_document", lambda oid, did: False)
         self.assertEqual(self.client.delete(f"/api/v3/resumes/{DID}",
                                             headers=H).status_code, 404)
+
+    def test_versions_list_and_restore(self):
+        """#68：列历史 + restore 用快照内容做一次带快照的 CAS 写。"""
+        self._patch("get_document", lambda oid, did: dict(DOC))
+        self._patch("stale_sources", lambda d, f: [])
+        self._patch("list_document_versions", lambda oid, did: [
+            {"id": "v2", "version": 2, "created_at": "t"}])
+        r = self.client.get(f"/api/v3/resumes/{DID}/versions", headers=H)
+        self.assertEqual(r.json()["versions"][0]["version"], 2)
+        self._patch("get_document_version", lambda oid, did, v: {
+            "snapshot": {"title": "旧标题", "fields": {"x": 1}}})
+        captured = {}
+        def fake_patch(oid, did, updates, expected, **kw):
+            captured.update(updates)
+            captured["snapshot_given"] = kw.get("snapshot") is not None
+            return {**DOC, **updates, "version": expected + 1}
+        self._patch("patch_document", fake_patch)
+        self._patch("facts_for_generation", lambda oid: [])
+        r = self.client.post(f"/api/v3/resumes/{DID}/versions/2/restore",
+                             headers=H)
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(captured["title"], "旧标题")
+        self.assertTrue(captured["snapshot_given"])
+        self._patch("get_document_version", lambda oid, did, v: None)
+        self.assertEqual(
+            self.client.post(f"/api/v3/resumes/{DID}/versions/9/restore",
+                             headers=H).status_code, 404)
 
     def test_create_daily_quota_429(self):
         """#67：日生成额度尽 → 429，不调生成器。"""
@@ -245,7 +272,7 @@ class ResumesV3Test(unittest.TestCase):
                                               "value_hash": "h2"}]}
         seen = {}
         self._patch("patch_document",
-                    lambda oid, did, u, ev: seen.update(
+                    lambda oid, did, u, ev, **kw: seen.update(
                         {"u": u, "ev": ev}) or {**DOC, **u})
         regen_kw = {}
         def fake_regen(doc, tpl, **kw):
