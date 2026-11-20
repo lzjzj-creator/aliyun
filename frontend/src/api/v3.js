@@ -99,6 +99,9 @@ export const patchResume = (id, body, version) =>
     method: "PATCH", body, headers: { "If-Match": String(version) },
   });
 
+export const duplicateResume = (id) =>
+  req3(`/api/v3/resumes/${id}/duplicate`, { method: "POST" });
+
 export const deleteResume = (id) =>
   req3(`/api/v3/resumes/${id}`, { method: "DELETE" });
 

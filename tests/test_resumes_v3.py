@@ -183,6 +183,20 @@ class ResumesV3Test(unittest.TestCase):
         self.assertEqual(self.client.delete(f"/api/v3/resumes/{DID}",
                                             headers=H).status_code, 404)
 
+    def test_duplicate_creates_fresh_draft(self):
+        """#69：复制 → 新 id、version=0、status=draft、title 带（副本）。"""
+        self._patch("get_document", lambda oid, did: dict(DOC))
+        self._patch("stale_sources", lambda d, f: [])
+        self._patch("facts_for_generation", lambda oid: [])
+        self._patch("duplicate_document", lambda oid, d: {
+            **d, "id": "dup-1", "title": d["title"] + "（副本）",
+            "version": 0, "status": "draft"})
+        r = self.client.post(f"/api/v3/resumes/{DID}/duplicate", headers=H)
+        self.assertEqual(r.status_code, 200)
+        doc = r.json()["document"]
+        self.assertEqual(doc["id"], "dup-1")
+        self.assertEqual(doc["status"], "draft")
+
     def test_versions_list_and_restore(self):
         """#68：列历史 + restore 用快照内容做一次带快照的 CAS 写。"""
         self._patch("get_document", lambda oid, did: dict(DOC))

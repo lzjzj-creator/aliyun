@@ -536,6 +536,20 @@ def create_document(owner_id: str, *, title: str, template_version: str,
     return rows[0]
 
 
+def duplicate_document(owner_id: str, doc: dict) -> dict:
+    """Copy a document as a fresh draft (new id, version 0); content is
+    deep-copied so later edits can't alias the original's JSON."""
+    title = f"{doc.get('title') or '简历'}（副本）"[:80]
+    return create_document(
+        owner_id, title=title,
+        template_version=doc["template_version"],
+        target_role=doc.get("target_role"),
+        jd_digest=doc.get("jd_digest"),
+        fields=doc.get("fields"), evidence_map=doc.get("evidence_map"),
+        gaps=doc.get("gaps"), fact_snapshot=doc.get("fact_snapshot"),
+        status="draft")
+
+
 def get_document(owner_id: str, doc_id: str) -> dict | None:
     return _one(_json(_request("GET", "/v3_resume_documents", params={
         "id": f"eq.{_uuid(doc_id)}", "owner_id": f"eq.{_check_owner_id(owner_id)}",
