@@ -1,0 +1,9 @@
+{
+  "protocol": 3,
+  "enabled": true,
+  "consent_at": "2026-11-20T09:12:33+00:00",
+  "fact_count": 6,
+  "by_kind": {"identity": 1, "goal": 1, "education": 1, "experience": 1, "skill": 1, "metric": 1},
+  "by_status": {"proposed": 2, "confirmed": 4},
+  "last_extracted_at": "2026-11-20T10:41:05+00:00"
+}

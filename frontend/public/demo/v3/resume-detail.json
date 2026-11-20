@@ -1,0 +1,53 @@
+{
+  "protocol": 3,
+  "id": "d0c0ffee-2222-4000-8000-000000000001",
+  "title": "后端开发-暑期实习",
+  "target_role": "后端开发工程师",
+  "template_version": "tpl-20261113",
+  "status": "draft",
+  "version": 3,
+  "fields": {
+    "basics": {"name": "张明", "phone": "", "email": "", "city": "杭州", "site": ""},
+    "education": [{"school": "浙江大学", "major": "计算机科学与技术", "degree": "本科",
+                   "period": "2023.09-2027.06", "gpa": "", "rank": ""}],
+    "projects": [{"name": "校园二手书小程序", "role": "独立后端", "period": "2025.10-2026.01",
+                  "bullets": ["独立设计并实现 FastAPI 后端，覆盖发布/搜索/下单全链路",
+                              "上线后下单转化提升 30%"], "links": ""}],
+    "skills": {"groups": [{"name": "后端", "items": ["Python", "FastAPI", "PostgreSQL"]}]},
+    "awards": {"items": []},
+    "summary": {"text": ""},
+    "_meta": {"manual_override": ["basics.city"]}
+  },
+  "evidence_map": {
+    "basics.name": [{"fact_id": "f1a2b3c4-1111-4000-8000-000000000001",
+                     "session_id": "87654321-4321-4321-8321-cba987654321",
+                     "msg_id": 3, "quote": "我叫张明", "fact_status": "confirmed"}],
+    "education.0.school": [{"fact_id": "f1a2b3c4-1111-4000-8000-000000000002",
+                            "session_id": "87654321-4321-4321-8321-cba987654321",
+                            "msg_id": 5, "quote": "我在浙江大学读计算机，大三",
+                            "fact_status": "confirmed"}],
+    "projects.0.name": [{"fact_id": "f1a2b3c4-1111-4000-8000-000000000003",
+                         "session_id": "87654321-4321-4321-8321-cba987654321",
+                         "msg_id": 9, "quote": "做过一个校园二手书小程序，自己写的后端",
+                         "fact_status": "confirmed"}],
+    "projects.0.bullets.1": [{"fact_id": "f1a2b3c4-1111-4000-8000-000000000004",
+                              "session_id": "87654321-4321-4321-8321-cba987654321",
+                              "msg_id": 11, "quote": "上线后下单转化提升了 30%",
+                              "fact_status": "proposed"}]
+  },
+  "gaps": [
+    {"field_path": "basics.phone", "label": "手机号", "reason": "对话中未提及，请手动填写"},
+    {"field_path": "basics.email", "label": "邮箱", "reason": "对话中未提及，请手动填写"},
+    {"field_path": "education.0.gpa", "label": "GPA", "reason": "对话中未提及，请手动填写"},
+    {"field_path": "awards", "label": "获奖经历", "reason": "暂无获奖经历素材，可留空"}
+  ],
+  "fact_snapshot": [
+    {"fact_id": "f1a2b3c4-1111-4000-8000-000000000001", "value_hash": "aa01"},
+    {"fact_id": "f1a2b3c4-1111-4000-8000-000000000002", "value_hash": "bb02"},
+    {"fact_id": "f1a2b3c4-1111-4000-8000-000000000003", "value_hash": "cc03"},
+    {"fact_id": "f1a2b3c4-1111-4000-8000-000000000004", "value_hash": "dd04"}
+  ],
+  "stale_sources": [],
+  "created_at": "2026-11-20T09:30:00+00:00",
+  "updated_at": "2026-11-20T10:02:00+00:00"
+}
