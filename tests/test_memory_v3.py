@@ -86,6 +86,14 @@ class Store:
         table = request.url.path.rsplit("/", 1)[-1]
         params = dict(request.url.params)
         data = json.loads(request.content) if request.content else {}
+        if table == "v3_find_owner":
+            rows = [r for r in self.rows.get("v3_owner", [])
+                    if r.get("deleted_at") is None
+                    and ((data.get("p_key_hash")
+                          and r.get("owner_key_hash") == data["p_key_hash"])
+                         or (data.get("p_recovery_hash")
+                             and r.get("recovery_hash") == data["p_recovery_hash"]))]
+            return httpx.Response(200, json=copy.deepcopy(rows[:2]))
         if table == "v3_spend_daily_quota":
             rows = self.rows.setdefault("v3_quota_daily", [])
             row = next((r for r in rows

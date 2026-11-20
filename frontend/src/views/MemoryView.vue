@@ -509,7 +509,7 @@ onMounted(boot);
   color: #374151; }
 .mem-consent-box li { margin: 6px 0; }
 .mem-session-row { display: flex; gap: 10px; align-items: center;
-  font-size: 13px; margin: 6px 0; }
+  flex-wrap: wrap; font-size: 13px; margin: 6px 0; }
 .mem-sec-title { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
 .bf-list { max-height: 150px; overflow-y: auto; margin: 4px 0 10px; }
 .bf-item { display: block; font-size: 13px; padding: 3px 0; }
