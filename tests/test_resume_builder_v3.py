@@ -55,8 +55,8 @@ class BuilderTest(unittest.TestCase):
         fields = out["fields"]
         self.assertEqual(fields["skills"]["groups"][0]["items"][0], "Python")
         ev = out["evidence_map"]
-        self.assertEqual(ev["skills.groups.0.items.0"][0]["status"], "confirmed")
-        self.assertEqual(ev["projects.0.name"][0]["status"], "proposed")
+        self.assertEqual(ev["skills.groups.0.items.0"][0]["fact_status"], "confirmed")
+        self.assertEqual(ev["projects.0.name"][0]["fact_status"], "proposed")
         self.assertEqual(ev["projects.0.name"][0]["quote"], "做过二手书小程序")
         self.assertEqual({s["fact_id"] for s in out["fact_snapshot"]},
                          {"f1", "f2"})
