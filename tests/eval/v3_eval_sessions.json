@@ -1,0 +1,63 @@
+{
+  "note": "脱敏评测集：20 条合成中文会话，标注 gold 事实（quote 必须为对应消息的逐字子串，value 逐字出现于 quote）。仅供离线 harness 驱动 stub 模型与验收层复核，不含任何真实用户数据。",
+  "sessions": [
+    {"id": "eeeeeeee-0000-4000-8000-000000000001", "messages": [{"id": 1, "content": "我叫张明，去年在字节跳动做后端实习，主要用 Go 写推荐系统"}], "gold": [
+      {"kind": "identity", "slot_path": "basics.name", "value": "张明", "msg_id": 1, "quote": "我叫张明"},
+      {"kind": "experience", "slot_path": "internships.0.company", "value": "字节跳动", "msg_id": 1, "quote": "在字节跳动做后端实习"},
+      {"kind": "skill", "slot_path": "skills.groups.0.items.0", "value": "Go", "msg_id": 1, "quote": "主要用 Go 写推荐系统"}]},
+    {"id": "eeeeeeee-0000-4000-8000-000000000002", "messages": [{"id": 1, "content": "我是杭州电子科技大学软件工程大三在读，GPA 3.8 专业前 10%"}], "gold": [
+      {"kind": "education", "slot_path": "education.0.school", "value": "杭州电子科技大学", "msg_id": 1, "quote": "杭州电子科技大学软件工程大三在读"},
+      {"kind": "metric", "slot_path": "education.0.gpa_or_rank", "value": "GPA 3.8 专业前 10%", "msg_id": 1, "quote": "GPA 3.8 专业前 10%"}]},
+    {"id": "eeeeeeee-0000-4000-8000-000000000003", "messages": [{"id": 1, "content": "英语六级 586 分，托业 850，日常可以读英文文档"}], "gold": [
+      {"kind": "metric", "slot_path": "awards.items.0.text", "value": "英语六级 586 分", "msg_id": 1, "quote": "英语六级 586 分"}]},
+    {"id": "eeeeeeee-0000-4000-8000-000000000004", "messages": [{"id": 1, "content": "我想找后端开发方向的暑期实习，base 杭州上海都可以"}], "gold": [
+      {"kind": "goal", "slot_path": "goal", "value": "后端开发方向的暑期实习", "msg_id": 1, "quote": "找后端开发方向的暑期实习"},
+      {"kind": "goal", "slot_path": "basics.target_role", "value": "后端开发", "msg_id": 1, "quote": "后端开发方向的暑期实习"},
+      {"kind": "constraint", "slot_path": "basics.city", "value": "杭州", "msg_id": 1, "quote": "base 杭州上海都可以"}]},
+    {"id": "eeeeeeee-0000-4000-8000-000000000005", "messages": [{"id": 1, "content": "在课程设计里我用 React 和 TypeScript 写了一个课表应用，部署在 Vercel 上"}], "gold": [
+      {"kind": "skill", "slot_path": "skills.groups.0.items.0", "value": "React", "msg_id": 1, "quote": "用 React 和 TypeScript 写了一个课表应用"},
+      {"kind": "experience", "slot_path": "projects.0.name", "value": "课表应用", "msg_id": 1, "quote": "一个课表应用"}]},
+    {"id": "eeeeeeee-0000-4000-8000-000000000006", "messages": [{"id": 1, "content": "我负责把接口的 P99 延迟从 800ms 优化到 120ms，主要靠加 Redis 缓存"}], "gold": [
+      {"kind": "metric", "slot_path": "internships.0.bullets.0", "value": "P99 延迟从 800ms 优化到 120ms", "msg_id": 1, "quote": "把接口的 P99 延迟从 800ms 优化到 120ms"},
+      {"kind": "skill", "slot_path": "skills.groups.0.items.1", "value": "Redis", "msg_id": 1, "quote": "主要靠加 Redis 缓存"}]},
+    {"id": "eeeeeeee-0000-4000-8000-000000000007", "messages": [{"id": 1, "content": "拿过全国大学生数学建模竞赛二等奖，还有校程序设计竞赛一等奖"}], "gold": [
+      {"kind": "award", "slot_path": "awards.items.0.text", "value": "全国大学生数学建模竞赛二等奖", "msg_id": 1, "quote": "全国大学生数学建模竞赛二等奖"},
+      {"kind": "award", "slot_path": "awards.items.1.text", "value": "校程序设计竞赛一等奖", "msg_id": 1, "quote": "校程序设计竞赛一等奖"}]},
+    {"id": "eeeeeeee-0000-4000-8000-000000000008", "messages": [{"id": 1, "content": "我在美团做测试开发实习的时候搭过一套接口自动化框架，用 pytest 和 Jenkins"}], "gold": [
+      {"kind": "experience", "slot_path": "internships.0.company", "value": "美团", "msg_id": 1, "quote": "在美团做测试开发实习"},
+      {"kind": "skill", "slot_path": "skills.groups.0.items.0", "value": "pytest", "msg_id": 1, "quote": "用 pytest 和 Jenkins"}]},
+    {"id": "eeeeeeee-0000-4000-8000-000000000009", "messages": [{"id": 1, "content": "邮箱是 liming@example.com，手机 13812345678，GitHub 是 github.com/liming"}], "gold": [
+      {"kind": "identity", "slot_path": "basics.email", "value": "liming@example.com", "msg_id": 1, "quote": "邮箱是 liming@example.com"},
+      {"kind": "identity", "slot_path": "basics.github", "value": "github.com/liming", "msg_id": 1, "quote": "GitHub 是 github.com/liming"}]},
+    {"id": "eeeeeeee-0000-4000-8000-000000000010", "messages": [{"id": 1, "content": "我不会前端，CSS 完全没碰过，别给我推前端岗位"}], "gold": [
+      {"kind": "constraint", "slot_path": "goal.notes", "value": "别给我推前端岗位", "msg_id": 1, "quote": "别给我推前端岗位"}]},
+    {"id": "eeeeeeee-0000-4000-8000-000000000011", "messages": [{"id": 1, "content": "硕士读的北京航空航天大学计算机，研究方向是分布式系统"}], "gold": [
+      {"kind": "education", "slot_path": "education.0.school", "value": "北京航空航天大学", "msg_id": 1, "quote": "北京航空航天大学计算机"},
+      {"kind": "education", "slot_path": "education.0.major", "value": "计算机", "msg_id": 1, "quote": "北京航空航天大学计算机"}]},
+    {"id": "eeeeeeee-0000-4000-8000-000000000012", "messages": [{"id": 1, "content": "我的毕业设计是基于 Kafka 的日志采集系统，峰值处理 2 万条每秒"}], "gold": [
+      {"kind": "experience", "slot_path": "projects.0.name", "value": "日志采集系统", "msg_id": 1, "quote": "日志采集系统"},
+      {"kind": "metric", "slot_path": "projects.0.bullets.0", "value": "峰值处理 2 万条每秒", "msg_id": 1, "quote": "峰值处理 2 万条每秒"}]},
+    {"id": "eeeeeeee-0000-4000-8000-000000000013", "messages": [{"id": 1, "content": "暑期只能实习两个月，七月初到八月底，转正不指望"}], "gold": [
+      {"kind": "constraint", "slot_path": "goal.notes", "value": "暑期只能实习两个月，七月初到八月底", "msg_id": 1, "quote": "暑期只能实习两个月，七月初到八月底"}]},
+    {"id": "eeeeeeee-0000-4000-8000-000000000014", "messages": [{"id": 1, "content": "我熟悉 MySQL 慢查询优化，之前把一条三表联查从 4 秒压到 200 毫秒"}], "gold": [
+      {"kind": "skill", "slot_path": "skills.groups.0.items.0", "value": "MySQL", "msg_id": 1, "quote": "熟悉 MySQL 慢查询优化"},
+      {"kind": "metric", "slot_path": "internships.0.bullets.0", "value": "三表联查从 4 秒压到 200 毫秒", "msg_id": 1, "quote": "把一条三表联查从 4 秒压到 200 毫秒"}]},
+    {"id": "eeeeeeee-0000-4000-8000-000000000015", "messages": [{"id": 1, "content": "在阿里云效团队实习了半年，做 CI/CD 流水线相关功能"}], "gold": [
+      {"kind": "experience", "slot_path": "internships.0.company", "value": "阿里云", "msg_id": 1, "quote": "在阿里云效团队实习了半年"},
+      {"kind": "experience", "slot_path": "internships.0.role", "value": "CI/CD 流水线相关功能", "msg_id": 1, "quote": "做 CI/CD 流水线相关功能"}]},
+    {"id": "eeeeeeee-0000-4000-8000-000000000016", "messages": [{"id": 1, "content": "拿过蓝桥杯省一，ICPC 区域赛铜牌，都是大二时候的事"}], "gold": [
+      {"kind": "award", "slot_path": "awards.items.0.text", "value": "蓝桥杯省一", "msg_id": 1, "quote": "蓝桥杯省一"},
+      {"kind": "award", "slot_path": "awards.items.1.text", "value": "ICPC 区域赛铜牌", "msg_id": 1, "quote": "ICPC 区域赛铜牌"}]},
+    {"id": "eeeeeeee-0000-4000-8000-000000000017", "messages": [{"id": 1, "content": "我是女生，叫李晓，手机号 13987654321，人在成都"}], "gold": [
+      {"kind": "identity", "slot_path": "basics.name", "value": "李晓", "msg_id": 1, "quote": "叫李晓"},
+      {"kind": "constraint", "slot_path": "basics.city", "value": "成都", "msg_id": 1, "quote": "人在成都"}]},
+    {"id": "eeeeeeee-0000-4000-8000-000000000018", "messages": [{"id": 1, "content": "我做过一个 Vue 3 写的记账小程序，用了 Pinia 和 ECharts"}], "gold": [
+      {"kind": "skill", "slot_path": "skills.groups.0.items.0", "value": "Vue 3", "msg_id": 1, "quote": "一个 Vue 3 写的记账小程序"},
+      {"kind": "experience", "slot_path": "projects.0.name", "value": "记账小程序", "msg_id": 1, "quote": "记账小程序"}]},
+    {"id": "eeeeeeee-0000-4000-8000-000000000019", "messages": [{"id": 1, "content": "我导师让我九月才能开始实习，之前要先把开题报告交了"}], "gold": [
+      {"kind": "constraint", "slot_path": "goal.notes", "value": "九月才能开始实习", "msg_id": 1, "quote": "九月才能开始实习"}]},
+    {"id": "eeeeeeee-0000-4000-8000-000000000020", "messages": [{"id": 1, "content": "我对数据库内核感兴趣，用 Rust 写过一个玩具 KV 存储引擎，支持 LSM tree"}], "gold": [
+      {"kind": "skill", "slot_path": "skills.groups.0.items.0", "value": "Rust", "msg_id": 1, "quote": "用 Rust 写过一个玩具 KV 存储引擎"},
+      {"kind": "experience", "slot_path": "projects.0.name", "value": "KV 存储引擎", "msg_id": 1, "quote": "一个玩具 KV 存储引擎"}]}
+  ]
+}
