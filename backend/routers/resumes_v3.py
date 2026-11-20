@@ -190,6 +190,30 @@ def create_batch(request: Request, req: BatchReq,
     return {"protocol": 3, "results": results}
 
 
+@router.post("/batch")
+def create_batch(request: Request, req: BatchReq,
+                 x_owner_token: str | None = Header(default=None)):
+    """P3 多岗位批量生成：逐项独立，单项失败不拖垮整批；带 JD 时附覆盖报告。"""
+    owner = _owner(request, x_owner_token)
+    results = []
+    for item in req.items:
+        try:
+            doc = resume_builder_v3.create_document(
+                owner["id"], title=item.title, target_role=item.target_role,
+                jd_text=item.jd_text, template_version=req.template_version)
+            entry = {"title": item.title, "document": _detail_public(
+                owner["id"], doc)}
+            if item.jd_text:
+                entry["jd_coverage"] = resume_builder_v3.jd_coverage(
+                    doc.get("fields") or {}, item.jd_text)
+            results.append(entry)
+        except resume_builder_v3.BuildFailed:
+            results.append({"title": item.title, "error": "build_failed"})
+        except (ValueError, memory_v3.MemoryStoreError):
+            results.append({"title": item.title, "error": "failed"})
+    return {"protocol": 3, "results": results}
+
+
 @router.get("/{doc_id}")
 def get_resume(request: Request, doc_id: str,
                x_owner_token: str | None = Header(default=None)):
