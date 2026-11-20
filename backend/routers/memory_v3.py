@@ -53,8 +53,22 @@ def _extract_limit(owner_id: str):
     hits = [t for t in _extract_hits.get(owner_id, []) if now - t < 3600]
     if len(hits) >= EXTRACT_PER_HOUR:
         raise security.throttled(int(3600 - (now - hits[0])))
+    if _daily_spend(owner_id, "extract", EXTRACT_PER_DAY) < 0:
+        raise security.throttled(86400)
     hits.append(now)
     _extract_hits[owner_id] = hits[-EXTRACT_PER_HOUR:]
+
+
+EXTRACT_PER_DAY = 30
+
+
+def _daily_spend(owner_id: str, kind: str, cap: int) -> int:
+    """Persistent per-owner daily quota; storage errors degrade to allow
+    (hourly burst limiter still guards), never to a hard 5xx on users."""
+    try:
+        return memory_v3.spend_daily_quota(owner_id, kind, cap)
+    except memory_v3.MemoryStoreError:
+        return 0
 
 
 class EnableReq(BaseModel):
@@ -319,6 +333,9 @@ def backfill_memory(request: Request, req: BackfillReq,
             raise HTTPException(503, "存储暂时不可用") from None
     results = []
     for sid in session_ids:
+        if _daily_spend(owner["id"], "extract", EXTRACT_PER_DAY) < 0:
+            results.append({"session_id": sid, "error": "daily_quota"})
+            continue
         try:
             r = fact_extractor.extract_incremental(owner["id"], sid)
             results.append({"session_id": sid, **r})

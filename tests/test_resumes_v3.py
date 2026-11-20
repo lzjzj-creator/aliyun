@@ -39,7 +39,10 @@ class ResumesV3Test(unittest.TestCase):
     def setUp(self):
         for p in [patch.object(rv3.security, "enforce_ip", lambda r: None),
                   patch.object(rv3.security_v3, "require_owner",
-                               lambda t: OWNER)]:
+                               lambda t: OWNER),
+                  # 默认额度充足，避免 RPC 触网；限额用例各自覆盖
+                  patch.object(rv3.memory_v3, "spend_daily_quota",
+                               lambda oid, kind, cap: 1)]:
             p.start()
             self.addCleanup(p.stop)
 
@@ -179,6 +182,28 @@ class ResumesV3Test(unittest.TestCase):
         self._patch("soft_delete_document", lambda oid, did: False)
         self.assertEqual(self.client.delete(f"/api/v3/resumes/{DID}",
                                             headers=H).status_code, 404)
+
+    def test_create_daily_quota_429(self):
+        """#67：日生成额度尽 → 429，不调生成器。"""
+        self._patch("spend_daily_quota", lambda oid, kind, cap: -1)
+        r = self.client.post("/api/v3/resumes", headers=H,
+                             json={"title": "x", "template_version": "tpl-x"})
+        self.assertEqual(r.status_code, 429)
+
+    def test_batch_daily_quota_marks_item(self):
+        """#67：批量中额度尽的项标 daily_quota，不拖垮整批。"""
+        spends = iter([1, -1])
+        self._patch("spend_daily_quota",
+                    lambda oid, kind, cap: next(spends, -1))
+        self._patch("facts_for_generation", lambda oid: [])
+        self._patch("stale_sources", lambda d, f: [])
+        with patch.object(rv3.resume_builder_v3, "create_document",
+                          lambda oid, **kw: {**DOC, "title": kw["title"]}):
+            r = self.client.post("/api/v3/resumes/batch", headers=H, json={
+                "items": [{"title": "甲"}, {"title": "乙"}]})
+        res = r.json()["results"]
+        self.assertEqual(res[0]["document"]["title"], "甲")
+        self.assertEqual(res[1]["error"], "daily_quota")
 
     def test_batch_isolated_and_coverage(self):
         docs = []

@@ -86,6 +86,20 @@ class Store:
         table = request.url.path.rsplit("/", 1)[-1]
         params = dict(request.url.params)
         data = json.loads(request.content) if request.content else {}
+        if table == "v3_spend_daily_quota":
+            rows = self.rows.setdefault("v3_quota_daily", [])
+            row = next((r for r in rows
+                        if r["owner_id"] == data["p_owner"]
+                        and r["day"] == "today"), None)
+            if row is None:
+                row = {"owner_id": data["p_owner"], "day": "today",
+                       "extracts": 0, "resume_gens": 0}
+                rows.append(row)
+            col = "extracts" if data["p_kind"] == "extract" else "resume_gens"
+            if row[col] >= data["p_cap"]:
+                return httpx.Response(200, json=-1)
+            row[col] += 1
+            return httpx.Response(200, json=row[col])
         rows = self.filtered(list(self.rows.get(table, [])), params)
         if request.method == "GET":
             rows = self.sorted(rows, params.get("order"))
@@ -337,6 +351,16 @@ class FactTest(V3StoreTest):
         self.assertEqual(len(self.store.rows["v3_facts"]), 1)
         self.assertIsNone(
             self.store.rows["v3_facts"][0].get("deleted_at"))
+
+    def test_daily_quota_spend_and_exhaust(self):
+        self.assertEqual(memory_v3.spend_daily_quota(OID, "extract", 2), 1)
+        self.assertEqual(memory_v3.spend_daily_quota(OID, "extract", 2), 2)
+        self.assertEqual(memory_v3.spend_daily_quota(OID, "extract", 2), -1)
+        # 另一类配额独立计数
+        self.assertEqual(memory_v3.spend_daily_quota(OID, "resume_gen", 1), 1)
+        self.assertEqual(memory_v3.spend_daily_quota(OID, "resume_gen", 1), -1)
+        with self.assertRaises(ValueError):
+            memory_v3.spend_daily_quota(OID, "bogus", 1)
 
     def test_fact_counts_by_kind_and_status(self):
         self.fact(kind="skill", status="confirmed")

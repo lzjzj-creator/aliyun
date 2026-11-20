@@ -26,6 +26,20 @@ router = APIRouter(prefix="/api/v3/resumes")
 MAX_JD_TEXT = 4000
 
 
+RESUME_GEN_PER_DAY = 20
+
+
+def _gen_limit(owner_id: str):
+    """Persistent per-owner daily cap on resume generations (§10);
+    storage wobble degrades to allow, never to a user-facing 5xx."""
+    try:
+        if memory_v3.spend_daily_quota(owner_id, "resume_gen",
+                                       RESUME_GEN_PER_DAY) < 0:
+            raise security.throttled(86400)
+    except memory_v3.MemoryStoreError:
+        pass
+
+
 def _owner(request: Request, x_owner_token) -> dict:
     security.enforce_ip(request)
     return security_v3.require_owner(x_owner_token)
@@ -153,6 +167,7 @@ def list_resumes(request: Request,
 def create_resume(request: Request, req: CreateDocReq,
                   x_owner_token: str | None = Header(default=None)):
     owner = _owner(request, x_owner_token)
+    _gen_limit(owner["id"])
     try:
         doc = resume_builder_v3.create_document(
             owner["id"], title=req.title, target_role=req.target_role,
@@ -173,6 +188,13 @@ def create_batch(request: Request, req: BatchReq,
     owner = _owner(request, x_owner_token)
     results = []
     for item in req.items:
+        try:
+            if memory_v3.spend_daily_quota(
+                    owner["id"], "resume_gen", RESUME_GEN_PER_DAY) < 0:
+                results.append({"title": item.title, "error": "daily_quota"})
+                continue
+        except memory_v3.MemoryStoreError:
+            pass  # 降级放行，不阻断整批
         try:
             doc = resume_builder_v3.create_document(
                 owner["id"], title=item.title, target_role=item.target_role,
@@ -238,6 +260,7 @@ def delete_resume(request: Request, doc_id: str,
 def regenerate_resume(request: Request, doc_id: str, req: RegenReq,
                       x_owner_token: str | None = Header(default=None)):
     owner, doc = _doc(request, x_owner_token, doc_id)
+    _gen_limit(owner["id"])
     tpl = load()
     try:
         built = resume_builder_v3.regenerate_fields(
