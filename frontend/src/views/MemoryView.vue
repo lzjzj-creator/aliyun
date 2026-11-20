@@ -28,6 +28,12 @@ const STATUS_LABELS = {
   rejected: "已拒绝", superseded: "已取代",
 };
 
+// D6：v2 会话清理后 source_session_id 置空，证据 quote 保留但标「来源已过期」
+function sourceExpired(fact) {
+  const evs = fact.evidence || [];
+  return evs.length > 0 && evs.every((e) => e.session_id == null);
+}
+
 async function boot() {
   booted.value = false;
   error.value = "";
@@ -216,6 +222,7 @@ onMounted(boot);
               {{ STATUS_LABELS[f.status] || f.status }}
             </span>
             <span class="mf-slot">{{ f.slot_path }}</span>
+            <span v-if="sourceExpired(f)" class="mf-expired">来源会话已删除</span>
           </div>
           <div class="mf-value">{{ typeof f.value === 'string' ? f.value : JSON.stringify(f.value) }}</div>
           <div v-for="(e, i) in f.evidence" :key="i" class="mf-quote">
@@ -278,6 +285,7 @@ onMounted(boot);
 .mf-status[data-s="proposed"] { color: #b45309; }
 .mf-status[data-s="rejected"], .mf-status[data-s="superseded"] { color: #9ca3af; }
 .mf-slot { color: #9ca3af; font-family: monospace; }
+.mf-expired { color: #b45309; font-size: 11px; }
 .mf-value { font-size: 14px; margin: 6px 0; }
 .mf-quote { font-size: 12px; color: #6b7280; margin: 2px 0; }
 .mf-ops { display: flex; gap: 8px; margin-top: 8px; }
