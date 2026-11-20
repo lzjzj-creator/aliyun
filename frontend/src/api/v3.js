@@ -82,6 +82,10 @@ export const deleteFact = (id) =>
 export const extractFacts = (sessionId) =>
   req3("/api/v3/facts/extract", { method: "POST", body: { session_id: sessionId } });
 
+export const backfill = (sessionIds) =>
+  req3("/api/v3/memory/backfill",
+       { method: "POST", body: { session_ids: sessionIds } });
+
 export const forgetSession = (sessionId) =>
   req3(`/api/v3/memory/sessions/${sessionId}`, { method: "DELETE" });
 

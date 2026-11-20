@@ -4,8 +4,8 @@ import { computed, onMounted, ref } from "vue";
 import { listSessions } from "../api/sessions";
 import {
   deleteAllMemory, deleteFact, disableMemory, enableMemory, exportMemory,
-  extractFacts, forgetSession, getMemory, getOwnerToken, listFacts, patchFact,
-  setOwnerToken,
+  backfill, extractFacts, forgetSession, getMemory, getOwnerToken, listFacts,
+  patchFact, setOwnerToken,
 } from "../api/v3";
 
 const enabled = ref(false);
@@ -41,6 +41,44 @@ function sourceExpired(fact) {
   return evs.length === 0 || evs.every((e) => e.session_id == null);
 }
 
+// ---- #70 历史回填：会话多选 + 分块顺序调用 + 进度 ----
+const allSessions = ref([]);       // v2 会话全量（供勾选）
+const picked = ref(new Set());
+const backfilling = ref(false);
+const backfillDone = ref(0);
+const backfillTotal = ref(0);
+const backfillResults = ref([]);   // 每会话 {session_id, added/.../error}
+
+function togglePick(sid) {
+  const s = new Set(picked.value);
+  if (s.has(sid)) s.delete(sid); else s.add(sid);
+  picked.value = s;
+}
+
+async function onBackfill() {
+  const ids = [...picked.value];
+  if (!ids.length) return;
+  backfilling.value = true;
+  backfillDone.value = 0;
+  backfillTotal.value = ids.length;
+  backfillResults.value = [];
+  try {
+    // 分块≤5：留在一小时限额内，同时让进度条真实前进
+    for (let i = 0; i < ids.length; i += 5) {
+      const res = await backfill(ids.slice(i, i + 5));
+      backfillResults.value.push(...(res.results || []));
+      backfillDone.value += (res.results || []).length;
+    }
+  } catch {
+    error.value = "回填中断，已完成部分已生效";
+  } finally {
+    backfilling.value = false;
+    picked.value = new Set();
+    await reload().catch(() => {});
+    status.value = await getMemory().catch(() => status.value);
+  }
+}
+
 // 事实证据里出现过的会话列表（§9 来源级删除入口）
 const sessions = computed(() => {
   const map = new Map();
@@ -70,6 +108,7 @@ async function boot() {
       const map = {};
       for (const s of list || []) if (s && s.id) map[s.id] = s.title;
       sessionTitles.value = map;
+      allSessions.value = list || [];
     }).catch(() => {});
     await reload();
   } catch (e) {
@@ -316,6 +355,35 @@ onMounted(boot);
         <button class="mem-btn" @click="confirmingWipe = false">取消</button>
       </div>
 
+      <!-- 历史回填：勾选会话 → 逐块抽取 → 进度 + 结果 -->
+      <div v-if="allSessions.length" class="mem-card">
+        <div class="mem-sec-title">回填历史会话</div>
+        <div class="bf-list">
+          <label v-for="s in allSessions" :key="s.id" class="bf-item">
+            <input type="checkbox" :checked="picked.has(s.id)"
+                   :disabled="backfilling" @change="togglePick(s.id)" />
+            {{ s.title || s.id.slice(0, 8) }}
+          </label>
+        </div>
+        <div class="mem-ops">
+          <button class="mem-btn" :disabled="backfilling || !picked.size"
+                  @click="onBackfill">
+            {{ backfilling ? `回填中 ${backfillDone}/${backfillTotal}` : `回填所选（${picked.size}）` }}
+          </button>
+        </div>
+        <div v-if="backfilling || backfillResults.length" class="bf-progress">
+          <div class="bf-bar"
+               :style="{ width: backfillTotal ? (backfillDone / backfillTotal * 100) + '%' : '0%' }" />
+        </div>
+        <ul v-if="backfillResults.length" class="bf-results">
+          <li v-for="r in backfillResults" :key="r.session_id">
+            {{ sessionTitle(r.session_id) }}：
+            <template v-if="r.error">{{ {daily_quota: "今日额度已尽", not_found: "会话不存在", failed: "抽取失败"}[r.error] || r.error }}</template>
+            <template v-else>+{{ r.added }} 新 / {{ r.merged }} 合并 / {{ r.skipped }} 跳过</template>
+          </li>
+        </ul>
+      </div>
+
       <!-- 来源级删除：忘掉某个会话 -->
       <div v-if="sessions.length" class="mem-card mem-sessions">
         <div class="mem-sec-title">来源会话</div>
@@ -443,6 +511,13 @@ onMounted(boot);
 .mem-session-row { display: flex; gap: 10px; align-items: center;
   font-size: 13px; margin: 6px 0; }
 .mem-sec-title { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+.bf-list { max-height: 150px; overflow-y: auto; margin: 4px 0 10px; }
+.bf-item { display: block; font-size: 13px; padding: 3px 0; }
+.bf-progress { height: 6px; background: #f3f4f6; border-radius: 3px;
+  margin-top: 10px; overflow: hidden; }
+.bf-bar { height: 100%; background: #2563eb; transition: width .3s; }
+.bf-results { margin: 8px 0 0; padding-left: 18px; font-size: 12px;
+  color: #6b7280; }
 .mf-ops { display: flex; gap: 8px; margin-top: 8px; }
 .mem-wipe { border-color: #fca5a5; color: #b91c1c; font-size: 13px; }
 .mem-stale { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px;
