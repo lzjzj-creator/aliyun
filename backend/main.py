@@ -40,13 +40,24 @@ app.include_router(resume_v2_router)
 if os.getenv("V2_MEMORY_ENABLED", "0") == "1":
     app.include_router(sessions_router)
     app.include_router(coach_router)
+try:
+    from routers.memory_v3 import router as memory_v3_router
+    from routers.resumes_v3 import router as resumes_v3_router
+except ImportError:
+    from .routers.memory_v3 import router as memory_v3_router
+    from .routers.resumes_v3 import router as resumes_v3_router
+# v3 long-term memory: isolated contract, off by default (§15 D2).
+if os.getenv("V3_MEMORY_ENABLED", "0") == "1":
+    app.include_router(memory_v3_router)
+    app.include_router(resumes_v3_router)
 
 origins = [o.strip() for o in os.getenv("ALLOWED_ORIGINS",
            "http://localhost:5173,http://127.0.0.1:5173").split(",") if o.strip()]
 app.add_middleware(CORSMiddleware, allow_origins=origins,
-                   allow_methods=["POST", "GET", "DELETE", "OPTIONS"],
+                   allow_methods=["POST", "GET", "PATCH", "DELETE", "OPTIONS"],
                    allow_headers=["Content-Type", "X-File-Name", "Authorization",
-                                  "X-Anon-Id", "X-Session-Token"],
+                                  "X-Anon-Id", "X-Session-Token", "X-Owner-Token",
+                                  "If-Match"],
                    expose_headers=["Retry-After"])
 
 MIN_SCORE = float(os.getenv("MIN_RETRIEVE_SCORE", "0.25"))

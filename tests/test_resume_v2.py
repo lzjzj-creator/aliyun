@@ -131,7 +131,14 @@ class EndpointShapeTest(unittest.TestCase):
         # main.py 含 v1 平铺 import，不拉整个 app；只挂本域路由即可测形状
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
+        from unittest.mock import patch
+        import backend.session_security as _sec
         from backend.routers.resume import router
+        # .env 的 V2_SHARED_QUOTA=1 会让 SharedLimiter 打 live 存储；
+        # 形状测试只需要进程内限流器，替换避免外部依赖。
+        cls._limiter_patch = patch.object(_sec, "limiter", _sec.RateLimiter())
+        cls._limiter_patch.start()
+        cls.addClassCleanup(cls._limiter_patch.stop)
         app = FastAPI()
         app.include_router(router)
         cls.c = TestClient(app)

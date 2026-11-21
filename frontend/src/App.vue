@@ -4,6 +4,8 @@ import AdminView from "./views/AdminView.vue";
 import ChatView from "./views/ChatView.vue";
 import ContractDemoView from "./views/ContractDemoView.vue";
 import InterviewView from "./views/InterviewView.vue";
+import MemoryView from "./views/MemoryView.vue";
+import ResumeLibraryView from "./views/ResumeLibraryView.vue";
 import ResumeView from "./views/ResumeView.vue";
 import ResumeWizardView from "./views/ResumeWizardView.vue";
 import SessionList from "./components/SessionList.vue";
@@ -13,13 +15,17 @@ import { setCurrentSessionId } from "./storage";
 const view = ref("chat");
 const sidebar = ref(false);          // 移动端会话抽屉
 const chatSid = ref("");   // 作为 InterviewView 的 key：切会话即重挂载走 boot()
+const resumeDocId = ref(""); // #/resume/library/:id 的文档 id
 const sessionListRef = ref(null);
 
 function syncRoute() {
   const h = location.hash || "#/chat";
   if (/^#\/?admin\/?$/.test(h)) { view.value = "admin"; return; }
   if (/^#\/?demo/.test(h)) { view.value = "contractDemo"; return; }
+  if (/^#\/?memory\/?$/.test(h)) { view.value = "memory"; return; }
   if (/^#\/?resume-v1/.test(h)) { view.value = "resumeV1"; return; }
+  const lib = h.match(/^#\/?resume\/library\/?([0-9a-zA-Z-]+)?/);
+  if (lib) { view.value = "resumeLibrary"; resumeDocId.value = lib[1] || ""; return; }
   if (/^#\/?resume/.test(h)) { view.value = "resume"; return; }
   if (/^#\/?chat-v1/.test(h)) { view.value = "chatV1"; return; }
   const m = h.match(/^#\/?chat\/?([0-9a-zA-Z-]+)?/);
@@ -71,6 +77,10 @@ onUnmounted(() => window.removeEventListener("hashchange", syncRoute));
               @click="nav('#/resume')">
         <span class="rail-ico">▤</span><span>简历</span>
       </button>
+      <button class="rail-item" :class="{ on: view === 'memory' }"
+              @click="nav('#/memory')">
+        <span class="rail-ico">◉</span><span>记忆</span>
+      </button>
     </nav>
 
     <div class="stage">
@@ -80,7 +90,7 @@ onUnmounted(() => window.removeEventListener("hashchange", syncRoute));
           <span class="tb-sub">先聊出你的经历，再长出一份简历</span>
         </div>
         <button v-if="view === 'chat'" class="tb-sessions" @click="sidebar = true">☰ 会话</button>
-        <span class="tb-privacy">对话留存可删 · 简历只在本机</span>
+        <span class="tb-privacy">对话留存可删 · 记忆默认关闭可导出可清空</span>
       </header>
 
       <main class="main-area">
@@ -97,7 +107,12 @@ onUnmounted(() => window.removeEventListener("hashchange", syncRoute));
           <ContractDemoView v-else-if="view === 'contractDemo'" />
           <ResumeView v-else />
         </div>
-        <ResumeWizardView v-else-if="view === 'resume'" />
+        <ResumeWizardView v-else-if="view === 'resume'"
+                          @goto-library="nav('#/resume/library')" />
+        <ResumeLibraryView v-else-if="view === 'resumeLibrary'"
+                           :doc-id="resumeDocId" :key="resumeDocId"
+                           @goto-memory="nav('#/memory')" @nav="nav" />
+        <MemoryView v-else-if="view === 'memory'" />
       </main>
     </div>
 

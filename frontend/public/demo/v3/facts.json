@@ -1,0 +1,102 @@
+{
+  "protocol": 3,
+  "facts": [
+    {
+      "id": "f1a2b3c4-1111-4000-8000-000000000001",
+      "kind": "identity",
+      "slot_path": "basics.name",
+      "value": "张明",
+      "status": "confirmed",
+      "confidence": 0.98,
+      "source_session_id": "87654321-4321-4321-8321-cba987654321",
+      "source_message_id": 3,
+      "evidence": [
+        {"session_id": "87654321-4321-4321-8321-cba987654321", "msg_id": 3,
+         "quote": "我叫张明"}
+      ],
+      "created_at": "2026-11-18T08:00:00+00:00",
+      "updated_at": "2026-11-18T08:02:11+00:00"
+    },
+    {
+      "id": "f1a2b3c4-1111-4000-8000-000000000002",
+      "kind": "education",
+      "slot_path": "education.0.school",
+      "value": "浙江大学",
+      "status": "confirmed",
+      "confidence": 0.95,
+      "source_session_id": "87654321-4321-4321-8321-cba987654321",
+      "source_message_id": 5,
+      "evidence": [
+        {"session_id": "87654321-4321-4321-8321-cba987654321", "msg_id": 5,
+         "quote": "我在浙江大学读计算机，大三"}
+      ],
+      "created_at": "2026-11-18T08:01:20+00:00",
+      "updated_at": "2026-11-18T08:02:11+00:00"
+    },
+    {
+      "id": "f1a2b3c4-1111-4000-8000-000000000003",
+      "kind": "experience",
+      "slot_path": "projects.0.name",
+      "value": "校园二手书小程序",
+      "status": "confirmed",
+      "confidence": 0.9,
+      "source_session_id": "87654321-4321-4321-8321-cba987654321",
+      "source_message_id": 9,
+      "evidence": [
+        {"session_id": "87654321-4321-4321-8321-cba987654321", "msg_id": 9,
+         "quote": "做过一个校园二手书小程序，自己写的后端"}
+      ],
+      "created_at": "2026-11-18T08:05:40+00:00",
+      "updated_at": "2026-11-18T08:06:02+00:00"
+    },
+    {
+      "id": "f1a2b3c4-1111-4000-8000-000000000004",
+      "kind": "metric",
+      "slot_path": "projects.0.bullets.0",
+      "value": "下单转化提升 30%",
+      "status": "proposed",
+      "confidence": 0.82,
+      "source_session_id": "87654321-4321-4321-8321-cba987654321",
+      "source_message_id": 11,
+      "evidence": [
+        {"session_id": "87654321-4321-4321-8321-cba987654321", "msg_id": 11,
+         "quote": "上线后下单转化提升了 30%"}
+      ],
+      "created_at": "2026-11-18T08:07:15+00:00",
+      "updated_at": "2026-11-18T08:07:15+00:00"
+    },
+    {
+      "id": "f1a2b3c4-1111-4000-8000-000000000005",
+      "kind": "skill",
+      "slot_path": "skills.groups.0.items.0",
+      "value": "Python",
+      "status": "proposed",
+      "confidence": 0.88,
+      "source_session_id": "87654321-4321-4321-8321-cba987654321",
+      "source_message_id": 13,
+      "evidence": [
+        {"session_id": "87654321-4321-4321-8321-cba987654321", "msg_id": 13,
+         "quote": "后端用的 Python FastAPI"}
+      ],
+      "created_at": "2026-11-18T08:09:30+00:00",
+      "updated_at": "2026-11-18T08:09:30+00:00"
+    },
+    {
+      "id": "f1a2b3c4-1111-4000-8000-000000000006",
+      "kind": "goal",
+      "slot_path": "goal",
+      "value": "找暑期后端实习",
+      "status": "confirmed",
+      "confidence": 0.97,
+      "source_session_id": "87654321-4321-4321-8321-cba987654321",
+      "source_message_id": 15,
+      "evidence": [
+        {"session_id": "87654321-4321-4321-8321-cba987654321", "msg_id": 15,
+         "quote": "我想找一份暑期后端开发的实习"}
+      ],
+      "created_at": "2026-11-18T08:11:00+00:00",
+      "updated_at": "2026-11-18T08:11:00+00:00"
+    }
+  ],
+  "next_cursor": null
+}

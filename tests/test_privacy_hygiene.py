@@ -9,6 +9,7 @@ FC 的访问日志由 uvicorn 访问日志承担，只记录请求行（方法 +
 import json
 import os
 import re
+import sys
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -17,6 +18,7 @@ import httpx
 
 ROOT = Path(__file__).resolve().parent.parent
 BACKEND = ROOT / "backend"
+sys.path.insert(0, str(BACKEND))
 FORBIDDEN_LOG_CALLS = ("logging", "logger.", "traceback", "pprint", "print(", "sys.stderr")
 CANARY = "sk-CANARY-upstream-echo-of-request-body"
 
@@ -83,6 +85,59 @@ class QueryStringHygieneTest(unittest.TestCase):
                                  "/rpc/v2_charge_tokens", "/rpc/v2_token_usage_today",
                                  "/rpc/v2_prune_quota"})
         self.assertNotIn('params={"p_', text)   # 配额参数走 JSON 体，不进查询串
+
+
+class V3HygieneTest(unittest.TestCase):
+    """#75 v3 专项：验证物/正文/证据不进 URL，令牌只走 Header，错误不回显。"""
+
+    # URL 里只允许出现标识/过滤键，绝不允许验证物与内容载荷
+    BANNED_URL_KEYS = {"owner_key_hash", "recovery_hash", "value", "quote",
+                       "evidence", "content", "token", "owner_token",
+                       "recovery_code", "fields", "snapshot"}
+
+    def test_v3_store_urls_carry_only_filter_keys(self):
+        text = (BACKEND / "memory_v3.py").read_text(encoding="utf-8")
+        keys = set(re.findall(r'"([a-z_]+)":\s*f?"', text))
+        leaked = keys & self.BANNED_URL_KEYS
+        self.assertEqual(leaked, set(), f"敏感字段进入 URL：{leaked}")
+
+    def test_owner_lookup_hashes_go_through_rpc_body(self):
+        """哈希查找必须走 /rpc/ JSON body——URL 会进访问日志。"""
+        text = (BACKEND / "memory_v3.py").read_text(encoding="utf-8")
+        self.assertNotRegex(text, r'params=\{[^}]*"owner_key_hash"')
+        self.assertNotRegex(text, r'params=\{[^}]*"recovery_hash"')
+        self.assertIn("/rpc/v3_find_owner", text)
+
+    def test_owner_token_only_via_header(self):
+        for name in ("memory_v3.py", "resumes_v3.py"):
+            text = (BACKEND / "routers" / name).read_text(encoding="utf-8")
+            self.assertNotRegex(text, r"Query\(.*token", name)
+            self.assertNotRegex(text, r"params=.*token", name)
+            self.assertIn("x_owner_token", text)
+
+    def test_v3_storage_failure_does_not_echo_upstream(self):
+        """v3 存储 500 → 统一 503，上游原文与业务数据都不外泄。"""
+        import importlib
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+        rv3 = importlib.import_module("backend.routers.memory_v3")
+        failing = httpx.Client(
+            base_url="https://supabase.invalid/rest/v1",
+            transport=httpx.MockTransport(lambda request: httpx.Response(
+                500, json={"message": f"upstream said {CANARY}"})))
+        app = FastAPI()
+        app.include_router(rv3.router)
+        try:
+            with patch.object(memory, "_client", failing), \
+                    patch.object(rv3.security, "enforce_ip", lambda r: None), \
+                    patch.object(rv3.security_v3, "require_owner",
+                                 lambda t, **kw: {"id": ANON, "memory_enabled": True}):
+                r = TestClient(app).get("/api/v3/memory",
+                                        headers={"X-Owner-Token": "t" * 40})
+        finally:
+            failing.close()
+        self.assertEqual(r.status_code, 503)
+        self.assertNotIn(CANARY, r.text)
 
 
 class ResponseSanitizationTest(unittest.TestCase):
