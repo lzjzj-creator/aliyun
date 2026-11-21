@@ -227,7 +227,7 @@ def run_live():
             per_session.append({"session": s["id"][-4:],
                                 "gold": len(gold), "stored": len(stored)})
         # final pass: strict+fuzzy over the whole owner state
-        stored = memory_v3.list_facts(oid, limit=500)["facts"]
+        stored = memory_v3.list_facts(oid, limit=200)["facts"]
         all_gold = [g for s in data["sessions"] for g in (s.get("gold") or [])]
         strict_keys = {(g["kind"], g["slot_path"], _norm_val(g["value"]))
                        for g in all_gold}

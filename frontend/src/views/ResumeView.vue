@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onUnmounted } from "vue";
 import { analyzeResume, rewriteBullets } from "../api";
+import { downloadElementAsPdf } from "../utils/exportPdf";
 
 const MAX = 12000;
 const step = ref(1); // 1输入 2核对 3结果
@@ -124,8 +125,13 @@ const KNOWN_MODEL_KEYS = new Set([
 const extraModelFields = computed(() =>
   Object.entries(report.value?.model_analysis || {}).filter(([k]) => !KNOWN_MODEL_KEYS.has(k)));
 
-function exportPdf() {
-  window.print();
+async function exportPdf() {
+  try {
+    const el = document.querySelector(".pane");
+    await downloadElementAsPdf(el, "简历诊断报告.pdf");
+  } catch (e) {
+    errMsg.value = e.message || "PDF 导出失败，请重试";
+  }
 }
 
 async function runRewrite() {

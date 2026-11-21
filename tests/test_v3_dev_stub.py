@@ -56,7 +56,7 @@ class V3DevStubTest(unittest.TestCase):
         self.assertIn("facts_detached", out)
 
         _, doc = self.call("/api/v3/resumes", token=token)
-        did = doc["resumes"][0]["id"]
+        did = doc["documents"][0]["id"]
         _, detail = self.call(f"/api/v3/resumes/{did}", token=token)
         _, vs = self.call(f"/api/v3/resumes/{did}/versions", token=token)
         self.assertIn("versions", vs)

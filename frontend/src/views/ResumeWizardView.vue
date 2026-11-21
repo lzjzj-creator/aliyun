@@ -4,6 +4,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import ResumeFieldsForm from "../components/ResumeFieldsForm.vue";
 import ResumePreview from "../components/ResumePreview.vue";
+import { downloadElementAsPdf } from "../utils/exportPdf";
 import { getTemplate, autofill, optimizePlan, optimizeSection } from "../api/resume";
 import { getSession, listSessions } from "../api/sessions";
 import {
@@ -227,12 +228,17 @@ function adoptAll() {
   errMsg.value = "";
 }
 
-function exportPrint() {
+async function exportPrint() {
   if (placeholders.value.length && optFields.value && step.value === 3) {
     const list = placeholders.value.map((p) => `· ${p.field_path}`).join("\n");
     if (!window.confirm(`还有 ${placeholders.value.length} 处【待补充】占位：\n${list}\n\n仍要导出吗？`)) return;
   }
-  window.print();
+  try {
+    const el = document.querySelector(".wizard .print-area");
+    await downloadElementAsPdf(el, `${targetRole.value || "简历"}.pdf`);
+  } catch (e) {
+    errMsg.value = e.message || "PDF 导出失败，请重试";
+  }
 }
 </script>
 

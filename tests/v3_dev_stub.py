@@ -86,7 +86,7 @@ class H(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Headers",
                          "Content-Type, X-Owner-Token, X-Anon-Id, "
-                         "X-Session-Token, Authorization")
+                         "X-Session-Token, Authorization, If-Match")
         self.send_header("Access-Control-Allow-Methods",
                          "GET, POST, PATCH, DELETE, OPTIONS")
         self.end_headers()
@@ -125,7 +125,7 @@ class H(BaseHTTPRequestHandler):
 
         # -- v2 session list (titles/backfill picker) ---------------------
         if path == "/api/v2/sessions" and method == "GET":
-            return self._send(200, {"protocol": 2, "sessions": SESSIONS})
+            return self._send(200, SESSIONS)
 
         if not self._auth():
             return self._send(404, {"detail": "not found"})
@@ -206,9 +206,17 @@ class H(BaseHTTPRequestHandler):
                 if "value" in body:
                     fact["value"] = body["value"]
                     fact["status"] = "proposed"
+                    for d in S.docs.values():
+                        for fids in (d.get("evidence_map") or {}).values():
+                            if any((e.get("fact_id") if isinstance(e, dict) else e) == fid for e in fids):
+                                d["status"] = "stale"
                 return self._send(200, {"protocol": 3, "fact": fact})
             if method == "DELETE":
                 fact["deleted_at"] = time.time()
+                for d in S.docs.values():
+                    for fids in (d.get("evidence_map") or {}).values():
+                        if any((e.get("fact_id") if isinstance(e, dict) else e) == fid for e in fids):
+                            d["status"] = "stale"
                 return self._send(200, {"protocol": 3, "deleted": fid})
 
         # -- resumes ------------------------------------------------------
@@ -220,7 +228,7 @@ class H(BaseHTTPRequestHandler):
                           "completeness": d.get("completeness", {}),
                           "updated_at": d["updated_at"]}
                          for d in S.docs.values()]
-                return self._send(200, {"protocol": 3, "resumes": items})
+                return self._send(200, {"protocol": 3, "documents": items})
             if method == "POST":
                 doc = json.loads(json.dumps(
                     next(iter(S.docs.values()))))
@@ -278,6 +286,7 @@ class H(BaseHTTPRequestHandler):
             if sub == "/regenerate" and method == "POST":
                 self._snapshot(did, doc)
                 doc["version"] += 1
+                doc["status"] = "draft"
                 doc["updated_at"] = "2026-11-23T09:00:00Z"
                 return self._send(200, {"protocol": 3,
                                         "document": _public_doc(doc)})

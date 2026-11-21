@@ -3,6 +3,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import ResumeFieldsForm from "../components/ResumeFieldsForm.vue";
 import ResumePreview from "../components/ResumePreview.vue";
+import { downloadElementAsPdf } from "../utils/exportPdf";
 import { getTemplate, optimizePlan, optimizeSection } from "../api/resume";
 import {
   createResume, deleteResume, duplicateResume, getOwnerToken, getResume,
@@ -213,7 +214,7 @@ async function onRestore(v) {
   }
 }
 
-function onExport() {
+async function onExport() {
   // 占位符红线：导出前必须列出待补充清单二次确认（与 v2 向导同口径）
   const gaps = doc.value?.gaps || [];
   if (gaps.length) {
@@ -222,7 +223,16 @@ function onExport() {
     if (!window.confirm(`还有 ${gaps.length} 处待补充：\n${list}\n\n仍要导出吗？`))
       return;
   }
-  window.print();
+  busy.value = true;
+  errMsg.value = "";
+  try {
+    const el = document.querySelector(".lib-page .print-area");
+    await downloadElementAsPdf(el, `${doc.value?.title || "简历"}.pdf`);
+  } catch (e) {
+    errMsg.value = e.message || "PDF 导出失败，请重试";
+  } finally {
+    busy.value = false;
+  }
 }
 
 async function onDuplicate() {
