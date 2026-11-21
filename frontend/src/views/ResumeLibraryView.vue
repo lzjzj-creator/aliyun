@@ -310,7 +310,7 @@ onMounted(async () => {
           </div>
           <div class="ld-meta">
             <span class="ld-status" :data-s="d.status">{{ d.status }}</span>
-            <span>完成度 {{ Math.round((d.completeness || 0) * 100) }}%</span>
+            <span>完成度 {{ Math.round((Number.isFinite(d.completeness) ? d.completeness : 0) * 100) }}%</span>
             <span>{{ (d.updated_at || "").slice(0, 10) }}</span>
           </div>
         </li>

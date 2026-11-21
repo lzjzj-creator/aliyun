@@ -15,7 +15,8 @@ export ALLOWED_ORIGINS="*"
 ENV_JSON=$(python -c "
 import json, os
 keys = ['SUPABASE_URL','SUPABASE_SERVICE_KEY','DASHSCOPE_API_KEY','DEEPSEEK_API_KEY',
-        'ALLOWED_ORIGINS','QWEN_MODEL_CHAT','EMBEDDING_MODEL','MIN_RETRIEVE_SCORE']
+        'ALLOWED_ORIGINS','QWEN_MODEL_CHAT','QWEN_MODEL_ROUTER','EMBEDDING_MODEL',
+        'MIN_RETRIEVE_SCORE','V2_MEMORY_ENABLED','V3_MEMORY_ENABLED']
 print(json.dumps({k: os.environ[k] for k in keys if os.environ.get(k)}))")
 
 echo '=== 部署 zhimai-api (FastAPI) ==='

@@ -225,7 +225,7 @@ class H(BaseHTTPRequestHandler):
                 items = [{"id": d["id"], "title": d["title"],
                           "target_role": d.get("target_role"),
                           "status": d["status"],
-                          "completeness": d.get("completeness", {}),
+                          "completeness": d.get("completeness", 0.72),
                           "updated_at": d["updated_at"]}
                          for d in S.docs.values()]
                 return self._send(200, {"protocol": 3, "documents": items})
