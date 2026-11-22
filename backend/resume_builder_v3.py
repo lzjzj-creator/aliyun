@@ -340,4 +340,8 @@ def regenerate_fields(doc: dict, tpl, *, target_role: str | None = None,
         built["fields"] = merge_manual_overrides(doc.get("fields") or {},
                                                  built["fields"])
         built = clear_manual_evidence(built, built["fields"])
+    # Copy the user-owned photo after generation so it never enters the model prompt.
+    old_meta = (doc.get("fields") or {}).get("_meta")
+    if isinstance(old_meta, dict) and "photo" in old_meta:
+        built["fields"].setdefault("_meta", {})["photo"] = deepcopy(old_meta["photo"])
     return built

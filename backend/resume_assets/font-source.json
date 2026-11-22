@@ -1,0 +1,111 @@
+{
+  "schema_version": 1,
+  "family": "Noto Sans SC",
+  "repository": "https://github.com/google/fonts",
+  "source_commit": "06bfe0d62a98375cb09c942fa18e68bd32cff057",
+  "source_commit_url": "https://github.com/google/fonts/commit/06bfe0d62a98375cb09c942fa18e68bd32cff057",
+  "source_directory": "ofl/notosanssc",
+  "downloaded_at_utc": "2026-11-21T15:54:36.586714+00:00",
+  "license": {
+    "spdx_id": "OFL-1.1",
+    "name": "SIL Open Font License 1.1",
+    "file": "OFL.txt",
+    "source_url": "https://raw.githubusercontent.com/google/fonts/06bfe0d62a98375cb09c942fa18e68bd32cff057/ofl/notosanssc/OFL.txt",
+    "copyright": "Copyright 2014-2021 Adobe (http://www.adobe.com/), with Reserved Font Name 'Source'",
+    "full_text_reviewed": true,
+    "distribution_note": "Bundling, web use, and embedding are permitted under OFL-1.1. Preserve the copyright and license when redistributing the font. Do not sell the font by itself. The license does not apply to documents created using the font."
+  },
+  "assets": [
+    {
+      "file": "NotoSansSC.ttf",
+      "upstream_filename": "NotoSansSC[wght].ttf",
+      "source_url": "https://raw.githubusercontent.com/google/fonts/06bfe0d62a98375cb09c942fa18e68bd32cff057/ofl/notosanssc/NotoSansSC%5Bwght%5D.ttf",
+      "contents_api_url": "https://api.github.com/repos/google/fonts/contents/ofl/notosanssc/NotoSansSC%5Bwght%5D.ttf?ref=06bfe0d62a98375cb09c942fa18e68bd32cff057",
+      "size_bytes": 17772300,
+      "git_blob_sha": "fb0637bafbcd804fe32152370a1225990745b4bc",
+      "sha256": "a3041811a78c361b1de50f953c805e0244951c21c5bd412f7232ef0d899af0da"
+    },
+    {
+      "file": "OFL.txt",
+      "upstream_filename": "OFL.txt",
+      "source_url": "https://raw.githubusercontent.com/google/fonts/06bfe0d62a98375cb09c942fa18e68bd32cff057/ofl/notosanssc/OFL.txt",
+      "contents_api_url": "https://api.github.com/repos/google/fonts/contents/ofl/notosanssc/OFL.txt?ref=06bfe0d62a98375cb09c942fa18e68bd32cff057",
+      "size_bytes": 4388,
+      "git_blob_sha": "1c9f43281b8f216c5461fe9ac729afbade7724e4",
+      "sha256": "1c05c68c34f9708415aada51f17e1b0092d2cea709bf4a94cd38114f9e73d7d9"
+    }
+  ],
+  "validation": {
+    "download_method": "Official GitHub contents API download_url via Python urllib HTTPS with default certificate verification",
+    "upstream_size_and_git_blob_sha_verified": true,
+    "git_blob_verification": "SHA-1 of b'blob ' + ASCII byte length + NUL + original downloaded bytes; matched GitHub contents API sha for both assets",
+    "saved_bytes_match_download": true,
+    "unmodified_upstream_bytes": true,
+    "subsetted_locally": false,
+    "sfnt": "TrueType",
+    "axes": [
+      {
+        "tag": "wght",
+        "minimum": 100,
+        "default": 100,
+        "maximum": 900
+      }
+    ],
+    "glyph_count": 31036,
+    "cjk_unified_ideographs_U4E00_U9FFF_mapped": 20976,
+    "chinese_sample": "中文简历教育经历项目技能",
+    "chinese_sample_all_mapped": true,
+    "coverage_note": "Complete upstream Noto Sans SC variable TTF, not a Latin-only web subset. Character coverage is that of the upstream font, not a claim to cover every Unicode CJK character.",
+    "metadata_url": "https://github.com/google/fonts/blob/06bfe0d62a98375cb09c942fa18e68bd32cff057/ofl/notosanssc/METADATA.pb",
+    "metadata_git_blob_sha": "2da7e54d742a000810c6ec99ffae919158d9d4d6",
+    "metadata_subsets": [
+      "chinese-simplified",
+      "cyrillic",
+      "latin",
+      "latin-ext",
+      "menu",
+      "vietnamese"
+    ]
+  },
+  "generated": {
+    "family": "Zhimai Resume",
+    "css_family": "ZhimaiResume",
+    "build_script": "tools/build_resume_fonts.py",
+    "build_command": "python tools/build_resume_fonts.py",
+    "dependency": "fonttools==4.63.0",
+    "source_file": "NotoSansSC.ttf",
+    "source_sha256": "a3041811a78c361b1de50f953c805e0244951c21c5bd412f7232ef0d899af0da",
+    "license": "OFL-1.1",
+    "license_file": "OFL.txt",
+    "license_sha256": "1c05c68c34f9708415aada51f17e1b0092d2cea709bf4a94cd38114f9e73d7d9",
+    "license_note": "Derived fonts remain under OFL-1.1; original copyright, attribution and license name records and the complete OFL.txt are preserved. Upstream source bytes are unchanged.",
+    "strategy": [
+      "Fully instantiate the official variable TrueType font at wght=400 and wght=700 with fontTools.varLib.instancer; do not subset.",
+      "Visit nominal Unicode codepoints in ascending order. Keep the first glyph ID and deep-copy glyf plus hmtx/vmtx for every alias, appending glyphOrder without changing existing IDs or composite references.",
+      "Rewrite every Unicode cmap subtable consistently; preserve format-14 variation sequences and their alternate glyphs. No input text normalization or substitution.",
+      "Preserve GSUB, GPOS, GDEF and BASE layout tables and rename derived font identities to Zhimai Resume Regular/Bold."
+    ],
+    "reproducibility": "Pinned source SHA-256 and fonttools version; fixed codepoint/glyph order, upstream head timestamps, recalcTimestamp=False, sorted sfnt tables, UTF-8/LF CSS, and no build-time timestamps or absolute paths.",
+    "assets": [
+      {
+        "file": "ZhimaiResume-Regular.ttf",
+        "size_bytes": 10699576,
+        "sha256": "b00542d5594646c99b15cd5705bd8420a646636d279382157295cc176e6efa6a",
+        "weight": 400,
+        "cloned_glyphs": 497
+      },
+      {
+        "file": "ZhimaiResume-Bold.ttf",
+        "size_bytes": 10688964,
+        "sha256": "7c2f3ff96951154ac8ae762e972531c71abc1dd4d2a953ba88491bfa79fb0436",
+        "weight": 700,
+        "cloned_glyphs": 497
+      },
+      {
+        "file": "fonts.css",
+        "size_bytes": 342,
+        "sha256": "40b352820218d708ed111613e5f7e89c2d15ce282d5a8fbcc125e1a68d8d6e3d"
+      }
+    ]
+  }
+}

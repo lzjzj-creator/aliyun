@@ -1,0 +1,18 @@
+[
+  {
+    "file": "showcase-classic.pdf",
+    "purpose": "synthetic-display-normal-content",
+    "layout": "classic",
+    "pages": 1,
+    "photo": false,
+    "text_verified": true
+  },
+  {
+    "file": "showcase-modern.pdf",
+    "purpose": "synthetic-display-normal-content",
+    "layout": "modern",
+    "pages": 1,
+    "photo": true,
+    "text_verified": true
+  }
+]

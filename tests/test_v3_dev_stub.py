@@ -33,6 +33,15 @@ class V3DevStubTest(unittest.TestCase):
         except urllib.error.HTTPError as e:
             return e.code, json.loads(e.read() or b"{}")
 
+    def test_template_and_pdf_version_gate(self):
+        status, template = self.call("/api/v2/resume/template")
+        self.assertEqual(status, 200)
+        self.assertEqual(template["template_version"], "1.0.0")
+        _, docs = self.call("/api/v3/resumes", token=v3_dev_stub.TOKEN)
+        did = docs["documents"][0]["id"]
+        status, _ = self.call(f"/api/v3/resumes/{did}/pdf", "POST", {"version": -1}, token=v3_dev_stub.TOKEN)
+        self.assertEqual(status, 409)
+
     def test_privacy_loop(self):
         # unauthenticated → 404 (never reveals the resource exists)
         status, _ = self.call("/api/v3/memory")

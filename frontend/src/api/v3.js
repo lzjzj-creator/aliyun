@@ -15,7 +15,7 @@ export function setOwnerToken(token) {
   else localStorage.removeItem(TOKEN_KEY);
 }
 
-async function req3(path, { method = "GET", body, headers } = {}) {
+async function req3(path, { method = "GET", body, headers, responseType } = {}) {
   const h = { ...headers, "X-Anon-Id": getAnonId() };
   const token = getOwnerToken();
   if (token) h["X-Owner-Token"] = token;
@@ -25,12 +25,20 @@ async function req3(path, { method = "GET", body, headers } = {}) {
     headers: h,
     body: body === undefined ? undefined : JSON.stringify(body),
   });
+  if (res.ok && responseType === "blob") {
+    if (!res.headers.get("Content-Type")?.toLowerCase().startsWith("application/pdf")) {
+      throw new Error("导出服务未返回 PDF，请重试");
+    }
+    return res.blob();
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const err = new Error(
       (typeof data.detail === "string" && data.detail) ||
       data.detail?.message || data.message || `HTTP ${res.status}`);
     err.status = res.status;
+    err.code = data.detail?.code;
+    err.issues = data.detail?.issues;
     err.data = data;
     throw err;
   }
@@ -132,6 +140,12 @@ export const forgetSession = (sessionId) =>
 // --- resume library ---------------------------------------------------------
 
 export const listResumes = () => req3("/api/v3/resumes");
+
+export const exportResumePdf = (id, { version, layout = "classic" }) =>
+  req3(`/api/v3/resumes/${encodeURIComponent(id)}/pdf`, {
+    method: "POST", body: { version, layout }, responseType: "blob",
+    headers: { Accept: "application/pdf" },
+  });
 
 export const createResume = (body) =>
   req3("/api/v3/resumes", { method: "POST", body });

@@ -13,6 +13,8 @@ try:
     from .. import session_security as security
     from .. import session_security_v3 as security_v3
     from ..resume_template import load
+    from ..resume_pdf import DocumentPdfReq, pdf_response
+    from ..resume_photo import photo_from_fields
     from .resume import _iter_leaves
 except ImportError:  # FC starts with backend on sys.path
     import memory_v3
@@ -21,6 +23,8 @@ except ImportError:  # FC starts with backend on sys.path
     import session_security as security
     import session_security_v3 as security_v3
     from resume_template import load
+    from resume_pdf import DocumentPdfReq, pdf_response
+    from resume_photo import photo_from_fields
     from routers.resume import _iter_leaves
 
 router = APIRouter(prefix="/api/v3/resumes")
@@ -130,9 +134,10 @@ class PatchDocReq(BaseModel):
     @field_validator("fields")
     @classmethod
     def fields_bounded(cls, value):
-        if value is not None and \
-                len(json.dumps(value, ensure_ascii=False)) > 120000:
-            raise ValueError("fields too large")
+        if value is not None:
+            photo_from_fields(value)
+            if len(json.dumps(value, ensure_ascii=False)) > 120000:
+                raise ValueError("fields too large")
         return value
 
 
@@ -222,6 +227,20 @@ def get_resume(request: Request, doc_id: str,
                x_owner_token: str | None = Header(default=None)):
     owner, doc = _doc(request, x_owner_token, doc_id)
     return {"protocol": 3, **_detail_public(owner["id"], doc)}
+
+
+@router.post("/{doc_id}/pdf")
+def export_resume(request: Request, doc_id: str, req: DocumentPdfReq,
+                  x_owner_token: str | None = Header(default=None)):
+    owner, doc = _doc(request, x_owner_token, doc_id)
+    if doc["version"] != req.version:
+        raise HTTPException(409, {"code": "VERSION_CONFLICT",
+                                  "message": "文档已更新，请刷新后重新导出"})
+    tpl = load()
+    if doc.get("template_version") != tpl.template_version:
+        raise HTTPException(409, {"code": "TEMPLATE_VERSION_MISMATCH",
+                                  "message": "模板版本已更新，请重新生成后导出"})
+    return pdf_response(tpl, doc.get("fields") or {}, req.layout)
 
 
 @router.patch("/{doc_id}")

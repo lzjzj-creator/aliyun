@@ -1,14 +1,71 @@
 <script setup>
 // 契约驱动的简历字段编辑器（#19）：不为字段写死 markup，
 // 按 sections/type/fields 生成表单；gaps 字段黄标提示。
-import { computed } from "vue";
+import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
+import { prepareResumePhoto } from "../utils/resumePhoto.js";
+import { isValidResumePhoto } from "../../../backend/resume_assets/render.mjs";
 
 const props = defineProps({
   template: { type: Object, required: true },
   modelValue: { type: Object, default: () => ({}) }, // fields
   gaps: { type: Array, default: () => [] },
+  disabled: { type: Boolean, default: false },
+  context: { type: [String, Number], default: 0 }, // parent generation, not just document id
 });
-const emit = defineEmits(["update:modelValue"]);
+const emit = defineEmits(["update:modelValue", "photo-busy"]);
+const photoId = useId();
+const photoError = ref("");
+const photoBusy = ref(false);
+const hasPhoto = computed(() => !!props.modelValue._meta && Object.hasOwn(props.modelValue._meta, "photo"));
+const photoSrc = computed(() => isValidResumePhoto(props.modelValue._meta?.photo) ? props.modelValue._meta.photo : "");
+let mounted = true;
+let pendingPhoto = null;
+
+function finishPhoto(request) {
+  if (pendingPhoto !== request) return;
+  pendingPhoto = null;
+  photoBusy.value = false;
+  emit("photo-busy", { ...request, busy: false });
+}
+function cancelPhoto() {
+  if (pendingPhoto) finishPhoto(pendingPhoto);
+}
+watch(() => props.context, () => { cancelPhoto(); photoError.value = ""; }, { flush: "sync" });
+watch(() => props.disabled, (disabled) => { if (disabled) cancelPhoto(); }, { flush: "sync" });
+onBeforeUnmount(() => { mounted = false; cancelPhoto(); });
+
+function mergePhoto(photo) {
+  // Read at completion time: text/manual metadata may change during encoding.
+  const meta = { ...(props.modelValue._meta || {}) };
+  if (photo === undefined) delete meta.photo;
+  else meta.photo = photo;
+  emit("update:modelValue", { ...props.modelValue, _meta: meta });
+}
+async function selectPhoto(event) {
+  const file = event.target.files?.[0];
+  event.target.value = ""; // same file may be retried, including after an error
+  if (!mounted || props.disabled || !file) return;
+  const request = { context: props.context, request: Symbol("photo") };
+  pendingPhoto = request; // older finally blocks must not release this request
+  photoError.value = "";
+  photoBusy.value = true;
+  emit("photo-busy", { ...request, busy: true });
+  const current = () => mounted && pendingPhoto === request && props.context === request.context && !props.disabled;
+  try {
+    const photo = await prepareResumePhoto(file);
+    if (current()) mergePhoto(photo);
+  } catch (error) {
+    if (current()) photoError.value = error.message || "照片处理失败，请重新选择。";
+  } finally {
+    if (current()) finishPhoto(request);
+  }
+}
+function removePhoto() {
+  if (!mounted || props.disabled) return;
+  cancelPhoto();
+  photoError.value = "";
+  mergePhoto(undefined);
+}
 
 const gapMap = computed(() => {
   const m = {};
@@ -62,7 +119,19 @@ const isOptSec = (sec) => sec.required === false;
 </script>
 
 <template>
-  <div class="rff">
+  <fieldset class="rff" :disabled="disabled">
+    <section class="rff-sec rff-photo">
+      <label :for="photoId" class="rff-title">照片（可选）</label>
+      <p :id="`${photoId}-help`" class="rff-photo-help">照片随简历保存，不发送给 AI。支持 JPEG / PNG，最大 5 MB；自动处理为不超过 240×320 像素、30 KB 的 JPEG。</p>
+      <img v-if="photoSrc" class="rff-photo-preview" :src="photoSrc" alt="当前简历照片" />
+      <p v-else-if="hasPhoto" class="rff-photo-error" role="alert">已保存的照片无效，请重新上传或移除后导出。</p>
+      <label :for="photoId" class="rff-photo-action">{{ hasPhoto ? "替换照片" : "上传照片" }}</label>
+      <input :id="photoId" class="rff-photo-input" type="file" accept="image/jpeg,image/png"
+             :disabled="disabled" :aria-describedby="`${photoId}-help`" @change="selectPhoto" />
+      <button v-if="hasPhoto || photoBusy" type="button" class="rff-photo-action" :disabled="disabled" @click="removePhoto">移除照片</button>
+      <p v-if="photoBusy" class="rff-photo-help" role="status" aria-live="polite">正在处理照片，请稍候再保存或导出；可重新选择照片。</p>
+      <p v-if="photoError" class="rff-photo-error" role="alert">{{ photoError }}</p>
+    </section>
     <section v-for="sec in sections" :key="sec.key" class="rff-sec" :data-key="sec.key">
       <h3 class="rff-title">
         {{ sec.title }}
@@ -160,10 +229,20 @@ const isOptSec = (sec) => sec.required === false;
         </label>
       </template>
     </section>
-  </div>
+  </fieldset>
 </template>
 
 <style scoped>
+.rff { min-width: 0; border: 0; padding: 0; margin: 0; }
+.rff-photo { border-bottom: 1px solid var(--line); padding-bottom: 14px; }
+.rff-photo-help { font-size: .78rem; color: var(--ink-soft); margin: 6px 0 10px; }
+.rff-photo-preview { display: block; width: 72px; height: 96px; object-fit: contain; margin-bottom: 10px; }
+.rff-photo-action { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; margin: 0 8px 8px 0; background: #fff; color: var(--teal); font: inherit; font-size: .82rem; cursor: pointer; }
+.rff-photo-input { display: block; min-height: 44px; max-width: 100%; font: inherit; font-size: .78rem; margin-bottom: 8px; }
+.rff-photo-input::file-selector-button { min-height: 44px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--teal); cursor: pointer; }
+.rff-photo :focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
+.rff:disabled .rff-photo-action, .rff-photo-input:disabled { opacity: .5; cursor: default; }
+.rff-photo-error { font-size: .78rem; color: var(--err); margin: 8px 0; }
 .rff-sec { margin-bottom: 18px; }
 .rff-title { color: var(--teal); font-size: .95rem; margin: 0 0 8px; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .rff-opt { font-size: .68rem; color: var(--mute); border: 1px solid var(--line); border-radius: 999px; padding: 0 6px; }

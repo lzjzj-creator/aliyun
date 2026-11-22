@@ -141,6 +141,15 @@ def _all_scopes(client: httpx.Client) -> Counter:
         offset += 1000
 
 
+@router.get("/api/admin/pdf-metrics")
+def admin_pdf_metrics(_: None = Depends(require_admin)):
+    try:
+        from .resume_pdf import render_metrics
+    except ImportError:
+        from resume_pdf import render_metrics
+    return {"ok": True, "data": render_metrics()}
+
+
 @router.get("/api/admin/overview")
 def admin_overview(_: None = Depends(require_admin)):
     with _sb_client() as client:

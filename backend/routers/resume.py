@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 try:
     from ..llm import llm, QWEN_CHAT
+    from ..resume_pdf import SnapshotPdfReq, pdf_response
     from ..resume_template import (
         load, check_version, TemplateError, get_section,
         validate_fields, empty_fields, iter_field_paths, valid_path_syntax,
@@ -20,6 +21,7 @@ try:
     from .. import session_security as security
 except ImportError:  # FC 以 backend 目录为根启动
     from llm import llm, QWEN_CHAT
+    from resume_pdf import SnapshotPdfReq, pdf_response
     from resume_template import (
         load, check_version, TemplateError, get_section,
         validate_fields, empty_fields, iter_field_paths, valid_path_syntax,
@@ -58,6 +60,19 @@ def _require_version(tpl, version: str):
 def get_template():
     """契约唯一出口：前后端读同一份，禁止双份硬编码。"""
     return _tpl().model_dump()
+
+
+@router.post("/pdf")
+def export_snapshot(request: Request, req: SnapshotPdfReq,
+                    x_anon_id: str | None = Header(default=None),
+                    x_session_token: str | None = Header(default=None)):
+    security.enforce_ip(request)
+    anon = security.require_anon(x_anon_id)
+    if req.session_id:
+        security.require_owner(req.session_id, anon, x_session_token)
+    tpl = _tpl()
+    _require_version(tpl, req.template_version)
+    return pdf_response(tpl, req.fields, req.layout)
 
 
 # ---------------- autofill：会话 → 字段 + evidence_map + gaps ----------------

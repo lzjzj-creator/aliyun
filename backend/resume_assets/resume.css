@@ -1,0 +1,187 @@
+/* Shared screen/print typography. ZhimaiResume's local @font-face is supplied by the host. */
+.resume-paper {
+  box-sizing: border-box;
+  width: 210mm;
+  min-height: 297mm;
+  max-width: none;
+  margin: 0;
+  padding: 14mm;
+  background: #fff;
+  color: #171717;
+  font-family: ZhimaiResume, "Microsoft YaHei", "PingFang SC", sans-serif;
+  font-size: 10.5pt;
+  line-height: 1.4;
+  font-weight: 400;
+  text-align: left;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  white-space: normal;
+  box-shadow: none;
+}
+
+.resume-paper * {
+  box-sizing: border-box;
+}
+
+.resume-paper p,
+.resume-paper h1,
+.resume-paper h2,
+.resume-paper ul {
+  margin: 0;
+}
+
+.resume-paper b {
+  font-weight: 700;
+}
+
+.resume-paper .resume-header {
+  text-align: center;
+  margin-bottom: 5mm;
+}
+
+.resume-paper .resume-header-with-photo {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 24mm;
+  gap: 6mm;
+  align-items: start;
+  break-inside: avoid;
+}
+
+.resume-paper .resume-header-text {
+  min-width: 0;
+}
+
+.resume-paper .resume-photo {
+  display: block;
+  width: 24mm;
+  height: 32mm;
+  object-fit: contain;
+  object-position: center top;
+}
+
+.resume-paper .resume-name {
+  color: inherit;
+  margin: 0;
+  font-size: 22pt;
+  line-height: 1.4;
+  font-weight: 700;
+  letter-spacing: 1pt;
+}
+
+.resume-paper .resume-role {
+  margin-top: 1mm;
+  font-size: 11pt;
+}
+
+.resume-paper .resume-contact {
+  margin-top: 1mm;
+  color: #333;
+}
+
+.resume-paper .resume-separator {
+  color: #666;
+}
+
+.resume-paper .resume-section {
+  margin-top: 4mm;
+  break-inside: auto;
+}
+
+.resume-paper .resume-section-title {
+  color: inherit;
+  margin: 0 0 2mm;
+  padding-bottom: 0.7mm;
+  font-size: 12pt;
+  line-height: 1.4;
+  font-weight: 700;
+  border-bottom: 0.5pt solid #888;
+  break-after: avoid;
+  page-break-after: avoid;
+}
+
+.resume-paper .resume-entry {
+  margin-bottom: 2.5mm;
+  break-inside: auto;
+}
+
+.resume-paper .resume-entry-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  column-gap: 3mm;
+  break-after: avoid;
+  page-break-after: avoid;
+}
+
+.resume-paper .resume-entry-title {
+  flex: 1 1 110mm;
+  min-width: 0;
+}
+
+.resume-paper .resume-period {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  margin-left: auto;
+  text-align: right;
+  color: #444;
+}
+
+.resume-paper .resume-detail,
+.resume-paper .resume-skill-line {
+  margin-top: 0.7mm;
+}
+
+.resume-paper .resume-bullets,
+.resume-paper .resume-awards {
+  margin: 1mm 0 0;
+  padding-left: 1.3em;
+  list-style: disc outside;
+}
+
+.resume-paper li {
+  margin-bottom: 0.6mm;
+}
+
+.resume-paper .resume-text,
+.resume-paper .resume-detail,
+.resume-paper .resume-skill-line,
+.resume-paper .resume-entry-title,
+.resume-paper .resume-period,
+.resume-paper .resume-name,
+.resume-paper .resume-role,
+.resume-paper .resume-contact span,
+.resume-paper li {
+  white-space: pre-wrap;
+  orphans: 2;
+  widows: 2;
+}
+
+.resume-paper[data-layout="modern"] .resume-header {
+  text-align: left;
+}
+
+.resume-paper[data-layout="modern"] .resume-section-title {
+  color: #233446;
+  border-bottom-color: #526171;
+}
+
+@page zhimai-resume {
+  size: A4;
+  margin: 14mm;
+}
+
+@media print {
+  .resume-paper {
+    page: zhimai-resume;
+    width: auto;
+    min-height: 0;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+}

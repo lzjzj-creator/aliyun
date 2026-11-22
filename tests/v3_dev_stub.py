@@ -11,6 +11,7 @@ batch). CORS allows X-Owner-Token.
 """
 import json
 import re
+import sys
 import time
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -19,6 +20,7 @@ from urllib.parse import urlparse, parse_qs
 
 ROOT = Path(__file__).resolve().parents[1]
 FIX = ROOT / "frontend" / "public" / "demo" / "v3"
+sys.path.insert(0, str(ROOT))
 PORT = 8790
 TOKEN = "dev-owner-token-0000000000000000"
 RECOVERY = "dev-recovery-0000"
@@ -122,6 +124,11 @@ class H(BaseHTTPRequestHandler):
             if body.get("recovery_code") != RECOVERY:
                 return self._send(404, {"detail": "not found"})
             return self._send(200, {"protocol": 3, "owner_token": TOKEN})
+
+        if path == "/api/v2/resume/template" and method == "GET":
+            return self._send(200, json.loads((ROOT / "backend/resume_template.json").read_text(encoding="utf-8")))
+        if path == "/api/v2/resume/pdf" and method == "POST":
+            return self._pdf(body.get("fields", {}), body.get("layout", "classic"))
 
         # -- v2 session list (titles/backfill picker) ---------------------
         if path == "/api/v2/sessions" and method == "GET":
@@ -259,6 +266,10 @@ class H(BaseHTTPRequestHandler):
             doc = S.docs.get(did)
             if doc is None:
                 return self._send(404, {"detail": "not found"})
+            if sub == "/pdf" and method == "POST":
+                if body.get("version") != doc["version"]:
+                    return self._send(409, {"detail": "version conflict"})
+                return self._pdf(doc.get("fields", {}), body.get("layout", "classic"))
             if sub == "" and method == "GET":
                 return self._send(200, {"protocol": 3,
                                         **_public_doc(doc)})
@@ -311,6 +322,16 @@ class H(BaseHTTPRequestHandler):
                                         "document": _public_doc(doc)})
 
         return self._send(404, {"detail": "not found"})
+
+    def _pdf(self, fields, layout):
+        from fastapi import HTTPException
+        from backend.resume_pdf import pdf_response
+        from backend.resume_template import load
+        try:
+            response = pdf_response(load(), fields, layout)
+        except HTTPException as exc:
+            return self._send(exc.status_code, {"detail": exc.detail})
+        return self._send(200, raw=response.body, ctype="application/pdf")
 
     def _snapshot(self, did, doc):
         S.versions.setdefault(did, []).append({

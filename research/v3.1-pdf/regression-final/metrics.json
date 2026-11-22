@@ -1,0 +1,170 @@
+[
+  {
+    "case": "case-01",
+    "layout": "classic",
+    "pages": 1,
+    "purpose": "synthetic-display",
+    "reading_order_checked": true,
+    "orphan_headings_checked": true,
+    "pdf_bytes": 39372,
+    "render_ms": 2266,
+    "fonts": [
+      "AAAAAA+ZhimaiResume-Bold",
+      "BAAAAA+ZhimaiResume-Regular"
+    ]
+  },
+  {
+    "case": "case-02",
+    "layout": "modern",
+    "pages": 1,
+    "purpose": "synthetic-display",
+    "reading_order_checked": true,
+    "orphan_headings_checked": true,
+    "pdf_bytes": 29041,
+    "render_ms": 2203,
+    "fonts": [
+      "AAAAAA+ZhimaiResume-Bold",
+      "BAAAAA+ZhimaiResume-Regular"
+    ]
+  },
+  {
+    "case": "case-03",
+    "layout": "classic",
+    "pages": 1,
+    "purpose": "edge-case-only-not-a-showcase",
+    "reading_order_checked": true,
+    "orphan_headings_checked": true,
+    "pdf_bytes": 41512,
+    "render_ms": 2266,
+    "fonts": [
+      "AAAAAA+ZhimaiResume-Bold",
+      "BAAAAA+ZhimaiResume-Regular"
+    ]
+  },
+  {
+    "case": "case-04",
+    "layout": "modern",
+    "pages": 1,
+    "purpose": "edge-case-only-not-a-showcase",
+    "reading_order_checked": true,
+    "orphan_headings_checked": true,
+    "pdf_bytes": 40100,
+    "render_ms": 2234,
+    "fonts": [
+      "AAAAAA+ZhimaiResume-Bold",
+      "BAAAAA+ZhimaiResume-Regular"
+    ]
+  },
+  {
+    "case": "case-05",
+    "layout": "classic",
+    "pages": 1,
+    "purpose": "edge-case-only-not-a-showcase",
+    "reading_order_checked": true,
+    "orphan_headings_checked": true,
+    "pdf_bytes": 41185,
+    "render_ms": 2313,
+    "fonts": [
+      "AAAAAA+ZhimaiResume-Bold",
+      "BAAAAA+ZhimaiResume-Regular"
+    ]
+  },
+  {
+    "case": "case-06",
+    "layout": "modern",
+    "pages": 2,
+    "purpose": "edge-case-only-not-a-showcase",
+    "reading_order_checked": true,
+    "orphan_headings_checked": true,
+    "pdf_bytes": 43970,
+    "render_ms": 2266,
+    "fonts": [
+      "AAAAAA+ZhimaiResume-Bold",
+      "BAAAAA+ZhimaiResume-Regular"
+    ]
+  },
+  {
+    "case": "case-07",
+    "layout": "classic",
+    "pages": 2,
+    "purpose": "edge-case-only-not-a-showcase",
+    "reading_order_checked": true,
+    "orphan_headings_checked": true,
+    "pdf_bytes": 39869,
+    "render_ms": 2281,
+    "fonts": [
+      "AAAAAA+ZhimaiResume-Bold",
+      "BAAAAA+ZhimaiResume-Regular"
+    ]
+  },
+  {
+    "case": "case-08",
+    "layout": "modern",
+    "pages": 1,
+    "purpose": "edge-case-only-not-a-showcase",
+    "reading_order_checked": true,
+    "orphan_headings_checked": true,
+    "pdf_bytes": 37677,
+    "render_ms": 2266,
+    "fonts": [
+      "AAAAAA+ZhimaiResume-Bold",
+      "BAAAAA+ZhimaiResume-Regular"
+    ]
+  },
+  {
+    "case": "case-09",
+    "layout": "classic",
+    "pages": 1,
+    "purpose": "edge-case-only-not-a-showcase",
+    "reading_order_checked": true,
+    "orphan_headings_checked": true,
+    "pdf_bytes": 29160,
+    "render_ms": 2219,
+    "fonts": [
+      "AAAAAA+ZhimaiResume-Bold",
+      "BAAAAA+ZhimaiResume-Regular"
+    ]
+  },
+  {
+    "case": "case-10",
+    "layout": "modern",
+    "pages": 1,
+    "purpose": "edge-case-only-not-a-showcase",
+    "reading_order_checked": true,
+    "orphan_headings_checked": true,
+    "pdf_bytes": 40441,
+    "render_ms": 2297,
+    "fonts": [
+      "AAAAAA+ZhimaiResume-Bold",
+      "BAAAAA+ZhimaiResume-Regular"
+    ]
+  },
+  {
+    "case": "case-11",
+    "layout": "classic",
+    "pages": 1,
+    "purpose": "edge-case-only-not-a-showcase",
+    "reading_order_checked": true,
+    "orphan_headings_checked": true,
+    "pdf_bytes": 42029,
+    "render_ms": 2375,
+    "fonts": [
+      "AAAAAA+ZhimaiResume-Bold",
+      "BAAAAA+ZhimaiResume-Regular"
+    ]
+  },
+  {
+    "case": "case-12",
+    "layout": "modern",
+    "pages": 2,
+    "purpose": "edge-case-only-not-a-showcase",
+    "reading_order_checked": true,
+    "orphan_headings_checked": true,
+    "pdf_bytes": 45756,
+    "render_ms": 2328,
+    "fonts": [
+      "AAAAAA+ZhimaiResume-Bold",
+      "BAAAAA+ZhimaiResume-Regular"
+    ]
+  }
+]

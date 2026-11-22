@@ -1,0 +1,15 @@
+{
+  "mode": "local fixture API; real Chromium PDF; injected error and optimization responses",
+  "passed": [
+    "library: dirty save before PDF, returned snapshot, desktop preview",
+    "library: 390/320px no overflow, fixed A4, mobile PDF equals desktop",
+    "library: required data gate, injected conflict preserves edits and blocks PDF, retry",
+    "library: discard preserves original without PATCH; modern PDF exports adopted text",
+    "photo: pending conversion blocks actions, metadata removal, invalid SVG rejected, saved/reloaded, two-layout PDF embedding, removal",
+    "library: copying unsaved photo persists current fields before duplicating",
+    "library: dirty restore preserves ten snapshots; clean restore recovers oldest text and photo",
+    "wizard: editing photos invalidates older optimization without restoring removed images",
+    "wizard: local snapshot, escaped evidence excluded from PDF, discard optimization, responsive preview"
+  ],
+  "page_errors": []
+}
