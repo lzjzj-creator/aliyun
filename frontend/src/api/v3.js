@@ -94,6 +94,9 @@ export const listFacts = ({ kind, status, cursor, limit = 50 } = {}) => {
   return req3(`/api/v3/facts?${params.toString()}`);
 };
 
+export const createFacts = (facts) =>
+  req3("/api/v3/facts", { method: "POST", body: { facts } });
+
 export const patchFact = (id, body) =>
   req3(`/api/v3/facts/${id}`, { method: "PATCH", body });
 

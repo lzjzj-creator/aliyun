@@ -120,6 +120,34 @@ class ExtractReq(BaseModel):
     session_id: str = Field(min_length=36, max_length=36)
 
 
+class CreateFactItem(BaseModel):
+    """随手记手动提交的单条事实：value 为槽位内容摘要，quote 为原话证据。"""
+    model_config = ConfigDict(extra="forbid")
+    kind: str = Field(min_length=1, max_length=32)
+    slot_path: str = Field(min_length=1, max_length=120)
+    value: str = Field(min_length=1, max_length=480)
+    quote: str | None = Field(default=None, max_length=2000)
+
+    @field_validator("kind")
+    @classmethod
+    def kind_choice(cls, value):
+        if value not in memory_v3.FACT_KINDS:
+            raise ValueError("kind must be a whitelisted fact kind")
+        return value
+
+    @field_validator("value")
+    @classmethod
+    def value_not_blank(cls, value):
+        if not value.strip():
+            raise ValueError("value must not be blank")
+        return value
+
+
+class CreateFactsReq(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    facts: list[CreateFactItem] = Field(min_length=1, max_length=30)
+
+
 class BackfillReq(BaseModel):
     model_config = ConfigDict(extra="forbid")
     # Without explicit ids, only import sessions whose credentials were supplied.
@@ -154,6 +182,18 @@ class BackfillReq(BaseModel):
 
 BACKFILL_PER_HOUR = 6
 _backfill_hits: dict[str, list] = {}
+
+MANUAL_PER_HOUR = 60   # 随手记不耗 LLM，仅防滥用
+_manual_hits: dict[str, list] = {}
+
+
+def _manual_limit(owner_id: str):
+    now = time.monotonic()
+    hits = [t for t in _manual_hits.get(owner_id, []) if now - t < 3600]
+    if len(hits) >= MANUAL_PER_HOUR:
+        raise security.throttled(int(3600 - (now - hits[0])))
+    hits.append(now)
+    _manual_hits[owner_id] = hits[-MANUAL_PER_HOUR:]
 
 
 def _backfill_limit(owner_id: str):
@@ -260,6 +300,27 @@ def list_facts(request: Request,
         owner["id"], kind=kind, status=status, cursor=cursor, limit=limit))
     return {"protocol": 3, "facts": [_fact_public(f) for f in page["facts"]],
             "next_cursor": page["next_cursor"]}
+
+
+@router.post("/facts")
+def create_facts(request: Request, req: CreateFactsReq,
+                 x_owner_token: str | None = Header(default=None)):
+    """随手记：用户手动提交事实。用户即事实来源，落库即 confirmed；
+    原话存为 evidence（source_type=manual），重复提交只合并证据。"""
+    owner = _owner(request, x_owner_token)
+    _manual_limit(owner["id"])
+    created = 0
+    rows = []
+    for item in req.facts:
+        row, is_new = _storage(lambda item=item: memory_v3.insert_fact(
+            owner["id"], item.kind, item.slot_path, item.value.strip(),
+            status="confirmed",
+            evidence=[{"source_type": "manual",
+                       "quote": (item.quote or item.value).strip()[:2000]}]))
+        rows.append(row)
+        created += 1 if is_new else 0
+    return {"protocol": 3, "created": created, "merged": len(rows) - created,
+            "facts": [_fact_public(r) for r in rows]}
 
 
 @router.patch("/facts/{fact_id}")

@@ -226,6 +226,65 @@ class RouterV3Test(unittest.TestCase):
             self.client.delete(f"/api/v3/facts/{FACT['id']}", headers=H)
             .status_code, 404)
 
+    def test_create_facts_manual(self):
+        """随手记批量提交：confirmed + manual 证据；重复项按合并计。"""
+        rv3._manual_hits.clear()
+        calls = []
+
+        def fake_insert(oid, kind, slot, value, **kw):
+            calls.append((kind, slot, value, kw))
+            row = {**FACT, "id": f"id-{len(calls)}", "kind": kind,
+                   "slot_path": slot, "value": value,
+                   "status": kw["status"], "evidence": kw["evidence"]}
+            return row, len(calls) == 1  # 第二条起按重复合并计
+
+        self._patch("insert_fact", fake_insert)
+        body = {"facts": [
+            {"kind": "experience", "slot_path": "campus.社团",
+             "value": "汉服社干事", "quote": "在汉服社做过新媒体"},
+            {"kind": "skill", "slot_path": "skills.notes",
+             "value": "会 PS / PPT / COZE"},
+        ]}
+        r = self.client.post("/api/v3/facts", headers=H, json=body)
+        self.assertEqual(r.status_code, 200)
+        data = r.json()
+        self.assertEqual(data["created"], 1)
+        self.assertEqual(data["merged"], 1)
+        self.assertEqual(len(data["facts"]), 2)
+        self.assertEqual(calls[0][3]["status"], "confirmed")
+        self.assertEqual(calls[0][3]["evidence"][0]["source_type"], "manual")
+        self.assertEqual(calls[0][3]["evidence"][0]["quote"], "在汉服社做过新媒体")
+        # quote 缺省时回退 value
+        self.assertEqual(calls[1][3]["evidence"][0]["quote"], "会 PS / PPT / COZE")
+
+    def test_create_facts_validation(self):
+        rv3._manual_hits.clear()
+        self._patch("insert_fact",
+                    lambda *a, **kw: (_ for _ in ()).throw(AssertionError))
+        base = {"kind": "skill", "slot_path": "skills", "value": "x"}
+        for bad in [
+            {"facts": []},                                        # 空列表
+            {"facts": [{**base, "kind": "bogus"}]},               # kind 白名单
+            {"facts": [{**base, "value": "   "}]},                # 空白值
+            {"facts": [{**base, "slot_path": ""}]},
+            {"facts": [{**base, "extra": 1}]},                    # extra=forbid
+            {"facts": [base] * 31},                               # 超上限
+        ]:
+            r = self.client.post("/api/v3/facts", headers=H, json=bad)
+            self.assertEqual(r.status_code, 422, bad)
+
+    def test_create_facts_rate_limit(self):
+        rv3._manual_hits.clear()
+        self._patch("insert_fact",
+                    lambda oid, k, s, v, **kw: (dict(FACT), True))
+        one = {"facts": [{"kind": "skill", "slot_path": "skills",
+                          "value": "x"}]}
+        for _ in range(rv3.MANUAL_PER_HOUR):
+            r = self.client.post("/api/v3/facts", headers=H, json=one)
+            self.assertEqual(r.status_code, 200)
+        r = self.client.post("/api/v3/facts", headers=H, json=one)
+        self.assertEqual(r.status_code, 429)
+
     def test_extract_budget_exhausted_429(self):
         """#88：全局 token 预算尽 → 429（非 503），不穿透到模型。"""
         with patch.object(rv3.fact_extractor, "extract_incremental",

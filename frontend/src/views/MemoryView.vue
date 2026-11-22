@@ -4,8 +4,8 @@ import { computed, onMounted, ref } from "vue";
 import { listSessions } from "../api/sessions";
 import {
   deleteAllMemory, deleteFact, disableMemory, enableMemory, exportMemory,
-  backfill, hasSessionCredential, forgetSession, getMemory, getOwnerToken, listFacts,
-  patchFact, recoverMemory, setOwnerToken,
+  backfill, createFacts, hasSessionCredential, forgetSession, getMemory,
+  getOwnerToken, listFacts, patchFact, recoverMemory, setOwnerToken,
 } from "../api/v3";
 
 const enabled = ref(false);
@@ -88,10 +88,93 @@ const STATUS_LABELS = {
   rejected: "已拒绝", superseded: "已取代",
 };
 
-// 来源已删：证据被清空（忘掉会话）或证据会话指针全部置空（D6 清理）
+// 来源已删：证据被清空（忘掉会话）或证据会话指针全部置空（D6 清理）；
+// 随手记手动证据（source_type=manual）不受会话删除影响
 function sourceExpired(fact) {
   const evs = fact.evidence || [];
-  return evs.length === 0 || evs.every((e) => e.session_id == null);
+  return evs.length === 0 ||
+    evs.every((e) => e.session_id == null && e.source_type !== "manual");
+}
+
+// ---- 随手记：按简历资料库模板随手梳理经历，填多少存多少（§9 事实库） ----
+const NOTE_FIELDS = [
+  { key: "identity", label: "个人情况", hint: "姓名 / 电话 / 邮箱 / 目前身份…",
+    kind: "identity", slot: "basics.notes", sec: "一、基本信息" },
+  { key: "goal", label: "意向岗位 / 方向", hint: "如：市场运营、销售、产品助理…",
+    kind: "goal", slot: "goal.notes", sec: "一、基本信息" },
+  { key: "club", label: "社团 / 学生工作", hint: "部门或社团、职务、时间、做了什么、成果（如播放量、营业额）",
+    kind: "experience", slot: "campus.社团", sec: "二、校内经历" },
+  { key: "classwork", label: "班级 / 学院事务", hint: "职务、时间、负责的事务",
+    kind: "experience", slot: "classwork.事务", sec: "二、校内经历" },
+  { key: "campus_project", label: "校内项目", hint: "项目名、你的角色、时间、做了什么、结果",
+    kind: "experience", slot: "campus.校内项目", sec: "二、校内经历" },
+  { key: "intern", label: "实习", hint: "公司、岗位、时间、工作内容、产出",
+    kind: "experience", slot: "internships.实习", sec: "三、校外经历" },
+  { key: "parttime", label: "兼职 / 社会实践", hint: "单位、时间、内容、收获",
+    kind: "experience", slot: "volunteer.兼职", sec: "三、校外经历" },
+  { key: "competition", label: "竞赛 / 获奖", hint: "赛事名、奖项、时间、你的角色",
+    kind: "award", slot: "awards.竞赛", sec: "三、校外经历" },
+  { key: "outside_other", label: "其他校外经历", hint: "志愿、支教、访学、副业…",
+    kind: "experience", slot: "experience.其他", sec: "三、校外经历" },
+  { key: "cert", label: "证书 / 荣誉", hint: "英语、计算机、专业证书、奖学金…",
+    kind: "award", slot: "awards.证书", sec: "四、证书资质" },
+  { key: "skill", label: "技能 / 工具", hint: "专业技能、软件工具、语言能力、通用能力",
+    kind: "skill", slot: "skills.notes", sec: "五、技能清单" },
+  { key: "extra", label: "作品 / 亮点 / 素材", hint: "作品链接、活动照片、个人优势、想补充的任何东西",
+    kind: "metric", slot: "summary.notes", sec: "六、其他亮点" },
+];
+const NOTE_SECTIONS = computed(() => {
+  const out = [];
+  for (const f of NOTE_FIELDS) {
+    const last = out[out.length - 1];
+    if (last && last.title === f.sec) last.fields.push(f);
+    else out.push({ title: f.sec, fields: [f] });
+  }
+  return out;
+});
+
+const NOTE_DRAFT_KEY = "zm_notes_v1";
+const notes = ref({});          // fieldKey -> 草稿文本
+const notesOpen = ref(false);
+const noteMsg = ref("");
+const noteBusy = ref(false);
+
+try {
+  const raw = localStorage.getItem(NOTE_DRAFT_KEY);
+  if (raw) notes.value = JSON.parse(raw) || {};
+} catch { notes.value = {}; }
+
+function saveNoteDraft() {
+  try { localStorage.setItem(NOTE_DRAFT_KEY, JSON.stringify(notes.value)); } catch { /* 忽略存储失败 */ }
+}
+
+const noteFilledCount = computed(() =>
+  NOTE_FIELDS.filter((f) => (notes.value[f.key] || "").trim()).length);
+
+async function submitNotes() {
+  const filled = NOTE_FIELDS.filter((f) => (notes.value[f.key] || "").trim());
+  if (!filled.length) { noteMsg.value = "先写点什么再提交，填多少算多少。"; return; }
+  noteBusy.value = true;
+  noteMsg.value = "";
+  try {
+    const res = await createFacts(filled.map((f) => {
+      const text = notes.value[f.key].trim();
+      return { kind: f.kind, slot_path: f.slot,
+               value: text.slice(0, 480), quote: text.slice(0, 2000) };
+    }));
+    for (const f of filled) delete notes.value[f.key];
+    saveNoteDraft();
+    noteMsg.value = `已存入 ${res.created} 条新事实` +
+      (res.merged ? `，${res.merged} 条与已有事实合并` : "") + "，下方列表可见。";
+    await reload();
+    status.value = await getMemory();
+  } catch (e) {
+    noteMsg.value = e.status === 429 ? "提交太频繁，请稍后再试。"
+      : e.status === 404 ? "请先开启长期记忆再提交。"
+      : "保存失败，请稍后重试；草稿已保留在本地。";
+  } finally {
+    noteBusy.value = false;
+  }
 }
 
 // ---- #70 历史回填：会话多选 + 分块顺序调用 + 进度 ----
@@ -450,6 +533,37 @@ onMounted(boot);
         <button class="mem-btn" :disabled="busy" @click="showPrivacy = true">隐私与数据</button>
       </div>
 
+      <!-- 随手记：按简历资料库模板随手梳理经历，填多少存多少 -->
+      <div class="mem-card notes-card">
+        <button class="notes-head" :aria-expanded="notesOpen" @click="notesOpen = !notesOpen">
+          <span>
+            <b>随手记</b>
+            <span class="notes-sub">想到什么就按模板记一笔，填不完整也能提交</span>
+          </span>
+          <span class="notes-count" v-if="noteFilledCount">{{ noteFilledCount }} 项待提交</span>
+          <span class="notes-arrow" :class="{ open: notesOpen }">›</span>
+        </button>
+        <div v-if="notesOpen" class="notes-body">
+          <section v-for="sec in NOTE_SECTIONS" :key="sec.title" class="notes-sec">
+            <div class="notes-sec-title">{{ sec.title }}</div>
+            <div v-for="f in sec.fields" :key="f.key" class="notes-field">
+              <label :for="`note-${f.key}`">{{ f.label }}</label>
+              <textarea :id="`note-${f.key}`" v-model="notes[f.key]" rows="2"
+                        :placeholder="f.hint" :disabled="noteBusy"
+                        @input="saveNoteDraft" />
+            </div>
+          </section>
+          <div class="mem-ops notes-ops">
+            <button class="mem-btn primary" :disabled="noteBusy || !noteFilledCount"
+                    @click="submitNotes">
+              {{ noteBusy ? "提交中…" : `提交到记忆（${noteFilledCount} 项）` }}
+            </button>
+            <span class="mem-sub">草稿自动保存在本机；提交后存为「已确认」事实，可随时改删。</span>
+          </div>
+          <p v-if="noteMsg" class="notes-msg">{{ noteMsg }}</p>
+        </div>
+      </div>
+
       <!-- 隐私抽屉：导出 / 停用 / 清空集中收纳 -->
       <div v-if="showPrivacy" class="mem-drawer-mask" @click.self="showPrivacy = false">
         <aside class="mem-drawer" role="dialog" aria-modal="true" aria-label="隐私与数据">
@@ -569,7 +683,8 @@ onMounted(boot);
               </div>
               <div v-if="openFacts.has(f.id)" class="ms-quotes">
                 <div v-for="(e, i) in f.evidence" :key="i" class="mf-quote">
-                  <span v-if="e.session_id" class="mf-src">
+                  <span v-if="e.source_type === 'manual'" class="mf-src">随手记</span>
+                  <span v-else-if="e.session_id" class="mf-src">
                     {{ sessionTitle(e.session_id) }}<template v-if="e.msg_id != null"> · 第{{ e.msg_id }}条</template>
                   </span>
                   “{{ e.quote }}”
@@ -593,7 +708,8 @@ onMounted(boot);
           </div>
           <div class="mf-value">{{ typeof f.value === 'string' ? f.value : JSON.stringify(f.value) }}</div>
           <div v-for="(e, i) in f.evidence" :key="i" class="mf-quote">
-            <span v-if="e.session_id" class="mf-src">
+            <span v-if="e.source_type === 'manual'" class="mf-src">随手记</span>
+            <span v-else-if="e.session_id" class="mf-src">
               {{ sessionTitle(e.session_id) }}<template v-if="e.msg_id != null"> · 第{{ e.msg_id }}条</template>
             </span>
             “{{ e.quote }}”
@@ -670,6 +786,45 @@ onMounted(boot);
 .md-danger { margin-top: 8px; border-top: 1px dashed var(--danger-border); padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
 .md-danger b { font-size: .8rem; color: var(--danger); }
 .mem-wipe-text { font-size: .8rem; color: var(--danger); margin: 0; }
+
+/* 随手记：模板填写面板 */
+.notes-card { padding: 0; overflow: hidden; }
+.notes-head {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 12px 16px; border: none; background: none; cursor: pointer;
+  font-family: inherit; text-align: left;
+}
+.notes-head:hover { background: var(--bg-hover); }
+.notes-head b { font-size: .9rem; font-weight: 650; }
+.notes-sub { font-size: .75rem; color: var(--ink-muted); margin-left: 8px; }
+.notes-count {
+  margin-left: auto; flex: none; font-size: .7rem; color: var(--coach);
+  background: var(--coach-soft); border-radius: var(--radius-pill); padding: 2px 8px;
+}
+.notes-arrow {
+  flex: none; font-size: 18px; color: var(--ink-muted); line-height: 1;
+  transform: rotate(90deg); transition: transform var(--dur-fast) var(--ease);
+  margin-left: auto;
+}
+.notes-count + .notes-arrow { margin-left: 0; }
+.notes-arrow.open { transform: rotate(-90deg); }
+.notes-body { border-top: 1px solid var(--border-subtle); padding: 12px 16px 16px; }
+.notes-sec { margin-bottom: 14px; }
+.notes-sec-title {
+  font-size: .78rem; font-weight: 650; color: var(--brand);
+  margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px dashed var(--border-subtle);
+}
+.notes-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+.notes-field label { font-size: .78rem; color: var(--ink-secondary); font-weight: 550; }
+.notes-field textarea {
+  font-family: inherit; font-size: .84rem; color: var(--ink); resize: vertical;
+  border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px;
+  background: var(--bg-surface); min-height: 40px; line-height: 1.5;
+}
+.notes-field textarea:focus { outline: none; border-color: var(--brand-border); }
+.notes-field textarea::placeholder { color: var(--ink-muted); font-size: .8rem; }
+.notes-ops { align-items: center; }
+.notes-msg { font-size: .8rem; color: var(--agent); margin: 8px 0 0; }
 
 .mem-filters { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
 .mem-mode { margin-left: auto; display: flex; gap: 4px; }
