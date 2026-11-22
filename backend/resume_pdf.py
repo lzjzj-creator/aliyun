@@ -432,7 +432,8 @@ html,body { margin: 0; padding: 0; background: white; }
             await route.abort()
 
     async with async_playwright() as playwright:
-        browser = await playwright.chromium.launch(headless=True, timeout=10000)
+        browser = await playwright.chromium.launch(headless=True, timeout=10000,
+                                                   chromium_sandbox=False)
         try:
             page = await browser.new_page(viewport={"width": 794, "height": 1123},
                                           device_scale_factor=1, service_workers="block")
