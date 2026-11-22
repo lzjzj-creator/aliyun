@@ -51,6 +51,34 @@ const kpiProposed = computed(() => status.value?.by_status?.proposed || 0);
 const kpiConfirmed = computed(() => status.value?.by_status?.confirmed || 0);
 const kpiRejected = computed(() => status.value?.by_status?.rejected || 0);
 
+// 事实展示模式：rows=行式分区（默认） | cards=证据卡（旧版）
+const viewMode = ref("rows");
+const openFacts = ref(new Set());   // 行式模式下展开证据的行 id
+function toggleFactRow(id) {
+  const s = new Set(openFacts.value);
+  if (s.has(id)) s.delete(id); else s.add(id);
+  openFacts.value = s;
+}
+
+// 行式分区：按槽位根段归类到简历素材板块（未知槽位归入"其他"）
+const ROW_SECTIONS = [
+  { key: "basics", label: "基本信息", roots: ["basics", "basic", "name", "school", "role", "objective", "goal", "goals"] },
+  { key: "campus", label: "校内经历", roots: ["campus", "education", "student_work", "classwork"] },
+  { key: "outside", label: "校外经历", roots: ["internships", "internship", "projects", "project", "volunteer", "experience", "experiences"] },
+  { key: "skills", label: "技能清单", roots: ["skills", "skill_groups", "skill"] },
+  { key: "awards", label: "奖项荣誉", roots: ["awards", "award", "publications", "honors"] },
+  { key: "other", label: "其他", roots: ["summary"] },
+];
+const factSections = computed(() => {
+  const groups = ROW_SECTIONS.map((s) => ({ ...s, items: [] }));
+  const fallback = groups[groups.length - 1];
+  for (const f of facts.value) {
+    const root = String(f.slot_path || "").split(".")[0];
+    (groups.find((s) => s.roots.includes(root)) || fallback).items.push(f);
+  }
+  return groups.filter((g) => g.items.length);
+});
+
 const KIND_LABELS = {
   identity: "身份", education: "教育", experience: "经历",
   skill: "技能", metric: "成果", award: "奖项", goal: "意向",
@@ -496,7 +524,7 @@ onMounted(boot);
         </p>
       </div>
 
-      <!-- 筛选 + 事实列表 -->
+      <!-- 筛选 + 展示模式切换 + 事实列表 -->
       <div class="mem-filters">
         <button v-for="f in ['', 'proposed', 'confirmed', 'rejected']" :key="f"
                 class="mem-chip" :class="{ on: filter === f }"
@@ -507,9 +535,53 @@ onMounted(boot);
                 :disabled="busy" @click="confirmAll">
           全部确认（{{ status.by_status.proposed }}）
         </button>
+        <span class="mem-mode">
+          <button class="mem-chip" :class="{ on: viewMode === 'rows' }" @click="viewMode = 'rows'">行式</button>
+          <button class="mem-chip" :class="{ on: viewMode === 'cards' }" @click="viewMode = 'cards'">卡片</button>
+        </span>
       </div>
 
-      <ul class="mem-facts">
+      <!-- 行式模式：按简历素材板块分区，一行一条事实，点行展开证据 -->
+      <template v-if="viewMode === 'rows'">
+        <section v-for="sec in factSections" :key="sec.key" class="ms-section">
+          <div class="ms-sec-head">
+            <b>{{ sec.label }}</b><span>{{ sec.items.length }} 条</span>
+          </div>
+          <ul class="ms-rows">
+            <li v-for="f in sec.items" :key="f.id" class="ms-row"
+                :class="{ open: openFacts.has(f.id), proposed: f.status === 'proposed' }">
+              <div class="ms-line" role="button" tabindex="0"
+                   @click="toggleFactRow(f.id)" @keydown.enter="toggleFactRow(f.id)">
+                <span class="ms-kind">{{ KIND_LABELS[f.kind] || f.kind }}</span>
+                <span class="ms-value">{{ typeof f.value === 'string' ? f.value : JSON.stringify(f.value) }}</span>
+                <span class="ms-slot">{{ slotLabel(f.slot_path) }}</span>
+                <span class="ms-ev">{{ (f.evidence || []).length }} 证据</span>
+                <span class="mf-status" :data-s="f.status">{{ STATUS_LABELS[f.status] || f.status }}</span>
+                <span v-if="sourceExpired(f)" class="ms-exp">来源已删</span>
+                <span class="ms-ops" @click.stop>
+                  <button v-if="f.status === 'proposed'" class="mem-btn sm"
+                          :disabled="busy" @click="act(f, 'confirmed')">确认</button>
+                  <button v-if="f.status === 'proposed'" class="mem-btn sm"
+                          :disabled="busy" @click="act(f, 'rejected')">拒绝</button>
+                  <button class="mem-btn sm danger" :disabled="busy"
+                          @click="act(f, 'delete')">删除</button>
+                </span>
+              </div>
+              <div v-if="openFacts.has(f.id)" class="ms-quotes">
+                <div v-for="(e, i) in f.evidence" :key="i" class="mf-quote">
+                  <span v-if="e.session_id" class="mf-src">
+                    {{ sessionTitle(e.session_id) }}<template v-if="e.msg_id != null"> · 第{{ e.msg_id }}条</template>
+                  </span>
+                  “{{ e.quote }}”
+                </div>
+                <p v-if="!(f.evidence || []).length" class="mem-sub">无证据引用</p>
+              </div>
+            </li>
+          </ul>
+        </section>
+      </template>
+
+      <ul v-else class="mem-facts">
         <li v-for="f in facts" :key="f.id" class="mem-fact">
           <div class="mf-head">
             <span class="mf-kind">{{ KIND_LABELS[f.kind] || f.kind }}</span>
@@ -599,7 +671,8 @@ onMounted(boot);
 .md-danger b { font-size: .8rem; color: var(--danger); }
 .mem-wipe-text { font-size: .8rem; color: var(--danger); margin: 0; }
 
-.mem-filters { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.mem-filters { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
+.mem-mode { margin-left: auto; display: flex; gap: 4px; }
 .mem-chip {
   border: 1px solid var(--border); border-radius: var(--radius-pill); background: var(--bg-surface);
   padding: 4px 12px; font-size: 12px; cursor: pointer; font-family: inherit; color: var(--ink-secondary);
@@ -625,6 +698,45 @@ onMounted(boot);
   border-radius: 0 8px 8px 0; padding: 7px 10px;
 }
 .mf-src { display: block; font-size: 11px; color: var(--agent); margin-bottom: 2px; }
+
+/* 行式模式：分区 + 紧凑行 */
+.ms-section {
+  background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-md);
+  margin-bottom: 12px; overflow: hidden; box-shadow: var(--shadow-xs);
+}
+.ms-sec-head {
+  display: flex; align-items: baseline; gap: 8px; padding: 10px 14px;
+  background: var(--bg-subtle); border-bottom: 1px solid var(--border-subtle);
+}
+.ms-sec-head b { font-size: .85rem; font-weight: 650; }
+.ms-sec-head span { font-size: .72rem; color: var(--ink-muted); }
+.ms-rows { list-style: none; margin: 0; padding: 0; }
+.ms-row { border-bottom: 1px solid var(--border-subtle); }
+.ms-row:last-child { border-bottom: none; }
+.ms-row.proposed { background: linear-gradient(90deg, var(--coach-soft), transparent 40%); }
+.ms-line {
+  display: flex; align-items: center; gap: 10px; padding: 9px 14px;
+  font-size: .84rem; cursor: pointer; user-select: none;
+}
+.ms-line:hover { background: var(--bg-hover); }
+.ms-kind {
+  flex: none; width: 44px; text-align: center; font-size: .68rem;
+  background: var(--brand-soft); color: var(--brand); border-radius: 4px; padding: 1px 4px;
+}
+.ms-value {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--ink);
+}
+.ms-slot { flex: none; font-size: .72rem; color: var(--ink-muted); }
+.ms-ev { flex: none; font-size: .7rem; color: var(--agent); background: var(--agent-soft); border-radius: var(--radius-pill); padding: 1px 8px; }
+.ms-exp { flex: none; font-size: .68rem; color: var(--coach); }
+.ms-ops { flex: none; display: flex; gap: 4px; }
+.ms-quotes { padding: 2px 14px 12px 68px; border-top: 1px dashed var(--border-subtle); }
+@media (max-width: 640px) {
+  .ms-line { flex-wrap: wrap; row-gap: 4px; }
+  .ms-value { flex-basis: 100%; order: -1; }
+  .ms-quotes { padding-left: 14px; }
+}
 .mem-consent {
   position: fixed; inset: 0; background: rgba(15, 23, 42, .42); z-index: 50;
   display: flex; align-items: center; justify-content: center; padding: 16px;
