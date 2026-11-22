@@ -12,6 +12,7 @@ import hmac
 import math
 import os
 import secrets
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import UUID
 
@@ -52,6 +53,21 @@ class SessionNotFound(MemoryStoreError):
 
 def _uuid(value):
     return str(UUID(str(value)))
+
+
+MESSAGE_TTL_HOURS = 48
+
+
+def _now_iso():
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _live_cutoff_iso():
+    """48h retention cutoff as a PostgREST literal. Filtering on created_at
+    (not the expires_at column) keeps reads correct before the optional
+    retention migration lands; expires_at is for the sweeper's index."""
+    return (datetime.now(timezone.utc)
+            - timedelta(hours=MESSAGE_TTL_HOURS)).isoformat()
 
 
 def _text(value, name):
@@ -148,9 +164,14 @@ def get_session_bundle(session_id: str) -> dict | None:
     })))
     if session is None:
         return None
+    cutoff = _live_cutoff_iso()
     return {"session": _public_session(session), "messages": _all("chat_messages", {
         "session_id": f"eq.{session_id}", "select": "*", "order": "id.asc",
-    }), "profile": get_profile(session_id)}
+        "created_at": f"gt.{cutoff}",
+    }), "history_expired": bool(_one(_json(_request("GET", "/chat_messages", params={
+        "session_id": f"eq.{session_id}", "created_at": f"lte.{cutoff}",
+        "select": "id", "limit": 1,
+    })))), "profile": get_profile(session_id)}
 
 
 def _sources(sources):
@@ -208,7 +229,8 @@ def append_message(session_id: str, role: str, content: str, *,
         if duplicate:
             old = _one(_json(_request("GET", "/chat_messages", params={
                 "session_id": f"eq.{session_id}", "role": "eq.user",
-                "client_msg_id": f"eq.{client_msg_id}", "select": "*", "limit": 1,
+                "client_msg_id": f"eq.{client_msg_id}", "select": "*",
+                "created_at": f"gt.{_live_cutoff_iso()}", "limit": 1,
             })))
             if old:
                 return old
@@ -295,13 +317,24 @@ def cleanup_expired(days: int = 90, dry_run: bool = True) -> int:
     })))
 
 
+def prune_expired_messages(batch_size: int = 500, dry_run: bool = True) -> dict:
+    """48h per-message retention sweep. dry_run=False performs physical deletes
+    plus title/profile reset and v3 evidence quote stripping (one transaction)."""
+    if type(batch_size) is not int or not 1 <= batch_size <= 10000 \
+            or type(dry_run) is not bool:
+        raise ValueError("batch_size must be 1..10000 and dry_run must be boolean")
+    return _json(_request("POST", "/rpc/v2_prune_expired_messages", json={
+        "batch_size": batch_size, "dry_run": dry_run,
+    }))
+
+
 def touch_title(session_id: str, first_msg: str) -> dict | None:
     """Only initial user content can set an untouched default title; no overwrite."""
     session_id = _uuid(session_id)
     _text(first_msg, "first_msg")
     first = _one(_json(_request("GET", "/chat_messages", params={
         "session_id": f"eq.{session_id}", "role": "eq.user", "order": "id.asc",
-        "select": "content", "limit": 1,
+        "select": "content", "created_at": f"gt.{_live_cutoff_iso()}", "limit": 1,
     })))
     if first is None or first["content"] != first_msg:
         return None

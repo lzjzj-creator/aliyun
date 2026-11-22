@@ -74,7 +74,17 @@ class CleanupReq(BaseModel):
     # strict：物理删除的开关不能被 "false"/"0" 这类字符串悄悄带过去
     model_config = ConfigDict(strict=True, extra="forbid")
     days: int = Field(default=90, ge=90, le=3650)
+    batch_size: int = Field(default=500, ge=1, le=10000)
     dry_run: bool = True
+
+
+def _message_prune_report(req: CleanupReq):
+    """v2_prune_expired_messages RPC may not be deployed yet — report instead
+    of failing the whole cleanup check."""
+    try:
+        return _memory.prune_expired_messages(req.batch_size, req.dry_run)
+    except _memory.MemoryStoreError:
+        return {"pending_migration": True}
 
 
 @router.post("/api/admin/cleanup")
@@ -87,11 +97,17 @@ def admin_cleanup(req: CleanupReq, _: None = Depends(require_admin)):
     try:
         report = {"days": req.days, "dry_run": req.dry_run,
                   "expired_sessions": _memory.cleanup_expired(req.days, req.dry_run),
+                  "expired_messages": _message_prune_report(req),
                   "quota": _memory.prune_quota(req.dry_run)}
     except ValueError:
         raise HTTPException(status_code=400, detail="保留期参数不合法") from None
     except _memory.MemoryStoreError:
         raise HTTPException(status_code=503, detail="配额存储暂时不可用") from None
+    try:
+        with _sb_client() as client:
+            _audit(client, "cleanup", {"dry_run": req.dry_run, "report": report})
+    except HTTPException:
+        pass
     return {"ok": True, "data": report}
 
 
@@ -105,6 +121,11 @@ def admin_login(req: AdminLoginReq, request: Request):
         _record_fail(key)
         raise HTTPException(status_code=401, detail="密码不正确")
     _fails.pop(key, None)
+    try:
+        with _sb_client() as client:
+            _audit(client, "admin_login", {})
+    except HTTPException:
+        pass
     return {"ok": True, "token": issue_session(), "expires_in": SESSION_TTL}
 
 
@@ -204,4 +225,66 @@ def admin_documents(
             items = r.json()
         except httpx.HTTPError:
             raise HTTPException(status_code=502, detail="知识库数据源暂时不可用，请稍后重试")
+    return {"ok": True, "data": {"items": items}}
+
+
+def _count_where(client: httpx.Client, table: str, params: dict) -> int | None:
+    """Filtered count; None when the table is not deployed yet."""
+    try:
+        r = client.get(f"/{table}", params={**params, "limit": 1},
+                       headers={"Prefer": "count=exact", "Range": "0-0"})
+        r.raise_for_status()
+        total = r.headers.get("content-range", "/0").rsplit("/", 1)[-1]
+        return int(total) if total.isdigit() else 0
+    except httpx.HTTPError:
+        return None
+
+
+def _audit(client: httpx.Client, action: str, detail: dict) -> None:
+    """Admin action audit. Failure to record must not break the action."""
+    try:
+        client.post("/admin_audit", json={"action": action, "detail": detail})
+    except httpx.HTTPError:
+        pass
+
+
+@router.get("/api/admin/stats")
+def admin_stats(_: None = Depends(require_admin)):
+    """运营概览：匿名会话/消息保留情况 + v3 记忆规模 + 当日 token 用量。
+    只给计数，不返回任何聊天正文或用户标识。"""
+    cutoff = _memory._live_cutoff_iso()
+    with _sb_client() as client:
+        data = {
+            "chat": {
+                "sessions": _count_where(client, "chat_sessions", {"select": "id"}),
+                "messages_live": _count_where(client, "chat_messages", {
+                    "select": "id", "created_at": f"gt.{cutoff}"}),
+                "messages_expired": _count_where(client, "chat_messages", {
+                    "select": "id", "created_at": f"lte.{cutoff}"}),
+            },
+            "v3": {
+                "owners": _count_where(client, "v3_owner", {"select": "id"}),
+                "facts": _count_where(client, "v3_facts", {"select": "id"}),
+                "resumes": _count_where(client, "v3_resume_documents", {"select": "id"}),
+            },
+        }
+    try:
+        data["tokens_today"] = _memory.token_usage_today()
+    except _memory.MemoryStoreError:
+        data["tokens_today"] = None
+    return {"ok": True, "data": data}
+
+
+@router.get("/api/admin/audit")
+def admin_audit(limit: int = Query(default=50, ge=1, le=200),
+                _: None = Depends(require_admin)):
+    with _sb_client() as client:
+        try:
+            r = client.get("/admin_audit", params={
+                "select": "id,action,detail,created_at",
+                "order": "id.desc", "limit": limit})
+            r.raise_for_status()
+            items = r.json()
+        except httpx.HTTPError:
+            items = []
     return {"ok": True, "data": {"items": items}}

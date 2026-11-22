@@ -164,7 +164,8 @@ class MemoryTest(unittest.TestCase):
         for i in range(5):
             memory.append_message(SID, "user", str(i))
         self.assertEqual([m["id"] for m in memory.get_session_bundle(SID)["messages"]], [1, 2, 3, 4, 5])
-        gets = [r for r in self.store.requests if r.method == "GET" and r.url.path.endswith("/chat_messages")]
+        gets = [r for r in self.store.requests if r.method == "GET"
+                and r.url.path.endswith("/chat_messages") and "offset" in r.url.params]
         self.assertEqual([r.url.params["offset"] for r in gets], ["0", "2", "4", "5"])
 
     def test_message_idempotency_keeps_original_and_does_not_dedupe_assistant(self):

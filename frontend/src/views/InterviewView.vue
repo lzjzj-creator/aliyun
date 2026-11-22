@@ -30,6 +30,7 @@ const chips = ref([]);         // 建议回复：归位到输入框上方，不�
 const busy = ref(false);
 const slow = ref(false);
 const dead = ref("");         // 致命错误提示（引擎未开放/会话丢失）
+const historyExpired = ref(false); // 48h 保留期：本会话旧消息已到期清除（非致命）
 const deadFallbackV1 = ref(false);  // dead 时是否提供 v1 问答回退入口
 const box = ref(null);
 const sessionId = ref(getCurrentSessionId());
@@ -81,6 +82,7 @@ function restoreMessages(bundle) {
     slot, value: typeof v === "object" && v !== null ? v.value : v,
   }));
   stage.value = (bundle.session && bundle.session.stage) || "probing";
+  historyExpired.value = !!bundle.history_expired;
   items.value = restored;
 }
 
@@ -323,6 +325,10 @@ onMounted(boot);
       </button>
     </div>
 
+    <div v-if="historyExpired" class="expired-banner">
+      本对话已超过 48 小时，历史消息已按隐私政策清除；可继续对话，或点上方「会话」新建。
+    </div>
+
     <div v-if="!items.length && !busy" class="empty">
       <h2>先来聊聊你的经历</h2>
       <p class="empty-hint">我会主动追问，把能写进简历的素材一点点挖出来。</p>
@@ -393,6 +399,11 @@ onMounted(boot);
   background: var(--accent-bg); border: 1px solid var(--accent-line); color: var(--err); font-size: .85rem;
 }
 .dead-banner a { color: var(--accent); margin-left: 6px; }
+.expired-banner {
+  margin: 0 0 10px; padding: 10px 14px; border-radius: 10px;
+  background: var(--accent-bg); border: 1px solid var(--accent-line);
+  color: var(--accent); font-size: .85rem;
+}
 .turn-error { margin-top: 8px; color: var(--err); font-size: .82rem; }
 .turn-error .retry {
   margin-left: 8px; padding: 2px 12px; font-size: .78rem; border-radius: 999px;

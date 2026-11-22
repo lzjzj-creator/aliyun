@@ -124,6 +124,10 @@ class CleanupEndpointTest(unittest.TestCase):
                 self.outer.calls.append(("cleanup", days, dry_run))
                 return 3
 
+            def prune_expired_messages(self, batch_size, dry_run):
+                self.outer.calls.append(("prune_messages", batch_size, dry_run))
+                return {"expired_messages": 2, "dry_run": dry_run}
+
             def prune_quota(self, dry_run):
                 self.outer.calls.append(("prune", dry_run))
                 return {"quota_buckets": 1, "stream_leases": 0}
@@ -139,16 +143,19 @@ class CleanupEndpointTest(unittest.TestCase):
     def test_defaults_to_dry_run_and_returns_only_counts(self):
         response = self.post({})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(self.calls, [("cleanup", 90, True), ("prune", True)])
+        self.assertEqual(self.calls, [("cleanup", 90, True),
+                                      ("prune_messages", 500, True), ("prune", True)])
         self.assertEqual(response.json()["data"], {
             "days": 90, "dry_run": True, "expired_sessions": 3,
+            "expired_messages": {"expired_messages": 2, "dry_run": True},
             "quota": {"quota_buckets": 1, "stream_leases": 0}})
 
     def test_explicit_delete_passes_through(self):
         response = self.post({"days": 120, "dry_run": False})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(self.calls[0], ("cleanup", 120, False))
-        self.assertEqual(self.calls[1], ("prune", False))
+        self.assertEqual(self.calls[1], ("prune_messages", 500, False))
+        self.assertEqual(self.calls[2], ("prune", False))
 
     def test_retention_shorter_than_90_is_rejected_before_storage(self):
         for body in ({"days": 30}, {"days": 90, "dry_run": "yes"}, {"days": "90"}, {"dry_run": None}):
@@ -178,7 +185,8 @@ class CleanupEndpointTest(unittest.TestCase):
         with patch.dict(os.environ, {"ADMIN_PASSWORD_HASH": "", "ADMIN_SESSION_SECRET": ""}):
             self.assertEqual(self.post({}, client=self.build(override=True)).status_code, 200)
             self.assertEqual(self.post({}, client=self.build(override=False)).status_code, 503)
-            self.assertEqual(self.calls, [("cleanup", 90, True), ("prune", True)],
+            self.assertEqual(self.calls, [("cleanup", 90, True),
+                                          ("prune_messages", 500, True), ("prune", True)],
                              "管理员未配置时必须在进存储前就拒绝")
         self.calls.clear()
         with patch.dict(os.environ, {"ADMIN_PASSWORD_HASH": encoded, "ADMIN_SESSION_SECRET": SECRET}):
@@ -189,7 +197,8 @@ class CleanupEndpointTest(unittest.TestCase):
             self.assertEqual(self.post({}, token=stale, client=gated).status_code, 401)
             self.assertEqual(self.calls, [], "未通过的令牌不能触发任何删除动作")
             self.assertEqual(self.post({}, token=issue_session(SECRET, ttl=600), client=gated).status_code, 200)
-        self.assertEqual(self.calls, [("cleanup", 90, True), ("prune", True)],
+        self.assertEqual(self.calls, [("cleanup", 90, True),
+                                      ("prune_messages", 500, True), ("prune", True)],
                          "只有持有效会话令牌的管理员请求才会落到存储，且默认干跑")
 
     def test_require_admin_directly(self):

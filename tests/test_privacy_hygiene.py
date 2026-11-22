@@ -66,7 +66,7 @@ class NoLoggingTest(unittest.TestCase):
 class QueryStringHygieneTest(unittest.TestCase):
     """正文/令牌不进 URL：memory 的 params 只允许出现白名单过滤字段。"""
     ALLOWED_PARAMS = {"select", "order", "limit", "offset", "id", "session_id", "anon_id",
-                      "role", "client_msg_id", "version", "title"}
+                      "role", "client_msg_id", "version", "title", "created_at"}
 
     def params_keys(self):
         text = (BACKEND / "memory.py").read_text(encoding="utf-8")
@@ -83,7 +83,7 @@ class QueryStringHygieneTest(unittest.TestCase):
             self.assertIn(call, {"/rpc/cleanup_expired_sessions", "/rpc/v2_spend_quota",
                                  "/rpc/v2_acquire_stream_lease", "/rpc/v2_release_stream_lease",
                                  "/rpc/v2_charge_tokens", "/rpc/v2_token_usage_today",
-                                 "/rpc/v2_prune_quota"})
+                                 "/rpc/v2_prune_quota", "/rpc/v2_prune_expired_messages"})
         self.assertNotIn('params={"p_', text)   # 配额参数走 JSON 体，不进查询串
 
 
