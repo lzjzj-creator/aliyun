@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import AdminView from "./views/AdminView.vue";
 import ChatView from "./views/ChatView.vue";
 import ContractDemoView from "./views/ContractDemoView.vue";
@@ -9,6 +9,7 @@ import ResumeLibraryView from "./views/ResumeLibraryView.vue";
 import ResumeView from "./views/ResumeView.vue";
 import ResumeWizardView from "./views/ResumeWizardView.vue";
 import SessionList from "./components/SessionList.vue";
+import UiIcon from "./components/UiIcon.vue";
 import { setCurrentSessionId } from "./storage";
 
 // hash 路由：#chat | #chat/:id | #chat-v1 | #resume | #resume-v1 | #demo | #admin（不引 vue-router）
@@ -17,6 +18,40 @@ const sidebar = ref(false);          // 移动端会话抽屉
 const chatSid = ref("");   // 作为 InterviewView 的 key：切会话即重挂载走 boot()
 const resumeDocId = ref(""); // #/resume/library/:id 的文档 id
 const sessionListRef = ref(null);
+const collapsed = ref(false);        // 侧栏折叠态（localStorage 记忆）
+
+try {
+  collapsed.value = localStorage.getItem("zm_sidebar_collapsed") === "1";
+} catch { /* 存储不可用时保持展开 */ }
+
+function toggleCollapsed() {
+  collapsed.value = !collapsed.value;
+  try { localStorage.setItem("zm_sidebar_collapsed", collapsed.value ? "1" : "0"); }
+  catch { /* 忽略持久化失败 */ }
+}
+
+const NAV = [
+  { hash: "#/chat", label: "访谈挖掘", short: "访谈", icon: "message",
+    on: (v) => v === "chat" || v === "chatV1" },
+  { hash: "#/resume", label: "简历向导", short: "向导", icon: "file-text",
+    on: (v) => v === "resume" || v === "resumeV1" },
+  { hash: "#/resume/library", label: "岗位简历库", short: "简历库", icon: "folder-kanban",
+    on: (v) => v === "resumeLibrary" },
+  { hash: "#/memory", label: "经历证据库", short: "经历库", icon: "database",
+    on: (v) => v === "memory" },
+];
+
+const PAGE_META = {
+  chat: ["访谈挖掘", "先聊出真实经历，再长成简历"],
+  chatV1: ["问答（旧版）", "先聊出你的经历，再长出一份简历"],
+  resume: ["简历向导", "从经历证据到岗位定制简历"],
+  resumeV1: ["简历诊断（旧版）", "先聊出你的经历，再长出一份简历"],
+  resumeLibrary: ["岗位简历库", "多版本定制 · 边改边学"],
+  memory: ["个人经历库", "事实可溯源 · 你可完全掌控"],
+  contractDemo: ["契约演示", ""],
+};
+const pageTitle = computed(() => (PAGE_META[view.value] || ["知脉 · 简历成长助手", ""])[0]);
+const pageSub = computed(() => (PAGE_META[view.value] || ["", ""])[1]);
 
 function syncRoute() {
   const h = location.hash || "#/chat";
@@ -66,34 +101,46 @@ onUnmounted(() => window.removeEventListener("hashchange", syncRoute));
     <AdminView />
   </div>
 
-  <div v-else class="workbench">
-    <nav class="rail" aria-label="主导航">
-      <div class="rail-logo" title="知脉">知</div>
-      <button class="rail-item" :class="{ on: view === 'chat' || view === 'chatV1' }"
-              @click="nav('#/chat')">
-        <span class="rail-ico">◈</span><span>访谈</span>
+  <div v-else class="workbench" :class="{ collapsed }">
+    <nav class="app-sidebar" aria-label="主导航">
+      <div class="sb-head">
+        <div class="sb-logo" title="知脉">知</div>
+        <span v-if="!collapsed" class="sb-brand">知脉</span>
+        <button class="sb-collapse" :aria-label="collapsed ? '展开导航' : '折叠导航'"
+                :title="collapsed ? '展开导航' : '折叠导航'" @click="toggleCollapsed">
+          <UiIcon name="panel-left" :size="16" />
+        </button>
+      </div>
+
+      <button v-for="item in NAV" :key="item.hash" class="sb-item"
+              :class="{ on: item.on(view) }" :title="collapsed ? item.label : undefined"
+              :aria-current="item.on(view) ? 'page' : undefined" @click="nav(item.hash)">
+        <UiIcon :name="item.icon" :size="18" />
+        <span v-if="!collapsed">{{ item.label }}</span>
       </button>
-      <button class="rail-item" :class="{ on: view === 'resume' || view === 'resumeV1' }"
-              @click="nav('#/resume')">
-        <span class="rail-ico">▤</span><span>简历</span>
-      </button>
-      <button class="rail-item" :class="{ on: view === 'memory' }"
-              @click="nav('#/memory')">
-        <span class="rail-ico">◉</span><span>记忆</span>
-      </button>
+
+      <div v-if="!collapsed" class="sb-foot">
+        <span class="sb-foot-title">成长闭环</span>
+        <span class="sb-foot-line">聊经历 → 存证据 →<br />定制简历 → 学优化</span>
+      </div>
     </nav>
 
     <div class="stage">
       <header class="topbar">
         <div class="tb-left">
-          <span class="tb-title">知脉 · 简历成长助手</span>
-          <span class="tb-sub">先聊出你的经历，再长出一份简历</span>
+          <button v-if="view === 'chat'" class="tb-sessions" @click="sidebar = true">☰ 会话</button>
+          <span class="tb-title">{{ pageTitle }}</span>
+          <span v-if="pageSub" class="tb-sub">{{ pageSub }}</span>
         </div>
-        <button v-if="view === 'chat'" class="tb-sessions" @click="sidebar = true">☰ 会话</button>
-        <span class="tb-privacy">对话留存可删 · 记忆默认关闭可导出可清空</span>
+        <details class="tb-privacy-pop">
+          <summary><UiIcon name="shield" :size="13" /> 隐私保护中</summary>
+          <div class="tb-privacy-card">
+            对话 48 小时留存可删 · 长期记忆默认关闭 · 支持导出 JSON 与一键清空
+          </div>
+        </details>
       </header>
 
-      <main class="main-area">
+      <main class="main-area" :class="{ 'main-flush': view === 'chat' }">
         <!-- 访谈：会话栏 | 消息流 | 画像栏 三柱工作台 -->
         <div v-if="view === 'chat'" class="iv-workbench">
           <SessionList ref="sessionListRef" class="iv-side-col" inline :active-id="chatSid"
@@ -115,6 +162,15 @@ onUnmounted(() => window.removeEventListener("hashchange", syncRoute));
         <MemoryView v-else-if="view === 'memory'" />
       </main>
     </div>
+
+    <nav class="mobile-tabs" aria-label="主导航">
+      <button v-for="item in NAV" :key="item.hash" class="mt-item"
+              :class="{ on: item.on(view) }" :aria-current="item.on(view) ? 'page' : undefined"
+              @click="nav(item.hash)">
+        <UiIcon :name="item.icon" :size="20" />
+        <span>{{ item.short }}</span>
+      </button>
+    </nav>
 
     <SessionList v-if="sidebar" :active-id="chatSid" @close="sidebar = false"
                  @select="onSelectSession" @new="onNewSession" />

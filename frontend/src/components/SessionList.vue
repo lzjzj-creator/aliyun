@@ -4,6 +4,7 @@
 import { onMounted, ref } from "vue";
 import { listSessions, deleteSession } from "../api/sessions";
 import { removeSessionToken } from "../storage";
+import UiIcon from "./UiIcon.vue";
 
 const emit = defineEmits(["select", "new", "close"]);
 const props = defineProps({
@@ -85,10 +86,14 @@ defineExpose({ reload: load });
   <aside :class="inline ? 'session-col' : 'session-drawer'">
     <header class="sd-head">
       <b>会话</b>
-      <button v-if="!inline" class="sd-close" @click="emit('close')" aria-label="关闭">×</button>
+      <button v-if="!inline" class="sd-close" @click="emit('close')" aria-label="关闭">
+        <UiIcon name="x" :size="18" />
+      </button>
     </header>
 
-    <button class="sd-new" @click="emit('new')">＋ 新建会话</button>
+    <button class="sd-new" @click="emit('new')">
+      <UiIcon name="plus" :size="15" /> 新建访谈
+    </button>
 
     <p v-if="loading" class="sd-hint">加载中…</p>
     <p v-else-if="errMsg" class="sd-hint">{{ errMsg }}</p>
@@ -111,7 +116,9 @@ defineExpose({ reload: load });
             <button @click="confirmId = ''">取消</button>
           </div>
         </div>
-        <button v-else class="sd-trash" title="删除会话" @click="confirmId = s.id">🗑</button>
+        <button v-else class="sd-trash" title="删除会话" aria-label="删除会话" @click="confirmId = s.id">
+          <UiIcon name="trash" :size="15" />
+        </button>
       </li>
     </ul>
 
@@ -123,48 +130,76 @@ defineExpose({ reload: load });
 .session-drawer {
   position: fixed; top: 0; left: 0; bottom: 0; z-index: 30;
   width: 300px; max-width: 88vw; padding: 14px 12px;
-  background: var(--paper); border-right: 1px solid var(--line);
+  background: var(--bg-surface); border-right: 1px solid var(--border);
   display: flex; flex-direction: column; gap: 10px;
-  box-shadow: 4px 0 24px rgba(31, 42, 46, .08);
+  box-shadow: var(--shadow-md);
 }
-/* 桌面内嵌栏：占据工作台一柱，随页面流 */
+/* 桌面内嵌栏：占据工作台一柱，内部滚动 */
 .session-col {
-  display: flex; flex-direction: column; gap: 10px;
-  height: 100%; padding: 14px 12px;
-  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
-  align-self: flex-start; position: sticky; top: 14px;
-  max-height: calc(100vh - 120px);
+  display: flex; flex-direction: column; gap: 8px;
+  height: 100%; min-height: 0; padding: 14px 10px;
+  background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-md);
 }
-.sd-item.active { background: rgba(20, 82, 90, .06); border-radius: 10px; border-left: 3px solid var(--accent); padding-left: 3px; }
-.sd-head { display: flex; justify-content: space-between; align-items: center; }
-.sd-head b { color: var(--teal); }
-.sd-close { border: none; background: none; font-size: 1.3rem; cursor: pointer; color: var(--ink-soft); }
+.sd-head { display: flex; justify-content: space-between; align-items: center; padding: 0 4px; }
+.sd-head b { color: var(--ink); font-size: .9rem; }
+.sd-close {
+  border: none; background: none; cursor: pointer; color: var(--ink-muted);
+  width: 30px; height: 30px; border-radius: var(--radius-xs);
+  display: flex; align-items: center; justify-content: center;
+}
+.sd-close:hover { background: var(--bg-hover); color: var(--ink); }
 .sd-new {
-  border: 1px solid var(--teal); background: var(--teal); color: #fff;
-  border-radius: 999px; padding: 9px 14px; cursor: pointer; font-size: .9rem;
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  border: 1px solid var(--brand); background: var(--brand); color: #fff;
+  border-radius: var(--radius-sm); padding: 8px 14px; cursor: pointer;
+  font: inherit; font-size: 13.5px; font-weight: 500;
+  transition: background var(--dur-fast) var(--ease);
 }
-.sd-hint { font-size: .82rem; color: var(--mute); padding: 4px 2px; }
-.sd-list { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; }
+.sd-new:hover { background: var(--brand-hover); }
+.sd-hint { font-size: .82rem; color: var(--ink-muted); padding: 4px 6px; }
+.sd-list {
+  list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; min-height: 0;
+  display: flex; flex-direction: column; gap: 4px;
+}
 .sd-item {
-  display: flex; align-items: flex-start; gap: 4px;
-  padding: 8px 6px; border-radius: 10px; border-bottom: 1px dashed var(--line);
+  position: relative; display: flex; align-items: flex-start; gap: 2px;
+  padding: 8px 8px 8px 11px; border-radius: 10px;
+  transition: background var(--dur-fast) var(--ease);
 }
-.sd-item:hover { background: var(--surface-warm); }
+.sd-item:hover { background: var(--bg-subtle); }
+.sd-item.active {
+  background: var(--bg-surface); box-shadow: var(--shadow-xs);
+}
+.sd-item.active::before {
+  content: ""; position: absolute; left: 0; top: 18%; bottom: 18%;
+  width: 3px; border-radius: 2px; background: var(--agent);
+}
 .sd-sess {
   flex: 1; min-width: 0; text-align: left; border: none; background: none;
   cursor: pointer; padding: 2px; font: inherit; color: var(--ink);
 }
 .sd-sess .t { display: block; font-size: .9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sd-sess .meta { display: flex; align-items: center; gap: 6px; font-size: .72rem; color: var(--mute); margin-top: 3px; }
-.stage { font-style: normal; padding: 0 6px; border-radius: 999px; background: rgba(20,82,90,.08); color: var(--teal); }
-.stage[data-s="done"] { background: rgba(14,138,22,.10); color: var(--good); }
-.sd-trash { border: none; background: none; cursor: pointer; font-size: .85rem; opacity: .5; padding: 4px; }
-.sd-trash:hover { opacity: 1; }
-.sd-confirm { font-size: .75rem; color: var(--err); padding: 4px 6px; }
+.sd-sess .meta { display: flex; align-items: center; gap: 6px; font-size: .72rem; color: var(--ink-muted); margin-top: 3px; }
+.stage { font-style: normal; padding: 0 6px; border-radius: var(--radius-pill); background: var(--brand-soft); color: var(--brand); }
+.stage[data-s="done"] { background: var(--agent-soft); color: var(--agent); }
+.sd-trash {
+  border: none; background: none; cursor: pointer; color: var(--ink-muted);
+  width: 26px; height: 26px; border-radius: var(--radius-xs); padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; transition: opacity var(--dur-fast) var(--ease);
+}
+.sd-item:hover .sd-trash, .sd-item:focus-within .sd-trash { opacity: 1; }
+.sd-trash:hover { color: var(--danger); background: var(--danger-soft); }
+@media (hover: none) { .sd-trash { opacity: .6; } }
+.sd-confirm { font-size: .75rem; color: var(--danger); padding: 4px 6px; }
 .sd-confirm-btns { display: flex; gap: 6px; margin-top: 4px; }
-.sd-confirm-btns button { border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 3px 10px; font-size: .75rem; cursor: pointer; }
-.sd-confirm-btns .danger { border-color: var(--err); background: var(--err); color: #fff; }
-.sd-demo { font-size: .7rem; color: var(--err); text-align: center; }
+.sd-confirm-btns button {
+  border: 1px solid var(--border); background: var(--bg-surface);
+  border-radius: var(--radius-pill); padding: 3px 10px; font-size: .75rem; cursor: pointer;
+  font-family: inherit; color: var(--ink);
+}
+.sd-confirm-btns .danger { border-color: var(--danger); background: var(--danger); color: #fff; }
+.sd-demo { font-size: .7rem; color: var(--danger); text-align: center; }
 @media (max-width: 640px) {
   .session-drawer { width: 100vw; max-width: 100vw; border-right: none; }
 }

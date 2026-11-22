@@ -16,7 +16,9 @@ const kindCn = (k) => KIND_CN[k] || k || "步骤";
 <template>
   <div v-if="steps.length || reasoning" class="tsteps" :class="{ live }">
     <details :open="live" class="tsteps-body">
-      <summary v-if="!live">思考过程 · {{ steps.length }} 步</summary>
+      <summary v-if="!live">
+        <span class="tsteps-summary">思考过程 · {{ steps.length }} 步</span>
+      </summary>
       <ol class="tsteps-list">
         <li v-for="s in steps" :key="s.id" :class="['tstep', s.status || 'running']">
           <span class="tstep-dot" aria-hidden="true"></span>
@@ -31,38 +33,49 @@ const kindCn = (k) => KIND_CN[k] || k || "步骤";
 </template>
 
 <style scoped>
-.tsteps { margin: 0 0 8px; font-size: .8rem; }
-.tsteps-body summary {
-  cursor: pointer; color: var(--mute); font-size: .75rem; list-style: none;
-  padding: 2px 0;
+.tsteps {
+  margin: 0 0 10px; font-size: .8rem;
+  background: var(--bg-subtle); border: 1px solid var(--border-subtle);
+  border-radius: 10px; padding: 8px 12px;
 }
-.tsteps-body summary::before { content: "▸ "; }
-.tsteps-body[open] summary::before { content: "▾ "; }
-.tsteps-body summary:hover { color: var(--teal); }
-.tsteps-list { list-style: none; margin: 6px 0 4px; padding: 0; }
+.tsteps-body summary {
+  cursor: pointer; color: var(--ink-muted); font-size: .75rem; list-style: none;
+  padding: 2px 0; display: flex; align-items: center; gap: 5px;
+}
+.tsteps-body summary::before {
+  content: "▸"; color: var(--agent); transition: transform var(--dur-fast) var(--ease);
+}
+.tsteps-body[open] summary::before { content: "▾"; }
+.tsteps-body summary:hover { color: var(--ink); }
+.tsteps-list { list-style: none; margin: 8px 0 4px; padding: 0 0 0 4px; position: relative; }
+/* 左侧竖向时间轴线 */
+.tsteps-list::before {
+  content: ""; position: absolute; left: 7px; top: 8px; bottom: 8px;
+  width: 1.5px; background: var(--border-strong); border-radius: 1px;
+}
 .tstep {
   display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap;
-  padding: 2px 0 2px 14px; position: relative; color: var(--ink-soft); line-height: 1.45;
+  padding: 3px 0 3px 20px; position: relative; color: var(--ink-secondary); line-height: 1.45;
 }
-.tstep + .tstep { border-top: 1px dashed var(--line); }
 .tstep-dot {
-  position: absolute; left: 0; top: .62em; width: 7px; height: 7px;
+  position: absolute; left: 0; top: .68em; width: 8px; height: 8px;
   border-radius: 50%; background: var(--step-idle);
 }
-.tstep.done .tstep-dot { background: var(--teal); }
+.tstep.done .tstep-dot { background: var(--agent); }
 .tstep.running .tstep-dot {
-  background: var(--accent); animation: tpulse 1s ease-in-out infinite;
+  background: var(--agent); animation: tpulse 1.1s ease-in-out infinite;
+  box-shadow: 0 0 0 3px var(--agent-soft);
 }
-@keyframes tpulse { 50% { opacity: .3; } }
+@keyframes tpulse { 50% { opacity: .35; } }
 .tstep-kind {
-  flex: none; font-size: .68rem; padding: 0 6px; border-radius: 999px;
-  background: rgba(20, 82, 90, .08); color: var(--teal);
-  border: 1px solid rgba(20, 82, 90, .18);
+  flex: none; font-size: .68rem; padding: 0 6px; border-radius: var(--radius-pill);
+  background: var(--agent-soft); color: var(--agent); border: 1px solid var(--agent-border);
 }
 .tstep-title { font-weight: 600; color: var(--ink); }
-.tstep-detail { color: var(--mute); font-size: .75rem; overflow-wrap: anywhere; }
+.tstep-detail { color: var(--ink-muted); font-size: .75rem; overflow-wrap: anywhere; }
 .tstep-reasoning {
-  margin: 4px 0 0; padding: 6px 10px; border-left: 3px solid var(--accent);
-  background: var(--accent-bg); border-radius: 0 8px 8px 0; color: var(--ink-soft); font-size: .78rem;
+  margin: 6px 0 0; padding: 8px 12px; border-left: 2px solid var(--agent);
+  background: var(--agent-soft); border-radius: 0 8px 8px 0;
+  color: var(--ink-secondary); font-size: .78rem; line-height: 1.6;
 }
 </style>

@@ -32,6 +32,14 @@ function onPhotoBusy(event) {
 const hasToken = ref(!!getOwnerToken());
 const creating = ref(false);
 const newDoc = ref({ title: "", target_role: "", jd_text: "" });
+const editorTab = ref("edit");       // 左侧控制台：edit | coach | evidence（v-show 切换，SSR 保活 DOM）
+const editorEl = ref(null);          // .lib-editor 容器引用（模块锚点跳转）
+const libSections = computed(() =>
+  (tpl.value?.sections || []).slice().sort((a, b) => a.order - b.order));
+function scrollToSection(key) {
+  editorEl.value?.querySelector(`.rff-sec[data-key="${key}"]`)
+    ?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
 const regenRole = ref("");
 const regenJd = ref("");
 const keepManual = ref(true);
@@ -69,6 +77,7 @@ function resetDocument() {
   versions.value = [];
   regenRole.value = ""; regenJd.value = ""; keepManual.value = true;
   mobilePanel.value = "edit";
+  editorTab.value = "edit";
   busy.value = false; saving.value = false; exporting.value = false; optBusy.value = false;
   clearOptimization();
 }
@@ -94,6 +103,7 @@ async function onOptimize() {
   const snapshot = cloneFields(fields.value);
   const ver = doc.value.template_version || tpl.value.template_version;
   optBusy.value = true;
+  editorTab.value = "coach";   // 点智能优化即切到 AI 优化教练 Tab 展示进度与结果
   clearOptimization();
   try {
     const plan = await optimizePlan({ template_version: ver, fields: snapshot });
@@ -440,63 +450,97 @@ onMounted(() => {
 
 <template>
   <div class="lib-page">
-    <h2 class="lib-title">岗位简历库</h2>
-
     <div v-if="!hasToken" class="lib-empty">
-      <p>简历库需要长期记忆提供事实来源。</p>
-      <button class="lib-btn primary" @click="emit('goto-memory')">
-        先去开启记忆
-      </button>
+      <b>简历库需要长期记忆提供事实来源</b>
+      <p>完成一次访谈即可自动建档，或先去记忆页手动开启。</p>
+      <button class="btn-primary" @click="emit('goto-memory')">先去开启记忆</button>
     </div>
 
     <div v-else-if="props.docId && !doc" class="lib-loading" role="status" aria-live="polite">
-      <button class="lib-btn" @click="emit('nav', '#/resume/library')">← 列表</button>
+      <button class="btn-secondary sm" @click="emit('nav', '#/resume/library')">← 列表</button>
       <p>{{ loading ? "正在加载简历…" : errMsg }}</p>
     </div>
 
     <template v-else-if="!doc">
-      <div class="lib-bar">
-        <button class="lib-btn primary" @click="creating = !creating">
-          {{ creating ? "收起" : "＋ 新建简历" }}
-        </button>
+      <div class="lib-head">
+        <div class="lib-head-main">
+          <h2 class="lib-title">岗位简历库</h2>
+          <span class="lib-count">{{ docs.length }} 份</span>
+        </div>
+        <button class="btn-primary" :disabled="busy" @click="creating = true">＋ 新建简历</button>
       </div>
 
-      <div v-if="creating" class="lib-new">
-        <label for="new-title">简历标题</label>
-        <input id="new-title" v-model="newDoc.title" :disabled="busy" placeholder="如：后端开发-暑期实习" maxlength="80" />
-        <label for="new-role">目标岗位（可选）</label>
-        <input id="new-role" v-model="newDoc.target_role" :disabled="busy" maxlength="80" />
-        <label for="new-jd">职位描述（可选）</label>
-        <textarea id="new-jd" v-model="newDoc.jd_text" :disabled="busy" rows="3" placeholder="用于相关性排序" />
-        <button class="lib-btn primary" :disabled="busy" @click="onCreate">
-          从事实库生成
-        </button>
+      <div v-if="creating" class="lib-modal-mask" @click.self="creating = false">
+        <div class="lib-modal" role="dialog" aria-modal="true" aria-label="新建简历">
+          <div class="lib-modal-head">
+            <b>新建简历</b>
+            <button class="lib-modal-x" aria-label="关闭" @click="creating = false">×</button>
+          </div>
+          <label for="new-title">简历标题</label>
+          <input id="new-title" v-model="newDoc.title" :disabled="busy" placeholder="如：后端开发-暑期实习" maxlength="80" />
+          <label for="new-role">目标岗位（可选）</label>
+          <input id="new-role" v-model="newDoc.target_role" :disabled="busy" maxlength="80" />
+          <label for="new-jd">职位描述（可选）</label>
+          <textarea id="new-jd" v-model="newDoc.jd_text" :disabled="busy" rows="3" placeholder="用于相关性排序"></textarea>
+          <div class="lib-modal-ops">
+            <button class="btn-secondary" @click="creating = false">取消</button>
+            <button class="btn-primary" :disabled="busy" @click="onCreate">从事实库生成</button>
+          </div>
+        </div>
       </div>
 
-      <ul class="lib-list">
-        <li v-for="d in docs" :key="d.id" class="lib-doc" role="button" tabindex="0"
-            @click="openDoc(d.id)" @keydown.enter="openDoc(d.id)" @keydown.space.prevent="openDoc(d.id)">
-          <div class="ld-main">
-            <b>{{ d.title }}</b>
-            <span class="ld-role">{{ d.target_role || "未指定岗位" }}</span>
+      <div v-if="docs.length" class="lib-grid">
+        <article v-for="d in docs" :key="d.id" class="lib-card" role="button" tabindex="0"
+                 @click="openDoc(d.id)" @keydown.enter="openDoc(d.id)" @keydown.space.prevent="openDoc(d.id)">
+          <div class="lc-top">
+            <span class="lc-role">{{ d.target_role || "未指定岗位" }}</span>
+            <span class="ld-status" :data-s="d.status">
+              {{ { draft: "草稿", ready: "就绪", stale: "需更新" }[d.status] || d.status }}
+            </span>
           </div>
-          <div class="ld-meta">
-            <span class="ld-status" :data-s="d.status">{{ d.status }}</span>
-            <span>完成度 {{ Math.round((Number.isFinite(d.completeness) ? d.completeness : 0) * 100) }}%</span>
-            <span>{{ (d.updated_at || "").slice(0, 10) }}</span>
+          <b class="lc-title">{{ d.title }}</b>
+          <div class="lc-foot">
+            <span class="lc-bar" aria-hidden="true">
+              <i :style="{ width: Math.round((Number.isFinite(d.completeness) ? d.completeness : 0) * 100) + '%' }"></i>
+            </span>
+            <span class="lc-pct">{{ Math.round((Number.isFinite(d.completeness) ? d.completeness : 0) * 100) }}%</span>
+            <span class="lc-date">{{ (d.updated_at || "").slice(0, 10) }}</span>
           </div>
-        </li>
-      </ul>
-      <p v-if="!docs.length" class="lib-hint">还没有简历，点「新建简历」从事实库生成一份。</p>
+        </article>
+      </div>
+      <p v-else class="lib-hint">还没有简历，点「新建简历」从事实库生成一份。</p>
       <p v-if="errMsg" class="lib-err">{{ errMsg }}</p>
     </template>
 
     <template v-else>
-      <div class="lib-detail-head">
-        <button class="lib-btn" @click="emit('nav', '#/resume/library')">← 列表</button>
-        <b>{{ doc.title }}</b>
-        <span class="ld-role">{{ doc.target_role || "未指定岗位" }}</span>
-        <span class="ld-status" :data-s="doc.status">{{ doc.status }}</span>
+      <div class="lib-topbar">
+        <button class="btn-ghost sm" @click="emit('nav', '#/resume/library')">← 列表</button>
+        <b class="lt-title">{{ doc.title }}</b>
+        <span class="ld-status" :data-s="doc.status">
+          {{ { draft: "草稿", ready: "就绪", stale: "需更新" }[doc.status] || doc.status }}
+        </span>
+        <label class="layout-control">版式
+          <select v-model="layout" :disabled="busy || optBusy || photoBusy">
+            <option value="classic">中文经典</option>
+            <option value="modern">中文现代</option>
+          </select>
+        </label>
+        <span class="save-state" role="status" aria-live="polite">{{ saveState }}</span>
+        <span class="lt-spacer"></span>
+        <details v-if="versions.length" class="lv-dropdown">
+          <summary>历史版本 · {{ versions.length }} <i class="lv-caret" aria-hidden="true">▾</i></summary>
+          <div class="lv-menu">
+            <div v-for="v in versions" :key="v.id" class="lv-row">
+              <span>v{{ v.version }}</span>
+              <button class="lv-restore" :disabled="busy || optBusy || photoBusy" @click="onRestore(v)">恢复</button>
+            </div>
+            <p class="lv-hint">仅保留最近 10 版</p>
+          </div>
+        </details>
+        <button class="btn-secondary sm" :disabled="busy || optBusy || photoBusy || !dirty" @click="onSave">{{ saving ? "保存中…" : "保存修改" }}</button>
+        <button class="btn-secondary sm" :disabled="busy || optBusy || photoBusy" @click="onDuplicate">复制为新稿</button>
+        <button class="btn-danger sm" :disabled="busy || optBusy || photoBusy" @click="onDelete">删除</button>
+        <button class="btn-primary sm" :disabled="busy || optBusy || photoBusy || !tpl" @click="onExport">{{ exporting ? "导出中…" : "导出 PDF" }}</button>
       </div>
 
       <div v-if="staleList.length" class="lib-stale">
@@ -505,25 +549,9 @@ onMounted(() => {
           {{ s.field_path }}（{{ s.change === "deleted" ? "来源已删" : "来源已变" }}）
         </span>
         —— 建议重新生成
+        <button class="stale-link" @click="editorTab = 'evidence'">去证据与定制</button>
       </div>
 
-      <div class="lib-detail-ops">
-        <label class="layout-control">版式
-          <select v-model="layout" :disabled="busy || optBusy || photoBusy">
-            <option value="classic">中文经典</option>
-            <option value="modern">中文现代</option>
-          </select>
-        </label>
-        <span class="save-state" role="status" aria-live="polite">{{ saveState }}</span>
-        <button class="lib-btn" :disabled="busy || optBusy || photoBusy || !dirty" @click="onSave">
-          {{ saving ? "保存中…" : "保存修改" }}
-        </button>
-        <button class="lib-btn primary" :disabled="busy || optBusy || photoBusy || !tpl" @click="onExport">
-          {{ exporting ? "导出中…" : "导出 PDF" }}
-        </button>
-        <button class="lib-btn" :disabled="busy || optBusy || photoBusy" @click="onDuplicate">复制为新稿</button>
-        <button class="lib-btn danger" :disabled="busy || optBusy || photoBusy" @click="onDelete">删除</button>
-      </div>
       <div v-if="errMsg || exportProblems.length" class="lib-feedback" role="alert">
         <p v-if="errMsg" class="lib-err">{{ errMsg }}</p>
         <ul v-if="exportProblems.length">
@@ -535,81 +563,92 @@ onMounted(() => {
         <button class="lib-btn" :aria-pressed="mobilePanel === 'preview'" @click="mobilePanel = 'preview'">预览</button>
       </div>
 
-      <div v-if="doc.gaps?.length" class="lib-gaps">
-        {{ doc.gaps.length }} 处待补充
-      </div>
-
-      <div v-if="versions.length" class="lib-versions">
-        <span class="lv-title">历史版本：</span>
-        <span v-for="v in versions" :key="v.id" class="lv-item">
-          v{{ v.version }}
-          <button class="lv-restore" :disabled="busy || optBusy || photoBusy"
-                  @click="onRestore(v)">恢复</button>
-        </span>
-        <span class="lv-hint">仅保留最近 10 版</span>
-      </div>
-
       <div class="lib-cols" :data-panel="mobilePanel">
-        <aside class="lib-editor">
-          <h3 class="editor-title">简历内容</h3>
-          <details v-if="evidenceRows.length" class="evidence-panel">
-            <summary>字段出处（仅供核对，不会导出）</summary>
-            <div v-for="row in evidenceRows" :key="row.path" class="evidence-field">
-              <b>{{ row.path }}</b>
-              <ul>
-                <li v-for="(source, i) in row.sources" :key="i">
-                  <p>{{ source.quote || "未提供引用原文" }}</p>
-                  <template v-for="key in ['session_id', 'msg_id', 'fact_id', 'fact_version', 'fact_status']" :key="key">
-                    <span v-if="source[key] != null && source[key] !== ''">{{ key }}：{{ source[key] }}</span>
-                  </template>
-                </li>
-              </ul>
-            </div>
-          </details>
-          <details class="lib-generation">
-            <summary>岗位与重新生成</summary>
-            <fieldset :disabled="busy || optBusy || photoBusy">
-              <label for="regen-role">目标岗位（可选）</label>
-              <input id="regen-role" v-model="regenRole" maxlength="80" />
-              <label for="regen-jd">职位描述（可选）</label>
-              <textarea id="regen-jd" v-model="regenJd" rows="3" />
-              <label><input type="checkbox" v-model="keepManual" /> 保留手工修改</label>
-              <button class="lib-btn" @click="onRegenerate">重新生成</button>
+        <aside ref="editorEl" class="lib-editor">
+          <nav class="editor-tabs" aria-label="简历编辑">
+            <button :aria-pressed="editorTab === 'edit'" :class="{ on: editorTab === 'edit' }" @click="editorTab = 'edit'">内容编辑</button>
+            <button :aria-pressed="editorTab === 'coach'" :class="{ on: editorTab === 'coach' }" @click="editorTab = 'coach'">AI 优化教练</button>
+            <button :aria-pressed="editorTab === 'evidence'" :class="{ on: editorTab === 'evidence' }" @click="editorTab = 'evidence'">证据与定制</button>
+          </nav>
+
+          <div v-show="editorTab === 'edit'" class="etab">
+            <nav v-if="libSections?.length" class="sec-pills" aria-label="模块跳转">
+              <button v-for="s in libSections" :key="s.key" class="sec-pill" @click="scrollToSection(s.key)">{{ s.title }}</button>
+            </nav>
+            <div v-if="doc.gaps?.length" class="lib-gaps">{{ doc.gaps.length }} 处待补充</div>
+            <fieldset class="lib-fields" :disabled="busy || optBusy || !!optFields" :aria-busy="busy || optBusy || photoBusy">
+              <legend class="sr-only">编辑简历字段</legend>
+              <ResumeFieldsForm v-if="tpl" v-model="fields" :template="tpl" :gaps="doc.gaps || []"
+                                :disabled="busy || optBusy || !!optFields" :context="photoContext" @photo-busy="onPhotoBusy" />
             </fieldset>
-          </details>
-          <button class="lib-btn" :disabled="busy || optBusy || photoBusy || !tpl" @click="onOptimize">
-            {{ optBusy ? "优化中…" : "智能优化" }}
-          </button>
-          <div v-if="optFields" class="lib-adopt" role="status">
-            <p>预览为待采纳优化稿。可采纳后保存并导出，或放弃优化稿返回原稿。</p>
-            <button class="lib-btn primary" :disabled="busy || optBusy || photoBusy" @click="adoptOptimized">采纳优化稿</button>
-            <button class="lib-btn" :disabled="busy || optBusy || photoBusy" @click="discardOptimized">放弃优化稿</button>
           </div>
-          <fieldset class="lib-fields" :disabled="busy || optBusy || !!optFields" :aria-busy="busy || optBusy || photoBusy">
-            <legend class="sr-only">编辑简历字段</legend>
-            <ResumeFieldsForm v-if="tpl" v-model="fields" :template="tpl" :gaps="doc.gaps || []"
-                              :disabled="busy || optBusy || !!optFields" :context="photoContext" @photo-busy="onPhotoBusy" />
-          </fieldset>
-          <div v-if="Object.keys(optResults).length" class="lib-opt">
-        <template v-for="(r, key) in optResults" :key="key">
-          <div v-if="r.change_log?.length" class="lo-sec">
-            <h3>改动 · {{ key }}</h3>
-            <div v-for="(c, i) in r.change_log" :key="i" class="lo-pair">
-              <p class="lo-before">{{ c.before }}</p>
-              <p class="lo-after">{{ c.after }}</p>
+
+          <div v-show="editorTab === 'coach'" class="etab">
+            <button class="btn-agent coach-run" :disabled="busy || optBusy || photoBusy || !tpl" @click="onOptimize">
+              {{ optBusy ? "优化中…" : "✦ 智能优化" }}
+            </button>
+            <ul v-if="optPlan" class="opt-list">
+              <li v-for="s in optPlan.sections" :key="s.key" :data-st="s.status">
+                <b>{{ s.title }}</b>
+                <span class="st">{{ { pending: "待优化", running: "优化中…", done: "完成", error: "失败", skipped: "跳过", ok: "无需改", check: "人工确认" }[s.status] || s.status }}</span>
+                <span v-if="s.reason" class="rs">{{ s.reason }}</span>
+              </li>
+            </ul>
+            <template v-for="(r, key) in optResults" :key="key">
+              <div v-if="r.change_log?.length" class="coach-sec">
+                <h3 class="coach-sec-title">改动 · {{ (optPlan?.sections || []).find(x => x.key === key)?.title || key }}</h3>
+                <div v-for="(c, i) in r.change_log" :key="i" class="coach-diff-card">
+                  <p class="diff-before">{{ c.before }}</p>
+                  <p class="diff-after">{{ c.after }}</p>
+                  <p v-if="c.reason" class="diff-reason">{{ c.reason }}</p>
+                </div>
+              </div>
+              <p v-if="r.error" class="lib-err">{{ (optPlan?.sections || []).find(x => x.key === key)?.title || key }}：{{ r.error }}</p>
+            </template>
+            <div v-if="optFields" class="lib-adopt" role="status">
+              <p>预览为待采纳优化稿。可采纳后保存并导出，或放弃优化稿返回原稿。</p>
+              <button class="btn-agent sm" :disabled="busy || optBusy || photoBusy" @click="adoptOptimized">采纳优化稿</button>
+              <button class="btn-secondary sm" :disabled="busy || optBusy || photoBusy" @click="discardOptimized">放弃优化稿</button>
             </div>
+            <div v-if="placeholders.length" class="coach-ph">
+              {{ placeholders.length }} 处待补充占位：{{ placeholders.map((p) => p.field_path).join("、") }}
+            </div>
+            <p v-if="!optPlan && !Object.keys(optResults).length" class="lib-hint">点「智能优化」，我会逐段给出改动和理由，像教练一样教你怎么改。</p>
           </div>
-          <p v-if="r.error" class="lib-err">{{ key }}：{{ r.error }}</p>
-        </template>
-        <div v-if="placeholders.length" class="lo-ph">
-          {{ placeholders.length }} 处待补充占位：
-          {{ placeholders.map((p) => p.field_path).join("、") }}
-        </div>
+
+          <div v-show="editorTab === 'evidence'" class="etab">
+            <details v-if="evidenceRows.length" class="evidence-panel">
+              <summary>字段出处（仅供核对，不会导出）</summary>
+              <div v-for="row in evidenceRows" :key="row.path" class="evidence-field">
+                <b>{{ row.path }}</b>
+                <ul>
+                  <li v-for="(source, i) in row.sources" :key="i">
+                    <p>{{ source.quote || "未提供引用原文" }}</p>
+                    <template v-for="key in ['session_id', 'msg_id', 'fact_id', 'fact_version', 'fact_status']" :key="key">
+                      <span v-if="source[key] != null && source[key] !== ''">{{ key }}：{{ source[key] }}</span>
+                    </template>
+                  </li>
+                </ul>
+              </div>
+            </details>
+            <details class="lib-generation">
+              <summary>岗位与重新生成</summary>
+              <fieldset :disabled="busy || optBusy || photoBusy">
+                <label for="regen-role">目标岗位（可选）</label>
+                <input id="regen-role" v-model="regenRole" maxlength="80" />
+                <label for="regen-jd">职位描述（可选）</label>
+                <textarea id="regen-jd" v-model="regenJd" rows="3"></textarea>
+                <label><input type="checkbox" v-model="keepManual" /> 保留手工修改</label>
+                <button class="btn-primary" :disabled="busy || optBusy || photoBusy" @click="onRegenerate">重新生成</button>
+              </fieldset>
+            </details>
           </div>
         </aside>
         <div class="lib-preview">
           <p class="preview-caption">{{ optFields ? "待采纳优化稿" : "投递预览" }} · {{ layout === "classic" ? "中文经典" : "中文现代" }}</p>
-          <ResumePreview v-if="tpl" class="print-area" :template="tpl" :fields="optFields || fields" :layout="layout" />
+          <div class="paper-stage">
+            <ResumePreview v-if="tpl" class="print-area" :template="tpl" :fields="optFields || fields" :layout="layout" />
+          </div>
         </div>
       </div>
     </template>
@@ -617,98 +656,188 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.lib-page { max-width: 1440px; margin: 0 auto; padding: 20px 24px 60px; background: #f4f5f7; border-radius: 14px; color: var(--ink, #263238); }
-.lib-page :deep(:focus-visible) { outline: 3px solid var(--teal, #2563eb); outline-offset: 3px; }
+.lib-page { max-width: 1440px; margin: 0 auto; padding: 0 0 60px; color: var(--ink); }
+.lib-page :deep(:focus-visible) { outline: 3px solid var(--brand); outline-offset: 3px; }
 .lib-page fieldset { min-width: 0; border: 0; margin: 0; padding: 0; }
-.lib-editor { min-width: 0; background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 18px; }
-.editor-title { margin: 0 0 14px; font-size: 15px; }
-.lib-fields { margin-top: 18px !important; }
-.lib-generation { border-bottom: 1px solid #e5e7eb; padding-bottom: 14px; margin-bottom: 14px; font-size: 13px; }
-.lib-generation summary { cursor: pointer; padding: 6px 0; }
-.evidence-panel { margin-bottom: 14px; border-bottom: 1px solid #e5e7eb; padding-bottom: 10px; font-size: 13px; overflow-wrap: anywhere; }
-.evidence-panel summary { cursor: pointer; padding: 6px 0; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+
+/* —— 列表态：工具条 + 卡片网格 + 居中 Modal —— */
+.lib-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 8px 0 18px; }
+.lib-head-main { display: flex; align-items: baseline; gap: 10px; }
+.lib-title { font-size: 20px; margin: 0; font-weight: 650; }
+.lib-count { font-size: 12px; padding: 1px 9px; border-radius: var(--radius-pill); background: var(--bg-subtle); color: var(--ink-secondary); }
+.lib-modal-mask {
+  position: fixed; inset: 0; z-index: 50; background: rgba(15, 23, 42, .42);
+  display: flex; align-items: center; justify-content: center; padding: 16px;
+}
+.lib-modal {
+  width: min(420px, 92vw); background: var(--bg-surface); border-radius: var(--radius-md);
+  padding: 18px; display: flex; flex-direction: column; gap: 8px; box-shadow: var(--shadow-md);
+}
+.lib-modal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.lib-modal-head b { font-size: 15px; }
+.lib-modal-x { border: none; background: none; font-size: 18px; color: var(--ink-muted); cursor: pointer; padding: 2px 6px; border-radius: var(--radius-xs); }
+.lib-modal-x:hover { background: var(--bg-hover); color: var(--ink); }
+.lib-modal label { font-size: .78rem; color: var(--ink-secondary); }
+.lib-modal input, .lib-modal textarea { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 13px; font-family: inherit; background: var(--bg-surface); color: var(--ink); }
+.lib-modal input:focus, .lib-modal textarea:focus { outline: none; border-color: var(--brand); }
+.lib-modal-ops { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+.lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+.lib-card {
+  background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-md);
+  padding: 16px; cursor: pointer; display: flex; flex-direction: column; gap: 8px;
+  transition: border-color var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+}
+.lib-card:hover { border-color: var(--brand-border); transform: translateY(-2px); box-shadow: var(--shadow-sm); }
+.lc-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.lc-role { font-size: .75rem; color: var(--ink-secondary); background: var(--bg-subtle); padding: 1px 9px; border-radius: var(--radius-pill); }
+.lc-title { font-size: .95rem; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lc-foot { display: flex; align-items: center; gap: 8px; font-size: .72rem; color: var(--ink-muted); }
+.lc-bar { flex: 1; height: 5px; border-radius: 3px; background: var(--bg-subtle); overflow: hidden; }
+.lc-bar i { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--agent), var(--brand)); transition: width var(--dur-base) var(--ease); }
+.lc-pct { font-variant-numeric: tabular-nums; }
+.lc-date { margin-left: auto; }
+.ld-status { font-size: .72rem; font-style: normal; padding: 1px 9px; border-radius: var(--radius-pill); }
+.ld-status[data-s="draft"] { background: var(--coach-soft); color: var(--coach); border: 1px solid var(--coach-border); }
+.ld-status[data-s="ready"] { background: var(--agent-soft); color: var(--agent); border: 1px solid var(--agent-border); }
+.ld-status[data-s="stale"] { background: #ffedd5; color: #c2410c; border: 1px solid #fdba74; }
+.lib-empty { background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 32px 24px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.lib-empty p { color: var(--ink-secondary); font-size: .88rem; margin: 0; }
+.lib-loading { color: var(--ink-secondary); font-size: .88rem; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.lib-hint { color: var(--ink-muted); font-size: 13px; }
+.lib-err { color: var(--danger); font-size: 13px; }
+
+/* —— 详情态：56px 吸顶操作栏 —— */
+.lib-topbar {
+  position: sticky; top: 0; z-index: 15; min-height: 56px;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 8px 0; margin-bottom: 14px;
+  background: var(--bg-canvas); border-bottom: 1px solid var(--border);
+}
+.lt-title { font-size: .95rem; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px; }
+.lt-spacer { flex: 1; }
+.layout-control { display: flex; gap: 6px; align-items: center; white-space: nowrap; font-size: .8rem; color: var(--ink-secondary); }
+.layout-control select { border: 1px solid var(--border); border-radius: 8px; padding: 5px 8px; background: var(--bg-surface); font: inherit; font-size: .82rem; color: var(--ink); }
+.save-state { font-size: .75rem; color: var(--ink-muted); }
+.lv-dropdown { position: relative; }
+.lv-dropdown summary {
+  list-style: none; cursor: pointer; font-size: .8rem; color: var(--ink-secondary);
+  padding: 6px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--bg-surface);
+  display: inline-flex; align-items: center; gap: 4px; user-select: none;
+}
+.lv-dropdown summary::-webkit-details-marker { display: none; }
+.lv-dropdown summary:hover { background: var(--bg-subtle); }
+.lv-dropdown[open] summary { border-color: var(--brand-border); color: var(--brand); }
+.lv-caret { font-style: normal; font-size: .68rem; }
+.lv-menu {
+  position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; min-width: 180px;
+  background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md); padding: 6px;
+}
+.lv-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 5px 8px; font-size: .82rem; border-radius: var(--radius-xs); }
+.lv-row:hover { background: var(--bg-subtle); }
+.lv-restore { border: none; background: none; color: var(--brand); cursor: pointer; font-size: .78rem; padding: 0 0 0 6px; }
+.lv-restore:hover { text-decoration: underline; }
+.lv-hint { margin: 4px 8px 2px; font-size: .68rem; color: var(--ink-muted); }
+.lib-stale {
+  background: var(--coach-soft); border: 1px solid var(--coach-border); border-radius: 8px;
+  padding: 10px 12px; font-size: 13px; color: var(--coach); margin-bottom: 12px;
+}
+.ls-item { font-family: monospace; font-size: .82rem; }
+.stale-link { border: none; background: none; color: var(--brand); cursor: pointer; font-size: .8rem; text-decoration: underline; padding: 0 0 0 6px; }
+.lib-feedback { padding: 10px 14px; border: 1px solid var(--danger-border); border-radius: 8px; margin: 12px 0; background: var(--danger-soft); font-size: 13px; color: var(--danger); }
+.lib-gaps { font-size: .78rem; color: var(--coach); margin-bottom: 10px; }
+.mobile-switch { display: none; }
+
+/* —— 左侧控制台：三 Tab（v-show 保活）—— */
+.lib-cols { display: grid; grid-template-columns: minmax(320px, 0.9fr) minmax(0, 1.35fr); gap: 24px; align-items: start; }
+.lib-editor { min-width: 0; background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 14px 16px 18px; box-shadow: var(--shadow-xs); }
+.editor-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin: 0 -6px 14px; padding: 0 6px; }
+.editor-tabs button {
+  border: none; background: none; cursor: pointer; font: inherit; font-size: .84rem;
+  color: var(--ink-secondary); padding: 8px 10px; position: relative;
+}
+.editor-tabs button:hover { color: var(--ink); }
+.editor-tabs button.on { color: var(--brand); font-weight: 600; }
+.editor-tabs button.on::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: -1px; height: 2px; border-radius: 1px; background: var(--brand); }
+.etab { min-width: 0; }
+.sec-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.sec-pill {
+  border: 1px solid var(--border); background: var(--bg-surface); color: var(--ink-secondary);
+  border-radius: var(--radius-pill); padding: 3px 10px; font-size: .75rem; cursor: pointer; font-family: inherit;
+}
+.sec-pill:hover { border-color: var(--brand-border); color: var(--brand); background: var(--brand-soft); }
+.lib-fields { margin-top: 4px !important; }
+
+/* —— AI 优化教练：diff 教学卡 —— */
+.coach-run { width: 100%; justify-content: center; margin-bottom: 10px; }
+.opt-list { list-style: none; margin: 0 0 10px; padding: 0; font-size: .8rem; }
+.opt-list li { display: flex; align-items: baseline; gap: 8px; padding: 5px 0; border-bottom: 1px dashed var(--border); flex-wrap: wrap; }
+.opt-list li:last-child { border-bottom: none; }
+.opt-list .st { font-size: .72rem; color: var(--ink-muted); }
+.opt-list li[data-st="done"] .st, .opt-list li[data-st="ok"] .st { color: var(--agent); }
+.opt-list li[data-st="running"] .st { color: var(--brand); }
+.opt-list li[data-st="error"] .st { color: var(--danger); }
+.opt-list .rs { width: 100%; font-size: .72rem; color: var(--ink-muted); }
+.coach-sec { margin-top: 10px; }
+.coach-sec-title { font-size: .8rem; font-weight: 650; margin: 0 0 8px; color: var(--ink-secondary); }
+.coach-diff-card {
+  border-left: 3px solid var(--coach-border); background: var(--coach-soft);
+  border-radius: 0 8px 8px 0; padding: 9px 12px; margin-bottom: 8px;
+}
+.coach-diff-card p { margin: 0; }
+.diff-before { color: var(--ink-muted); font-size: .78rem; text-decoration: line-through; }
+.diff-after { color: var(--agent); font-size: .85rem; margin-top: 3px !important; }
+.diff-reason { color: var(--ink-secondary); font-size: .75rem; margin-top: 5px !important; border-top: 1px dashed var(--coach-border); padding-top: 5px; }
+.coach-ph { font-size: .78rem; color: var(--coach); margin: 8px 0; }
+.lib-adopt {
+  padding: 10px 14px; border: 1px solid var(--agent-border); border-radius: 8px;
+  margin: 12px 0; background: var(--agent-soft); font-size: .82rem; color: var(--ink-secondary);
+}
+.lib-adopt .btn-agent, .lib-adopt .btn-secondary { margin: 6px 8px 0 0; }
+
+/* —— 证据与定制 —— */
+.evidence-panel { margin-bottom: 14px; border-bottom: 1px solid var(--border); padding-bottom: 10px; font-size: 13px; overflow-wrap: anywhere; }
+.evidence-panel summary { cursor: pointer; padding: 6px 0; color: var(--ink-secondary); }
 .evidence-field { margin-top: 10px; }
 .evidence-field ul { margin: 6px 0; padding-left: 20px; }
 .evidence-field p { white-space: pre-wrap; margin: 6px 0; }
-.evidence-field span { display: block; color: #4b5563; font-size: 12px; }
-.lib-adopt .lib-btn { margin: 0 8px 6px 0; }
+.evidence-field span { display: block; color: var(--ink-secondary); font-size: 12px; }
+.lib-generation { border-bottom: 1px solid var(--border); padding-bottom: 14px; margin-bottom: 14px; font-size: 13px; }
+.lib-generation summary { cursor: pointer; padding: 6px 0; color: var(--ink-secondary); }
 .lib-generation fieldset { display: grid; gap: 8px; padding-top: 10px; }
-.lib-generation input:not([type]), .lib-generation textarea, .layout-control select { width: 100%; box-sizing: border-box; border: 1px solid #d1d5db; border-radius: 8px; padding: 8px 10px; background: #fff; font: inherit; }
-.layout-control { display: flex; gap: 8px; align-items: center; white-space: nowrap; }
-.layout-control select { width: auto; }
-.save-state { margin-right: auto; font-size: 12px; color: #4b5563; }
-.lib-adopt, .lib-feedback { padding: 10px 14px; border: 1px solid #e5e7eb; border-radius: 8px; margin: 12px 0; background: #fff; font-size: 13px; }
-.lib-feedback { color: #b91c1c; }
-.lib-preview { min-width: 0; overflow: auto; }
-.preview-caption { margin: 0 0 12px; font-size: 12px; color: #4b5563; }
-.mobile-switch { display: none; }
-.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-.lib-title { font-size: 20px; margin: 0 0 16px; }
-.lib-empty { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
-  padding: 24px; text-align: center; }
-.lib-bar { margin-bottom: 12px; }
-.lib-new { display: flex; flex-direction: column; gap: 8px; background: #fff;
-  border: 1px solid #e5e7eb; border-radius: 10px; padding: 14px; margin-bottom: 14px; }
-.lib-new input, .lib-new textarea { border: 1px solid #d1d5db; border-radius: 8px;
-  padding: 8px 10px; font-size: 13px; font-family: inherit; }
-.lib-list { list-style: none; margin: 0; padding: 0; }
-.lib-doc { display: flex; justify-content: space-between; align-items: center;
-  background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
-  padding: 14px 16px; margin-bottom: 10px; cursor: pointer; }
-.lib-doc:hover { border-color: #93c5fd; }
-.ld-main { display: flex; flex-direction: column; gap: 2px; }
-.ld-role { color: #6b7280; font-size: 12px; }
-.ld-meta { display: flex; gap: 12px; font-size: 12px; color: #6b7280; }
-.ld-status[data-s="draft"] { color: #b45309; }
-.ld-status[data-s="ready"] { color: #047857; }
-.lib-detail-head { display: flex; align-items: center; gap: 10px;
-  margin-bottom: 12px; }
-.lib-versions { font-size: 12px; color: #6b7280; margin: 8px 0;
-  display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.lv-title { font-weight: 600; }
-.lv-item { background: #f3f4f6; border-radius: 999px; padding: 2px 8px; }
-.lv-restore { border: 0; background: none; color: #2563eb; cursor: pointer;
-  font-size: 12px; padding: 0 0 0 4px; }
-.lv-hint { color: #9ca3af; }
-.lib-stale { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px;
-  padding: 10px 12px; font-size: 13px; color: #92400e; margin-bottom: 12px; }
-.ls-item { font-family: monospace; }
-.lib-detail-ops { display: flex; gap: 10px; align-items: center;
-  margin-bottom: 12px; flex-wrap: wrap; font-size: 13px; }
-.lib-detail-ops input[type="text"], .lib-detail-ops input:not([type]) {
-  border: 1px solid #d1d5db; border-radius: 8px; padding: 6px 10px; }
-.lib-gaps { font-size: 12px; color: #b45309; margin-bottom: 8px; }
-.lib-cols { display: grid; grid-template-columns: minmax(300px, 0.85fr) minmax(0, 1.4fr); gap: 24px; align-items: start; }
-.lib-btn { border: 1px solid #d1d5db; background: #fff; border-radius: 8px;
-  padding: 7px 14px; font-size: 13px; cursor: pointer; }
-.lib-btn.primary { background: #2563eb; border-color: #2563eb; color: #fff; }
-.lib-btn.danger { color: #b91c1c; border-color: #fca5a5; }
-.lib-btn:disabled { opacity: 0.5; cursor: default; }
-.lib-hint { color: #9ca3af; font-size: 13px; }
-.lib-err { color: #b91c1c; font-size: 13px; }
-.lib-opt { margin-top: 14px; border-top: 1px solid #e5e7eb; padding-top: 10px; }
-.lo-sec h3 { font-size: 13px; margin: 10px 0 6px; }
-.lo-pair { border-left: 3px solid #d1d5db; padding-left: 10px; margin-bottom: 8px; }
-.lo-before { color: #9ca3af; font-size: 12px; margin: 0;
-  text-decoration: line-through; }
-.lo-after { color: #047857; font-size: 13px; margin: 2px 0 0; }
-.lo-ph { font-size: 12px; color: #b45309; margin: 8px 0; }
+.lib-generation input:not([type]), .lib-generation textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; background: var(--bg-surface); font: inherit; color: var(--ink); }
+
+/* —— 右侧 A4 纸张舞台 —— */
+.lib-preview { min-width: 0; position: sticky; top: 70px; max-height: calc(100vh - 96px); overflow: auto; }
+.preview-caption { margin: 0 0 10px; font-size: .75rem; color: var(--ink-muted); }
+.paper-stage {
+  border: 1px dashed var(--border-strong); border-radius: 10px; padding: 26px;
+  background: var(--bg-subtle); box-shadow: inset 0 0 0 1px var(--bg-surface);
+}
+.paper-stage :deep(.print-area) { box-shadow: var(--shadow-paper); }
+
 @media (max-width: 760px) {
-  .lib-page { padding: 16px 12px 40px; }
-  .lib-detail-head, .ld-meta { flex-wrap: wrap; }
+  .lib-topbar { position: static; min-height: 0; }
   .lib-cols { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .lib-preview { position: static; max-height: none; }
   .mobile-switch { display: flex; gap: 8px; margin: 14px 0; }
-  .mobile-switch [aria-pressed="true"] { background: var(--teal, #2563eb); color: #fff; }
+  .mobile-switch .lib-btn {
+    flex: 1; border: 1px solid var(--border); background: var(--bg-surface); color: var(--ink-secondary);
+    border-radius: var(--radius-sm); padding: 8px; font-size: .84rem; cursor: pointer; font-family: inherit;
+  }
+  .mobile-switch [aria-pressed="true"] { background: var(--brand); border-color: var(--brand); color: #fff; }
   .lib-cols[data-panel="edit"] .lib-preview, .lib-cols[data-panel="preview"] .lib-editor { display: none; }
-  .lib-editor { padding: 14px; }
-  .save-state { width: 100%; order: 1; }
+  .lib-editor { padding: 12px; }
+  .paper-stage { padding: 14px 8px; }
+  .lt-title { max-width: 140px; }
 }
 /* 库详情导出：只出预览稿，隐藏列表/表单/操作区 */
 @media print {
-  .lib-title, .lib-detail-head, .lib-list, .lib-bar, .lib-new, .lib-loading, .lib-stale, .lib-gaps,
-  .lib-versions, .lib-detail-ops, .lib-feedback, .mobile-switch, .preview-caption,
+  .lib-head, .lib-title, .lib-grid, .lib-modal-mask, .lib-empty, .lib-loading, .lib-stale, .lib-gaps,
+  .lib-topbar, .lib-feedback, .mobile-switch, .preview-caption,
   .lib-editor, .evidence-panel { display: none !important; }
   .lib-cols, .lib-preview { display: block !important; }
+  .paper-stage { border: none; padding: 0; background: none; box-shadow: none; }
 }
-@media (max-width: 420px) { .lib-page { padding: 14px 10px 40px; } }
 </style>

@@ -8,12 +8,15 @@ import { getTemplate } from "../api/resume";
 import { replayEvents } from "../api/core";
 import ThinkingSteps from "../components/ThinkingSteps.vue";
 import ProfilePanel from "../components/ProfilePanel.vue";
+import UiIcon from "../components/UiIcon.vue";
 import {
   getCurrentSessionId, setCurrentSessionId, setSessionToken,
 } from "../storage";
 import { toMirrorHref } from "../kbSource.mjs";
 
 const emit = defineEmits(["goto-resume", "session-created"]);
+
+const PATH_STEPS = ["聊出经历", "存为证据", "生成简历", "学会优化"];
 
 const md = new MarkdownIt({ linkify: true, html: false, breaks: true });
 const renderMd = (t) => md.render(t || "");
@@ -194,11 +197,24 @@ function send(text) {
   const query = (text ?? input.value).trim();
   if (!query || busy.value || dead.value || demoLoading.value) return;
   input.value = "";
+  nextTick(() => { if (inputEl.value) inputEl.value.style.height = "auto"; });
   chips.value = [];
   items.value.push({ role: "user", text: query, _k: ++itemKey });
   stream({ sessionId: sessionId.value || null, message: query,
            clientMsgId: newClientMsgId(), userText: query });
   scroll();
+}
+
+// 多行输入框：自适应高度（上限 140px）；Enter 发送、Shift+Enter 换行
+function autoGrow() {
+  const el = inputEl.value;
+  if (!el) return;
+  el.style.height = "auto";
+  el.style.height = `${Math.min(el.scrollHeight, 140)}px`;
+}
+function onEnterKey(e) {
+  if (e.isComposing || e.keyCode === 229) return;   // 中文输入法选词回车不发送
+  send();
 }
 
 function retry(turn) {
@@ -329,7 +345,12 @@ onMounted(boot);
       本对话已超过 48 小时，历史消息已按隐私政策清除；可继续对话，或点上方「会话」新建。
     </div>
 
-    <div v-if="!items.length && !busy" class="empty">
+    <ol v-if="(!items.length && !busy) || stage === 'greeting'" class="iv-path"
+        aria-label="成长路径">
+      <li v-for="(t, i) in PATH_STEPS" :key="t"><i>{{ i + 1 }}</i><span>{{ t }}</span></li>
+    </ol>
+
+    <div v-if="!items.length && !busy" class="empty iv-hero">
       <h2>先来聊聊你的经历</h2>
       <p class="empty-hint">我会主动追问，把能写进简历的素材一点点挖出来。</p>
       <button class="demo-chat" :disabled="demoLoading" @click="loadDemo">
@@ -339,6 +360,7 @@ onMounted(boot);
 
     <div ref="box" class="stream">
       <div v-for="(m, i) in items" :key="m._k ?? i" :class="['msg', m.role]">
+        <span v-if="m.role === 'assistant'" class="msg-avatar" aria-hidden="true">知</span>
         <div class="bubble" :class="{ pending: busy && i === items.length - 1 && !m.text }">
           <ThinkingSteps v-if="m.role === 'assistant'"
                          :steps="m.steps" :reasoning="m.reasoning"
@@ -379,12 +401,20 @@ onMounted(boot);
     <p v-if="stage === 'done'" class="stage-done">访谈已收尾，素材画像已就绪。</p>
 
     <div v-if="chips.length" class="suggest-replies" :class="{ hero: stage === 'greeting' }">
-      <button v-for="r in chips" :key="r" :disabled="busy" @click="send(r)">{{ r }}</button>
+      <button v-for="r in chips" :key="r" :disabled="busy" @click="send(r)">
+        <span v-if="stage === 'greeting'" class="hc-ico" aria-hidden="true">
+          <UiIcon name="sparkles" :size="16" />
+        </span>
+        <span>{{ r }}</span>
+      </button>
     </div>
     <form class="composer" @submit.prevent="send()">
-      <input ref="inputEl" v-model="input" :disabled="busy || !!dead"
-             :placeholder="busy ? (slow ? '首次唤醒服务，约 3–8 秒…' : '思考中…') : '聊聊你的经历，或直接提问…'" />
-      <button type="submit" :disabled="busy || !input.trim() || !!dead">发送</button>
+      <textarea ref="inputEl" v-model="input" rows="1" :disabled="busy || !!dead"
+                :placeholder="busy ? (slow ? '首次唤醒服务，约 3–8 秒…' : '思考中…') : '聊聊你的经历，或直接提问…（Enter 发送，Shift+Enter 换行）'"
+                @input="autoGrow" @keydown.enter.exact.prevent="onEnterKey"></textarea>
+      <button type="submit" :disabled="busy || !input.trim() || !!dead">
+        <UiIcon name="send" :size="15" /><span>发送</span>
+      </button>
     </form>
     </div>
 
@@ -396,46 +426,47 @@ onMounted(boot);
 <style scoped>
 .dead-banner {
   margin: 0 0 10px; padding: 10px 14px; border-radius: 10px;
-  background: var(--accent-bg); border: 1px solid var(--accent-line); color: var(--err); font-size: .85rem;
+  background: var(--danger-soft); border: 1px solid var(--danger-border); color: var(--danger); font-size: .85rem;
 }
-.dead-banner a { color: var(--accent); margin-left: 6px; }
+.dead-banner a { color: var(--danger); margin-left: 6px; }
 .expired-banner {
   margin: 0 0 10px; padding: 10px 14px; border-radius: 10px;
-  background: var(--accent-bg); border: 1px solid var(--accent-line);
-  color: var(--accent); font-size: .85rem;
+  background: var(--coach-soft); border: 1px solid var(--coach-border);
+  color: var(--coach); font-size: .85rem;
 }
-.turn-error { margin-top: 8px; color: var(--err); font-size: .82rem; }
+/* 首屏 4 步成长路径条 */
+.iv-path {
+  display: flex; flex-wrap: wrap; gap: 6px 18px; list-style: none;
+  margin: 0 0 12px; padding: 10px 14px;
+  background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-md);
+  font-size: .78rem; color: var(--ink-secondary); box-shadow: var(--shadow-xs);
+}
+.iv-path li { display: flex; align-items: center; gap: 7px; }
+.iv-path i {
+  font-style: normal; flex: none; width: 18px; height: 18px; border-radius: 50%;
+  background: var(--agent-soft); color: var(--agent); border: 1px solid var(--agent-border);
+  font-size: .66rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center;
+}
+.iv-path li:last-child i { background: var(--brand-soft); color: var(--brand); border-color: var(--brand-border); }
+.turn-error { margin-top: 8px; color: var(--danger); font-size: .82rem; }
 .turn-error .retry {
-  margin-left: 8px; padding: 2px 12px; font-size: .78rem; border-radius: 999px;
-  border: 1px solid var(--accent); color: var(--accent); background: #fff; cursor: pointer;
+  margin-left: 8px; padding: 2px 12px; font-size: .78rem; border-radius: var(--radius-pill);
+  border: 1px solid var(--danger-border); color: var(--danger); background: var(--bg-surface); cursor: pointer;
 }
+.turn-error .retry:hover { background: var(--danger-soft); }
 .coach-cards { margin-top: 10px; }
 .coach-card.go {
-  width: 100%; padding: 10px; border-radius: 10px; border: 1px solid var(--accent);
-  background: var(--accent-bg); color: var(--accent); font-size: .9rem; cursor: pointer;
+  width: 100%; padding: 10px; border-radius: 10px; border: 1px solid var(--agent-border);
+  background: var(--agent-soft); color: var(--agent); font-size: .9rem; cursor: pointer;
+  font-family: inherit; font-weight: 500;
 }
-.coach-card.go:hover { background: var(--accent-hover); }
-.suggest-replies { display: flex; flex-wrap: wrap; gap: 8px; }
-.suggest-replies button {
-  padding: 6px 14px; border-radius: 999px; font-size: .82rem; cursor: pointer;
-  border: 1px dashed var(--teal); background: #fff; color: var(--teal);
-}
-.suggest-replies button:hover:not(:disabled) { background: var(--hover-teal); }
-.suggest-replies button:disabled { opacity: .5; cursor: default; }
-/* greeting 阶段：入口级双卡（开始访谈 / 直接提问），不是普通快捷回复 */
-.suggest-replies.hero { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.suggest-replies.hero button {
-  padding: 16px; font-size: .92rem; text-align: left; line-height: 1.5;
-  border-radius: 12px; border-style: solid; border-color: var(--teal);
-}
-@media (max-width: 640px) {
-  .suggest-replies.hero { grid-template-columns: 1fr; }
-}
-.stage-done { margin: 6px 0 0; font-size: .78rem; color: var(--mute); text-align: center; }
+.coach-card.go:hover { filter: brightness(.97); }
+.stage-done { margin: 6px 0 0; font-size: .78rem; color: var(--ink-muted); text-align: center; }
 .demo-link {
-  margin-left: 8px; padding: 2px 12px; font-size: .78rem; border-radius: 999px;
-  border: 1px solid var(--accent); color: var(--accent); background: #fff; cursor: pointer;
+  margin-left: 8px; padding: 2px 12px; font-size: .78rem; border-radius: var(--radius-pill);
+  border: 1px solid var(--agent-border); color: var(--agent); background: var(--bg-surface); cursor: pointer;
 }
+.demo-link:hover { background: var(--agent-soft); }
 .empty { padding: 24px 0 8px; }
-.empty-hint { color: var(--ink-soft); font-size: .85rem; margin: 4px 0 12px; }
+.empty-hint { color: var(--ink-secondary); font-size: .85rem; margin: 4px 0 12px; }
 </style>

@@ -234,42 +234,42 @@ const isOptSec = (sec) => sec.required === false;
 
 <style scoped>
 .rff { min-width: 0; border: 0; padding: 0; margin: 0; }
-.rff-photo { border-bottom: 1px solid var(--line); padding-bottom: 14px; }
-.rff-photo-help { font-size: .78rem; color: var(--ink-soft); margin: 6px 0 10px; }
+.rff-photo { border-bottom: 1px solid var(--border); padding-bottom: 14px; }
+.rff-photo-help { font-size: .78rem; color: var(--ink-secondary); margin: 6px 0 10px; }
 .rff-photo-preview { display: block; width: 72px; height: 96px; object-fit: contain; margin-bottom: 10px; }
-.rff-photo-action { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; margin: 0 8px 8px 0; background: #fff; color: var(--teal); font: inherit; font-size: .82rem; cursor: pointer; }
+.rff-photo-action { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; border: 1px solid var(--border-strong); border-radius: 8px; padding: 8px 12px; margin: 0 8px 8px 0; background: var(--bg-surface); color: var(--brand); font: inherit; font-size: .82rem; cursor: pointer; }
 .rff-photo-input { display: block; min-height: 44px; max-width: 100%; font: inherit; font-size: .78rem; margin-bottom: 8px; }
-.rff-photo-input::file-selector-button { min-height: 44px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--teal); cursor: pointer; }
-.rff-photo :focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
+.rff-photo-input::file-selector-button { min-height: 44px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--bg-surface); color: var(--brand); cursor: pointer; }
+.rff-photo :focus-visible { outline: 3px solid var(--brand); outline-offset: 3px; }
 .rff:disabled .rff-photo-action, .rff-photo-input:disabled { opacity: .5; cursor: default; }
-.rff-photo-error { font-size: .78rem; color: var(--err); margin: 8px 0; }
+.rff-photo-error { font-size: .78rem; color: var(--danger); margin: 8px 0; }
 .rff-sec { margin-bottom: 18px; }
-.rff-title { color: var(--teal); font-size: .95rem; margin: 0 0 8px; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-.rff-opt { font-size: .68rem; color: var(--mute); border: 1px solid var(--line); border-radius: 999px; padding: 0 6px; }
-.rff-rule { font-size: .68rem; color: var(--mute); font-weight: normal; }
+.rff-title { color: var(--brand); font-size: .95rem; margin: 0 0 8px; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.rff-opt { font-size: .68rem; color: var(--ink-muted); border: 1px solid var(--border); border-radius: var(--radius-pill); padding: 0 6px; }
+.rff-rule { font-size: .68rem; color: var(--ink-muted); font-weight: normal; }
 .rff-kv { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
 .rff-field { display: flex; flex-direction: column; gap: 3px; margin-bottom: 6px; }
-.rff-field > span { font-size: .78rem; color: var(--ink-soft); }
-.req { color: var(--err); font-style: normal; }
+.rff-field > span { font-size: .78rem; color: var(--ink-secondary); }
+.req { color: var(--danger); font-style: normal; }
 .rff-field input, .rff-field textarea {
-  border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px;
-  font: inherit; font-size: .88rem; background: #fff; width: 100%;
+  border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px;
+  font: inherit; font-size: .88rem; background: var(--bg-surface); width: 100%; color: var(--ink);
 }
-.rff-field.gap input, .rff-field.gap textarea { border-color: var(--warn); background: var(--warn-bg); }
-.rff-entry { border: 1px dashed var(--line); border-radius: 10px; padding: 10px; margin-bottom: 8px; background: #fff; }
-.rff-entry-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: .75rem; color: var(--mute); }
-.rff-entry-head .grp-name { flex: 1; border: 1px solid var(--line); border-radius: 8px; padding: 5px 9px; font-size: .85rem; margin-right: 8px; }
-.mini { border: 1px solid var(--line); background: #fff; color: var(--mute); border-radius: 6px; padding: 2px 8px; font-size: .72rem; cursor: pointer; }
-.mini:hover { color: var(--err); border-color: var(--err); }
+.rff-field.gap input, .rff-field.gap textarea { border-color: var(--coach); background: var(--coach-soft); }
+.rff-entry { border: 1px dashed var(--border-strong); border-radius: 10px; padding: 10px; margin-bottom: 8px; background: var(--bg-surface); }
+.rff-entry-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: .75rem; color: var(--ink-muted); }
+.rff-entry-head .grp-name { flex: 1; border: 1px solid var(--border); border-radius: 8px; padding: 5px 9px; font-size: .85rem; margin-right: 8px; background: var(--bg-surface); color: var(--ink); }
+.mini { border: 1px solid var(--border); background: var(--bg-surface); color: var(--ink-muted); border-radius: 6px; padding: 2px 8px; font-size: .72rem; cursor: pointer; }
+.mini:hover { color: var(--danger); border-color: var(--danger); }
 .rff-add {
-  border: 1px dashed var(--teal); background: #fff; color: var(--teal);
+  border: 1px dashed var(--brand-border); background: var(--bg-surface); color: var(--brand);
   border-radius: 999px; padding: 5px 14px; font-size: .8rem; cursor: pointer;
 }
 .rff-line { display: flex; gap: 6px; margin-bottom: 6px; }
-.rff-line input { border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; font-size: .85rem; }
+.rff-line input { border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; font-size: .85rem; background: var(--bg-surface); color: var(--ink); }
 .rff-line .grow { flex: 1; }
 .rff-line .per { width: 90px; }
-.rff-gap-hint { font-size: .78rem; color: var(--warn); background: var(--warn-bg); border-radius: 8px; padding: 6px 10px; margin: 4px 0 8px; }
+.rff-gap-hint { font-size: .78rem; color: var(--coach); background: var(--coach-soft); border-radius: 8px; padding: 6px 10px; margin: 4px 0 8px; }
 @media (max-width: 640px) {
   .rff-kv { grid-template-columns: 1fr; }
 }

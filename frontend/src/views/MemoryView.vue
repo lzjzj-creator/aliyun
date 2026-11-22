@@ -25,10 +25,31 @@ const recoveryError = ref("");
 const disabledMemory = ref(false);
 const showRecovery = ref(false);
 const sessionTitles = ref({});     // session_id -> v2 会话标题
+const showPrivacy = ref(false);    // 隐私抽屉：导出/停用/清空集中在此
 
 function sessionTitle(sid) {
   return sessionTitles.value[sid] || `会话 ${String(sid).slice(0, 8)}…`;
 }
+
+// 事实的 slot_path → 中文槽位名（合同槽位段名 → 显示名）
+const SLOT_LABELS = {
+  basics: "基本信息", basic: "基本信息", education: "教育经历",
+  internships: "实习经历", internship: "实习经历", projects: "项目经历",
+  project: "项目经历", skills: "技能", skill_groups: "技能",
+  awards: "奖项", award: "奖项", summary: "自我评价", campus: "校园经历",
+  volunteer: "志愿经历", publications: "论文发表", name: "姓名",
+  school: "学校", role: "目标岗位", objective: "求职意向",
+};
+function slotLabel(path) {
+  if (!path) return "其他";
+  const seg = String(path).split(".")[0];
+  return SLOT_LABELS[seg] || path;
+}
+
+// KPI：事实总量 + 各状态计数（来自 status.by_status）
+const kpiProposed = computed(() => status.value?.by_status?.proposed || 0);
+const kpiConfirmed = computed(() => status.value?.by_status?.confirmed || 0);
+const kpiRejected = computed(() => status.value?.by_status?.rejected || 0);
 
 const KIND_LABELS = {
   identity: "身份", education: "教育", experience: "经历",
@@ -386,29 +407,42 @@ onMounted(boot);
         建议先「导出 JSON」备份。
       </div>
 
-      <!-- 状态卡 -->
-      <div v-if="status" class="mem-card">
-        <div class="mem-stats">
-          <span>{{ status.fact_count }} 条事实</span>
-          <span v-for="(n, s) in status.by_status" :key="s">
-            {{ STATUS_LABELS[s] || s }} {{ n }}
-          </span>
-          <span v-if="status.last_extracted_at">
-            最近抽取 {{ status.last_extracted_at.slice(0, 16).replace("T", " ") }}
-          </span>
-        </div>
-        <div class="mem-ops">
-          <button class="mem-btn" :disabled="busy" @click="onExport">导出 JSON</button>
-          <button class="mem-btn" :disabled="busy" @click="onDisable">停用记忆</button>
-          <button class="mem-btn danger" :disabled="busy"
-                  @click="confirmingWipe = true">清空全部</button>
-        </div>
+      <!-- KPI 卡片：事实总量与各状态计数 -->
+      <div v-if="status" class="mem-kpis">
+        <div class="kpi"><b>{{ status.fact_count }}</b><span>事实总数</span></div>
+        <div class="kpi kpi-warn"><b>{{ kpiProposed }}</b><span>待确认</span></div>
+        <div class="kpi kpi-ok"><b>{{ kpiConfirmed }}</b><span>已确认</span></div>
+        <div class="kpi"><b>{{ kpiRejected }}</b><span>已拒绝</span></div>
       </div>
 
-      <div v-if="confirmingWipe" class="mem-wipe">
-        将永久删除全部事实与简历文档，不可恢复。
-        <button class="mem-btn danger" :disabled="busy" @click="onWipe">确认清空</button>
-        <button class="mem-btn" @click="confirmingWipe = false">取消</button>
+      <div class="mem-statusline">
+        <span v-if="status?.last_extracted_at">
+          最近抽取 {{ status.last_extracted_at.slice(0, 16).replace("T", " ") }}
+        </span>
+        <button class="mem-btn" :disabled="busy" @click="showPrivacy = true">隐私与数据</button>
+      </div>
+
+      <!-- 隐私抽屉：导出 / 停用 / 清空集中收纳 -->
+      <div v-if="showPrivacy" class="mem-drawer-mask" @click.self="showPrivacy = false">
+        <aside class="mem-drawer" role="dialog" aria-modal="true" aria-label="隐私与数据">
+          <div class="md-head">
+            <b>隐私与数据</b>
+            <button class="md-x" aria-label="关闭" @click="showPrivacy = false">×</button>
+          </div>
+          <p class="mem-sub">每条事实都可逐条确认、拒绝或删除；下方操作影响全部数据。</p>
+          <button class="mem-btn wide" :disabled="busy" @click="onExport">导出 JSON 备份</button>
+          <button class="mem-btn wide" :disabled="busy" @click="onDisable">停用记忆（保留已有事实）</button>
+          <div class="md-danger">
+            <b>危险区</b>
+            <button v-if="!confirmingWipe" class="mem-btn danger wide" :disabled="busy"
+                    @click="confirmingWipe = true">清空全部</button>
+            <template v-else>
+              <p class="mem-wipe-text">将永久删除全部事实与简历文档，不可恢复。</p>
+              <button class="mem-btn danger wide" :disabled="busy" @click="onWipe">确认清空</button>
+              <button class="mem-btn wide" @click="confirmingWipe = false">取消</button>
+            </template>
+          </div>
+        </aside>
       </div>
 
       <!-- 历史回填：勾选会话 → 逐块抽取 → 进度 + 结果 -->
@@ -482,7 +516,7 @@ onMounted(boot);
             <span class="mf-status" :data-s="f.status">
               {{ STATUS_LABELS[f.status] || f.status }}
             </span>
-            <span class="mf-slot">{{ f.slot_path }}</span>
+            <span class="mf-slot">{{ slotLabel(f.slot_path) }}</span>
             <span v-if="sourceExpired(f)" class="mf-expired">来源会话已删除</span>
           </div>
           <div class="mf-value">{{ typeof f.value === 'string' ? f.value : JSON.stringify(f.value) }}</div>
@@ -512,69 +546,110 @@ onMounted(boot);
 
 <style scoped>
 .mem-page { max-width: 720px; margin: 0 auto; padding: 20px 16px 60px; }
-.mem-title { font-size: 20px; margin: 0 0 16px; }
+.mem-title { font-size: 20px; margin: 0 0 16px; font-weight: 650; }
 .mem-empty, .mem-card, .mem-onboard, .mem-wipe {
-  background: var(--panel, #fff); border: 1px solid var(--line, #e5e7eb);
-  border-radius: 10px; padding: 16px; margin-bottom: 14px;
+  background: var(--bg-surface); border: 1px solid var(--border);
+  border-radius: var(--radius-md); padding: 16px; margin-bottom: 14px;
 }
-.mem-sub { color: #6b7280; font-size: 13px; }
-.mem-hint { color: #6b7280; }
-.mem-err { color: #b91c1c; font-size: 13px; }
-.mem-stats { display: flex; flex-wrap: wrap; gap: 10px; font-size: 13px;
-  color: #374151; margin-bottom: 10px; }
+.mem-sub { color: var(--ink-secondary); font-size: 13px; }
+.mem-hint { color: var(--ink-muted); }
+.mem-err { color: var(--danger); font-size: 13px; }
 .mem-ops { display: flex; gap: 8px; flex-wrap: wrap; }
 .mem-btn {
-  border: 1px solid #d1d5db; background: #fff; border-radius: 8px;
-  padding: 7px 14px; font-size: 13px; cursor: pointer;
+  border: 1px solid var(--border-strong); background: var(--bg-surface); border-radius: 8px;
+  padding: 7px 14px; font-size: 13px; cursor: pointer; font-family: inherit; color: var(--ink);
 }
-.mem-btn.primary { background: #2563eb; border-color: #2563eb; color: #fff; }
-.mem-btn.danger { color: #b91c1c; border-color: #fca5a5; }
+.mem-btn:hover:not(:disabled) { background: var(--bg-subtle); }
+.mem-btn.primary { background: var(--brand); border-color: var(--brand); color: #fff; }
+.mem-btn.primary:hover:not(:disabled) { background: var(--brand-hover); }
+.mem-btn.danger { color: var(--danger); border-color: var(--danger-border); }
+.mem-btn.danger:hover:not(:disabled) { background: var(--danger-soft); }
 .mem-btn.sm { padding: 4px 10px; font-size: 12px; }
+.mem-btn.wide { width: 100%; text-align: left; }
 .mem-btn:disabled { opacity: 0.5; cursor: default; }
-.mem-filters { display: flex; gap: 8px; margin-bottom: 12px; }
-.mem-chip {
-  border: 1px solid #d1d5db; border-radius: 999px; background: #fff;
-  padding: 4px 12px; font-size: 12px; cursor: pointer;
+
+/* KPI 卡片 */
+.mem-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }
+.kpi {
+  background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-md);
+  padding: 14px 16px; display: flex; flex-direction: column; gap: 2px; box-shadow: var(--shadow-xs);
 }
-.mem-chip.on { background: #eff6ff; border-color: #2563eb; color: #1d4ed8; }
+.kpi b { font-size: 1.35rem; font-variant-numeric: tabular-nums; font-weight: 700; }
+.kpi span { font-size: .72rem; color: var(--ink-muted); }
+.kpi-warn b { color: var(--coach); }
+.kpi-ok b { color: var(--agent); }
+.mem-statusline { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; font-size: .78rem; color: var(--ink-muted); }
+
+/* 隐私抽屉 */
+.mem-drawer-mask {
+  position: fixed; inset: 0; z-index: 60; background: rgba(15, 23, 42, .42);
+  display: flex; justify-content: flex-end;
+}
+.mem-drawer {
+  width: min(360px, 92vw); height: 100%; overflow-y: auto;
+  background: var(--bg-surface); padding: 18px; display: flex; flex-direction: column; gap: 10px;
+  box-shadow: var(--shadow-md); animation: drawer-in var(--dur-base) var(--ease);
+}
+@keyframes drawer-in { from { transform: translateX(24px); opacity: .6; } }
+.md-head { display: flex; align-items: center; justify-content: space-between; }
+.md-head b { font-size: .95rem; }
+.md-x { border: none; background: none; font-size: 18px; color: var(--ink-muted); cursor: pointer; padding: 2px 6px; border-radius: var(--radius-xs); }
+.md-x:hover { background: var(--bg-hover); color: var(--ink); }
+.md-danger { margin-top: 8px; border-top: 1px dashed var(--danger-border); padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.md-danger b { font-size: .8rem; color: var(--danger); }
+.mem-wipe-text { font-size: .8rem; color: var(--danger); margin: 0; }
+
+.mem-filters { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.mem-chip {
+  border: 1px solid var(--border); border-radius: var(--radius-pill); background: var(--bg-surface);
+  padding: 4px 12px; font-size: 12px; cursor: pointer; font-family: inherit; color: var(--ink-secondary);
+}
+.mem-chip.on { background: var(--brand-soft); border-color: var(--brand-border); color: var(--brand); }
 .mem-facts { list-style: none; margin: 0; padding: 0; }
 .mem-fact {
-  border: 1px solid #e5e7eb; border-radius: 10px; background: #fff;
-  padding: 12px 14px; margin-bottom: 10px;
+  border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-surface);
+  padding: 12px 14px; margin-bottom: 10px; box-shadow: var(--shadow-xs);
 }
-.mf-head { display: flex; gap: 8px; align-items: center; font-size: 12px; }
-.mf-kind { background: #eef2ff; color: #3730a3; border-radius: 4px;
-  padding: 1px 6px; }
-.mf-status[data-s="confirmed"] { color: #047857; }
-.mf-status[data-s="proposed"] { color: #b45309; }
-.mf-status[data-s="rejected"], .mf-status[data-s="superseded"] { color: #9ca3af; }
-.mf-slot { color: #9ca3af; font-family: monospace; }
-.mf-expired { color: #b45309; font-size: 11px; }
+.mf-head { display: flex; gap: 8px; align-items: center; font-size: 12px; flex-wrap: wrap; }
+.mf-kind { background: var(--brand-soft); color: var(--brand); border-radius: 4px; padding: 1px 6px; }
+.mf-status[data-s="confirmed"] { color: var(--agent); }
+.mf-status[data-s="proposed"] { color: var(--coach); }
+.mf-status[data-s="rejected"], .mf-status[data-s="superseded"] { color: var(--ink-muted); }
+.mf-slot { color: var(--ink-muted); font-size: .72rem; }
+.mf-expired { color: var(--coach); font-size: 11px; }
 .mf-value { font-size: 14px; margin: 6px 0; }
-.mf-quote { font-size: 12px; color: #6b7280; margin: 2px 0; }
-.mf-src { display: block; font-size: 11px; color: #9ca3af; }
+/* 证据引用卡 */
+.mf-quote {
+  font-size: .78rem; color: var(--ink-secondary); margin: 6px 0;
+  background: var(--agent-soft); border-left: 2px solid var(--agent);
+  border-radius: 0 8px 8px 0; padding: 7px 10px;
+}
+.mf-src { display: block; font-size: 11px; color: var(--agent); margin-bottom: 2px; }
 .mem-consent {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 50;
+  position: fixed; inset: 0; background: rgba(15, 23, 42, .42); z-index: 50;
   display: flex; align-items: center; justify-content: center; padding: 16px;
 }
 .mem-consent-box {
-  background: #fff; border-radius: 12px; padding: 20px;
-  max-width: 480px; width: 100%;
+  background: var(--bg-surface); border-radius: var(--radius-md); padding: 20px;
+  max-width: 480px; width: 100%; box-shadow: var(--shadow-md);
 }
 .mem-consent-box h3 { margin: 0 0 10px; font-size: 16px; }
 .mem-consent-box ul { margin: 0 0 14px; padding-left: 20px; font-size: 13px;
-  color: #374151; }
+  color: var(--ink-secondary); }
 .mem-consent-box li { margin: 6px 0; }
 .mem-session-row { display: flex; gap: 10px; align-items: center;
   flex-wrap: wrap; font-size: 13px; margin: 6px 0; }
 .mem-sec-title { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
 .bf-list { max-height: 150px; overflow-y: auto; margin: 4px 0 10px; }
 .bf-item { display: block; font-size: 13px; padding: 3px 0; }
-.bf-progress { height: 6px; background: #f3f4f6; border-radius: 3px;
+.bf-progress { height: 6px; background: var(--bg-subtle); border-radius: 3px;
   margin-top: 10px; overflow: hidden; }
-.bf-bar { height: 100%; background: #2563eb; transition: width .3s; }
+.bf-bar { height: 100%; background: var(--brand); transition: width .3s; }
 .bf-results { margin: 8px 0 0; padding-left: 18px; font-size: 12px;
-  color: #6b7280; }
+  color: var(--ink-secondary); }
+@media (max-width: 560px) {
+  .mem-kpis { grid-template-columns: repeat(2, 1fr); }
+}
 .mf-ops { display: flex; gap: 8px; margin-top: 8px; }
 .mem-wipe { border-color: #fca5a5; color: #b91c1c; font-size: 13px; }
 .mem-stale { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px;

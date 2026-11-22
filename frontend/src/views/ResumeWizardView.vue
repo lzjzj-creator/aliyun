@@ -421,7 +421,9 @@ async function exportPrint() {
       </aside>
       <div class="wz-canvas">
         <p class="preview-caption">投递预览 · {{ layout === "classic" ? "中文经典" : "中文现代" }}</p>
-        <ResumePreview v-if="tpl" class="print-area" :template="tpl" :fields="fields" :layout="layout" />
+        <div class="paper-stage">
+          <ResumePreview v-if="tpl" class="print-area" :template="tpl" :fields="fields" :layout="layout" />
+        </div>
       </div>
     </div>
 
@@ -464,10 +466,11 @@ async function exportPrint() {
 
         <template v-for="(r, key) in results" :key="key">
           <div v-if="r.change_log?.length" class="rewrite">
-            <h3>改动明细 · {{ (plan?.sections || []).find(s => s.key === key)?.title || key }}</h3>
-            <div v-for="(c, i) in r.change_log" :key="i" class="pair">
-              <div><b>原文</b><p>{{ c.before }}</p></div>
-              <div><b>优化</b><p>{{ c.after }}</p><p class="follow">{{ c.reason }}</p></div>
+            <h3 class="coach-sec-title">改动明细 · {{ (plan?.sections || []).find(s => s.key === key)?.title || key }}</h3>
+            <div v-for="(c, i) in r.change_log" :key="i" class="coach-diff-card">
+              <p class="diff-before">{{ c.before }}</p>
+              <p class="diff-after">{{ c.after }}</p>
+              <p v-if="c.reason" class="diff-reason">{{ c.reason }}</p>
             </div>
           </div>
           <div v-if="r.error" class="warn">{{ r.error }}</div>
@@ -489,7 +492,9 @@ async function exportPrint() {
       </aside>
       <div class="wz-canvas">
         <p class="preview-caption">{{ optFields ? "优化稿预览" : "投递预览" }} · {{ layout === "classic" ? "中文经典" : "中文现代" }}</p>
-        <ResumePreview v-if="tpl" class="print-area" :template="tpl" :fields="optFields || fields" :layout="layout" />
+        <div class="paper-stage">
+          <ResumePreview v-if="tpl" class="print-area" :template="tpl" :fields="optFields || fields" :layout="layout" />
+        </div>
       </div>
     </div>
   </section>
@@ -497,88 +502,106 @@ async function exportPrint() {
 
 
 <style scoped>
-.wizard { background: #f4f5f7; border-radius: 14px; padding: 20px 24px 40px; }
-.wizard :deep(:focus-visible) { outline: 3px solid var(--teal); outline-offset: 3px; }
-.wiz-toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 14px 0; margin-bottom: 14px; border-bottom: 1px solid var(--line); }
-.layout-control { display: flex; align-items: center; gap: 8px; font-size: .82rem; }
-.layout-control select { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink); font: inherit; }
-.save-state { margin-right: auto; font-size: .78rem; color: var(--ink-soft); }
-.snapshot-hint { flex-basis: 100%; margin: 0; font-size: .75rem; color: var(--ink-soft); }
-.wiz-feedback { background: #fff; border: 1px solid var(--warn-line); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; color: var(--err); font-size: .82rem; }
+.wizard { padding: 0 0 40px; }
+.wizard :deep(:focus-visible) { outline: 3px solid var(--brand); outline-offset: 3px; }
+.wiz-toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 14px 0; margin-bottom: 14px; border-bottom: 1px solid var(--border); }
+.layout-control { display: flex; align-items: center; gap: 8px; font-size: .82rem; color: var(--ink-secondary); }
+.layout-control select { padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-surface); color: var(--ink); font: inherit; }
+.save-state { margin-right: auto; font-size: .78rem; color: var(--ink-secondary); }
+.snapshot-hint { flex-basis: 100%; margin: 0; font-size: .75rem; color: var(--ink-muted); }
+.wiz-feedback { background: var(--danger-soft); border: 1px solid var(--danger-border); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; color: var(--danger); font-size: .82rem; }
 .wiz-fields { min-width: 0; border: 0; padding: 0; margin: 0; }
-.section-nav { margin-bottom: 16px; border-bottom: 1px solid var(--line); padding-bottom: 10px; }
-.section-nav summary { font-size: .82rem; padding: 6px 0; cursor: pointer; }
-.evidence-panel { margin-bottom: 14px; border-bottom: 1px solid var(--line); padding-bottom: 10px; font-size: .82rem; overflow-wrap: anywhere; }
-.evidence-panel summary { cursor: pointer; padding: 6px 0; }
+.section-nav { margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+.section-nav summary { font-size: .82rem; padding: 6px 0; cursor: pointer; color: var(--ink-secondary); }
+.evidence-panel { margin-bottom: 14px; border-bottom: 1px solid var(--border); padding-bottom: 10px; font-size: .82rem; overflow-wrap: anywhere; }
+.evidence-panel summary { cursor: pointer; padding: 6px 0; color: var(--ink-secondary); }
 .evidence-field { margin-top: 10px; }
 .evidence-field ul { margin: 6px 0; padding-left: 20px; }
 .evidence-field p { white-space: pre-wrap; margin: 6px 0; }
-.evidence-field span { display: block; color: var(--ink-soft); font-size: .75rem; }
-.preview-caption { margin: 0 0 12px; font-size: .75rem; color: var(--ink-soft); }
+.evidence-field span { display: block; color: var(--ink-secondary); font-size: .75rem; }
+.preview-caption { margin: 0 0 10px; font-size: .75rem; color: var(--ink-muted); }
 .mobile-switch { display: none; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-.wizard .wiz-steps .wiz-lib { margin-left: auto; color: var(--teal); }
+.wizard .wiz-steps .wiz-lib { margin-left: auto; color: var(--brand); }
 .wiz-steps { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
 .wizard .wiz-steps button {
-  border: 1px solid var(--line); background: #fff; color: var(--ink-soft);
-  border-radius: 999px; padding: 6px 14px; font-size: .82rem; cursor: pointer;
+  border: 1px solid var(--border); background: var(--bg-surface); color: var(--ink-secondary);
+  border-radius: var(--radius-pill); padding: 6px 14px; font-size: .82rem; cursor: pointer; font-family: inherit;
 }
-.wiz-steps button.on { border-color: var(--teal); background: var(--teal); color: #fff; }
+.wiz-steps button.on { border-color: var(--brand); background: var(--brand); color: #fff; }
 .wiz-source { display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
-.wiz-source label { display: flex; flex-direction: column; gap: 4px; font-size: .8rem; color: var(--ink-soft); }
-.wiz-source select { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: inherit; background: #fff; min-width: 220px; }
-.wiz-hint { font-size: .78rem; color: var(--mute); margin: 4px 0 12px; }
+.wiz-source label { display: flex; flex-direction: column; gap: 4px; font-size: .8rem; color: var(--ink-secondary); }
+.wiz-source select { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font: inherit; background: var(--bg-surface); min-width: 220px; color: var(--ink); }
+.wiz-hint { font-size: .78rem; color: var(--ink-muted); margin: 4px 0 12px; }
 
 /* 双栏工作台：导航和建议留在内容侧栏，纸面只展示投递内容。 */
 .wiz-work { display: grid; grid-template-columns: minmax(300px, .85fr) minmax(0, 1.4fr); gap: 24px; align-items: start; }
 .wz-nav { display: grid; gap: 6px; padding-top: 8px; }
 .wz-nav-item {
   display: flex; align-items: center; justify-content: space-between; gap: 6px;
-  padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px;
-  background: #fff; font-size: .85rem; color: var(--ink); cursor: pointer; text-align: left;
+  padding: 9px 12px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--bg-surface); font-size: .85rem; color: var(--ink); cursor: pointer; text-align: left;
+  font-family: inherit;
 }
-.wz-nav-item:hover { border-color: var(--teal); }
-.wz-nav-item.on { border-color: var(--teal); background: var(--hover-teal); }
-.wz-nav-item.gap { border-left: 3px solid var(--warn-line); }
-.wz-nav-badge { flex: none; font-size: .68rem; color: var(--good); }
-.wz-nav-badge.warn { color: var(--warn); }
-.wz-nav-badge.dim { color: var(--mute); }
-.wz-canvas { min-width: 0; overflow: auto; }
+.wz-nav-item:hover { border-color: var(--brand-border); }
+.wz-nav-item.on { border-color: var(--brand); background: var(--brand-soft); }
+.wz-nav-item.gap { border-left: 3px solid var(--coach-border); }
+.wz-nav-badge { flex: none; font-size: .68rem; color: var(--agent); }
+.wz-nav-badge.warn { color: var(--coach); }
+.wz-nav-badge.dim { color: var(--ink-muted); }
+.wz-canvas { min-width: 0; position: sticky; top: 70px; max-height: calc(100vh - 96px); overflow: auto; }
+.paper-stage {
+  border: 1px dashed var(--border-strong); border-radius: 10px; padding: 26px;
+  background: var(--bg-subtle);
+}
+.paper-stage :deep(.print-area) { box-shadow: var(--shadow-paper); }
 .wz-panel {
-  min-width: 0; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 18px;
+  min-width: 0; background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 18px;
+  box-shadow: var(--shadow-xs);
 }
-.wz-panel-title { margin: 0 0 10px; font-size: .9rem; color: var(--teal); }
+.wz-panel-title { margin: 0 0 10px; font-size: .9rem; color: var(--brand); font-weight: 650; }
 .row-right { display: flex; gap: 8px; flex-wrap: wrap; }
 .wz-actions { margin-top: 14px; }
-.primary { border-color: var(--accent) !important; background: var(--accent) !important; color: #fff !important; }
+.primary { border-color: var(--brand) !important; background: var(--brand) !important; color: #fff !important; }
 
-/* 优化导航列 */
+/* 优化导航列 + Diff 教学卡 */
 .opt-run { margin-bottom: 10px; }
 .opt-list { list-style: none; padding: 0; margin: 0 0 10px; }
 .opt-list li {
-  padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px;
-  margin-bottom: 6px; background: #fff; font-size: .85rem; cursor: pointer;
+  padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px;
+  margin-bottom: 6px; background: var(--bg-surface); font-size: .85rem; cursor: pointer;
 }
-.opt-list li.on { border-color: var(--teal); background: var(--hover-teal); }
-.opt-list li[data-st="done"] { border-left: 3px solid var(--good); }
-.opt-list li[data-st="error"] { border-left: 3px solid var(--err); }
-.opt-list li[data-st="running"] { border-left: 3px solid var(--accent); }
-.opt-list .st { margin-left: 8px; font-size: .75rem; color: var(--mute); }
-.opt-list .rs { display: block; font-size: .72rem; color: var(--mute); }
+.opt-list li.on { border-color: var(--brand); background: var(--brand-soft); }
+.opt-list li[data-st="done"] { border-left: 3px solid var(--agent); }
+.opt-list li[data-st="error"] { border-left: 3px solid var(--danger); }
+.opt-list li[data-st="running"] { border-left: 3px solid var(--brand); }
+.opt-list .st { margin-left: 8px; font-size: .75rem; color: var(--ink-muted); }
+.opt-list .rs { display: block; font-size: .72rem; color: var(--ink-muted); }
+.coach-sec-title { font-size: .8rem; font-weight: 650; margin: 10px 0 8px; color: var(--ink-secondary); }
+.coach-diff-card {
+  border-left: 3px solid var(--coach-border); background: var(--coach-soft);
+  border-radius: 0 8px 8px 0; padding: 9px 12px; margin-bottom: 8px;
+}
+.coach-diff-card p { margin: 0; }
+.diff-before { color: var(--ink-muted); font-size: .78rem; text-decoration: line-through; }
+.diff-after { color: var(--agent); font-size: .85rem; margin-top: 3px !important; }
+.diff-reason { color: var(--ink-secondary); font-size: .75rem; margin-top: 5px !important; border-top: 1px dashed var(--coach-border); padding-top: 5px; }
 .wz-nav .back { margin-top: 4px; }
 
 @media (max-width: 760px) {
-  .wizard { padding: 16px 12px 32px; }
   .wiz-work { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .wz-canvas { position: static; max-height: none; }
   .mobile-switch { display: flex; gap: 8px; margin-bottom: 14px; }
-  .mobile-switch [aria-pressed="true"] { background: var(--teal); color: #fff; }
+  .mobile-switch [aria-pressed="true"] { background: var(--brand); color: #fff; }
   .wiz-work[data-panel="edit"] .wz-canvas, .wiz-work[data-panel="preview"] .wz-panel { display: none; }
   .wz-panel { padding: 14px; }
+  .paper-stage { padding: 14px 8px; }
   .save-state { width: 100%; order: 1; }
   .snapshot-hint { order: 2; }
 }
 @media print {
   .wiz-steps, .wiz-toolbar, .wiz-feedback, .mobile-switch, .wz-panel, .preview-caption, .evidence-panel { display: none !important; }
   .wiz-work, .wz-canvas { display: block !important; }
+  .paper-stage { border: none; padding: 0; background: none; }
 }
 </style>
