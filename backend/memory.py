@@ -115,17 +115,35 @@ def _all(table, params):
         offset += len(page)
 
 
-def create_session(anon_id: str) -> dict:
-    """Return {session, token}; DB trigger creates empty profile atomically."""
+def create_session(anon_id: str, user_id: str | None = None,
+                   seed_profile: dict | None = None) -> dict:
+    """Return {session, token}; DB trigger creates empty profile atomically.
+    v5: user_id links the session to an app_users row (Bearer path). When
+    seed_profile is given, the new session's profile row is pre-filled right
+    after insert so initialized users skip basic identity questions."""
     _text(anon_id, "anon_id")
     token = secrets.token_urlsafe(32)
-    rows = _json(_request("POST", "/chat_sessions", params={"select": SESSION_FIELDS},
-                         headers={"Prefer": "return=representation"}, json={
+    payload = {
         "anon_id": anon_id,
         "session_token_hash": hashlib.sha256(token.encode()).hexdigest(),
-    }))
+    }
+    if user_id:
+        payload["user_id"] = str(user_id)
+    rows = _json(_request("POST", "/chat_sessions", params={"select": SESSION_FIELDS},
+                         headers={"Prefer": "return=representation"}, json=payload))
     if not rows:
         raise MemoryStoreError("Session insert returned no row")
+    if seed_profile:
+        sid = rows[0]["id"]
+        try:
+            # Seeding writes profile values only — deliberately NOT the
+            # coverage_detail.filled markers, which would lock the slots and
+            # block interview corrections of initialized data.
+            _json(_request("PATCH", "/user_profiles", params={
+                "session_id": f"eq.{sid}",
+            }, json={"profile": seed_profile}))
+        except MemoryStoreError:
+            pass  # Seeding is best-effort; interview still works without it.
     return {"session": _public_session(rows[0]), "token": token}
 
 
@@ -146,7 +164,13 @@ def verify_session(session_id: str, anon_id: str, token: str) -> bool:
     return bool(rows) and matched
 
 
-def list_sessions(anon_id: str, limit: int = 50) -> list:
+def list_sessions(anon_id: str, limit: int = 50, user_id: str | None = None) -> list:
+    if user_id:
+        rows = _json(_request("GET", "/chat_sessions", params={
+            "user_id": f"eq.{_uuid(user_id)}", "select": SESSION_FIELDS,
+            "order": "updated_at.desc,id.desc", "limit": limit,
+        }))
+        return [_public_session(row) for row in rows]
     _text(anon_id, "anon_id")
     if type(limit) is not int or not 1 <= limit <= 500:
         raise ValueError("limit must be between 1 and 500")
@@ -157,6 +181,15 @@ def list_sessions(anon_id: str, limit: int = 50) -> list:
     return [_public_session(row) for row in rows]
 
 
+def session_user_id(session_id: str) -> str | None:
+    """v5 ownership check: Bearer user may access any session whose user_id
+    column matches, without a session token."""
+    row = _one(_json(_request("GET", "/chat_sessions", params={
+        "id": f"eq.{_uuid(session_id)}", "select": "user_id", "limit": 1,
+    })))
+    return row.get("user_id") if row else None
+
+
 def get_session_bundle(session_id: str) -> dict | None:
     session_id = _uuid(session_id)
     session = _one(_json(_request("GET", "/chat_sessions", params={
@@ -164,14 +197,10 @@ def get_session_bundle(session_id: str) -> dict | None:
     })))
     if session is None:
         return None
-    cutoff = _live_cutoff_iso()
+    # v5: 自动 48h 保留已废止——读取不再过滤；history_expired 恒 false（契约位保留）。
     return {"session": _public_session(session), "messages": _all("chat_messages", {
         "session_id": f"eq.{session_id}", "select": "*", "order": "id.asc",
-        "created_at": f"gt.{cutoff}",
-    }), "history_expired": bool(_one(_json(_request("GET", "/chat_messages", params={
-        "session_id": f"eq.{session_id}", "created_at": f"lte.{cutoff}",
-        "select": "id", "limit": 1,
-    })))), "profile": get_profile(session_id)}
+    }), "history_expired": False, "profile": get_profile(session_id)}
 
 
 def _sources(sources):
@@ -230,7 +259,7 @@ def append_message(session_id: str, role: str, content: str, *,
             old = _one(_json(_request("GET", "/chat_messages", params={
                 "session_id": f"eq.{session_id}", "role": "eq.user",
                 "client_msg_id": f"eq.{client_msg_id}", "select": "*",
-                "created_at": f"gt.{_live_cutoff_iso()}", "limit": 1,
+                "limit": 1,
             })))
             if old:
                 return old
@@ -334,7 +363,7 @@ def touch_title(session_id: str, first_msg: str) -> dict | None:
     _text(first_msg, "first_msg")
     first = _one(_json(_request("GET", "/chat_messages", params={
         "session_id": f"eq.{session_id}", "role": "eq.user", "order": "id.asc",
-        "select": "content", "created_at": f"gt.{_live_cutoff_iso()}", "limit": 1,
+        "select": "content", "limit": 1,
     })))
     if first is None or first["content"] != first_msg:
         return None

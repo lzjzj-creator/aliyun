@@ -1,18 +1,20 @@
-// v2 API 底座：anon/令牌头注入、统一 JSON 请求、SSE 解析（§4/§5）
-import { getAnonId, getSessionToken } from "../storage";
+// v5 API 底座：Bearer 注入、统一 JSON 请求、SSE 解析（v5 计划 §3/§4）
+// 浏览器只持有 auth_token（guest 也算）；旧的 X-Anon-Id / X-Session-Token /
+// X-Owner-Token 三套头已废除，服务端按 Authorization 解析 user_id。
+import { getAuthToken } from "../storage";
 
 export const API_BASE = import.meta.env.VITE_API_BASE || "";
 
-export function authHeaders(sessionId, extra = {}) {
-  const h = { "X-Anon-Id": getAnonId(), ...extra };
-  if (sessionId) {
-    const t = getSessionToken(sessionId);
-    if (t) h["X-Session-Token"] = t;
-  }
+export function authHeaders(_sessionId, extra = {}) {
+  // 参数保留 sessionId 兼容旧调用签名；Bearer 下不需要会话级令牌。
+  const h = { ...extra };
+  const t = getAuthToken();
+  if (t) h.Authorization = `Bearer ${t}`;
   return h;
 }
 
-// 统一 JSON 请求；非 2xx 抛带 status 的 Error（404 用于越权判定）
+// 统一 JSON 请求；非 2xx 抛带 status/code/issues 的 Error（404 用于越权判定，
+// detail 可能是字符串或 {code,message,retryable,issues} 对象——两种都展开）
 export async function req(path, { method = "GET", body, sessionId, headers } = {}) {
   const h = authHeaders(sessionId, headers);
   if (body !== undefined) h["Content-Type"] = "application/json";
@@ -23,8 +25,14 @@ export async function req(path, { method = "GET", body, sessionId, headers } = {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const err = new Error(data.detail || data.message || `HTTP ${res.status}`);
+    const detail = data.detail;
+    const message = (typeof detail === "string" && detail)
+      || detail?.message || data.message || `HTTP ${res.status}`;
+    const err = new Error(message);
     err.status = res.status;
+    err.code = detail?.code;
+    err.issues = detail?.issues || data.issues;
+    err.retryable = detail?.retryable;
     err.data = data;
     throw err;
   }

@@ -66,7 +66,8 @@ class NoLoggingTest(unittest.TestCase):
 class QueryStringHygieneTest(unittest.TestCase):
     """正文/令牌不进 URL：memory 的 params 只允许出现白名单过滤字段。"""
     ALLOWED_PARAMS = {"select", "order", "limit", "offset", "id", "session_id", "anon_id",
-                      "role", "client_msg_id", "version", "title", "created_at"}
+                      "role", "client_msg_id", "version", "title", "created_at",
+                      "user_id"}   # v5 归属过滤列（标识键，非验证物）
 
     def params_keys(self):
         text = (BACKEND / "memory.py").read_text(encoding="utf-8")

@@ -62,7 +62,8 @@ onBeforeUnmount(() => {
   </div>
 </template>
 
-<style src="../../../backend/resume_assets/fonts.css"></style>
+<!-- S5：预览用 GB2312 子集 woff2 + swap；服务端 PDF 仍走 fonts.css 全量 TTF -->
+<style src="../../../backend/resume_assets/fonts-preview.css"></style>
 <style src="../../../backend/resume_assets/resume.css"></style>
 
 <style scoped>

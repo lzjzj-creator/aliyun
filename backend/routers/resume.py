@@ -64,12 +64,14 @@ def get_template():
 
 @router.post("/pdf")
 def export_snapshot(request: Request, req: SnapshotPdfReq,
+                    authorization: str | None = Header(default=None),
                     x_anon_id: str | None = Header(default=None),
                     x_session_token: str | None = Header(default=None)):
     security.enforce_ip(request)
-    anon = security.require_anon(x_anon_id)
+    user, anon = security.require_identity(request, authorization, x_anon_id)
     if req.session_id:
-        security.require_owner(req.session_id, anon, x_session_token)
+        security.require_access(request, req.session_id, authorization,
+                                anon if user is None else None, x_session_token)
     tpl = _tpl()
     _require_version(tpl, req.template_version)
     return pdf_response(tpl, req.fields, req.layout)
@@ -79,15 +81,97 @@ def export_snapshot(request: Request, req: SnapshotPdfReq,
 
 class AutofillReq(BaseModel):
     session_id: Optional[str] = None       # A 域 #2/#3 就绪后走会话读取
+    session_ids: Optional[list[str]] = None  # v5：多会话复选合并提取
+    include_facts: bool = False              # v5：并入已确认随手记/事实
     template_version: str = ""
     messages: Optional[list[dict]] = None  # 降级路径：前端直传消息 [{role,content,id?}]
     profile: Optional[dict] = None
 
 
-def _resolve_conversation(req: AutofillReq, anon_id: str, token: str):
-    """返回 (messages, profile)。优先 messages 直传；session_id 路径依赖 A 域 memory.py。"""
+def _session_messages(sid: str):
+    """Load one session's messages, ids namespaced s{idx}:{id} happens in caller."""
+    try:
+        from .. import memory
+    except ImportError:
+        try:
+            import memory      # FC 以 backend 为根启动的裸模块形态
+        except ImportError:
+            memory = None
+    if memory is None:
+        raise HTTPException(status_code=501, detail={
+            "code": "SESSION_STORE_NOT_READY",
+            "message": "会话存储未就绪；请先以 messages 直传调用"})
+    try:
+        bundle = memory.get_session_bundle(sid)
+    except memory.MemoryStoreError:
+        raise HTTPException(status_code=503, detail="存储暂时不可用") from None
+    if bundle is None or bundle.get("session") is None:
+        raise security.not_found()
+    return bundle["messages"], (bundle.get("profile") or {}).get("profile") or {}
+
+
+def _namespaced(messages: list[dict], tag: str) -> list[dict]:
+    """Prefix message ids with a session tag so cross-session evidence stays
+    unambiguous and traceable (msg_id -> s{i}:{id})."""
+    out = []
+    for m in messages:
+        m2 = dict(m)
+        if "id" in m2 and m2["id"] is not None:
+            m2["id"] = f"{tag}:{m2['id']}"
+        out.append(m2)
+    return out
+
+
+def _facts_as_messages(facts: list[dict]) -> list[dict]:
+    """Confirmed facts (含随手记 source_type=manual) as synthetic user messages
+    with id fact:{id}; evidence quotes become citable content."""
+    out = []
+    for f in facts:
+        quote = ""
+        for ev in f.get("evidence") or []:
+            if isinstance(ev, dict) and isinstance(ev.get("quote"), str) \
+                    and ev["quote"].strip():
+                quote = ev["quote"].strip()
+                break
+        value = f.get("value")
+        text = quote or (value if isinstance(value, str) else
+                         json.dumps(value, ensure_ascii=False)[:200])
+        if text:
+            out.append({"id": f"fact:{f['id']}", "role": "user",
+                        "content": text})
+    return out
+
+
+def _resolve_conversation(req: AutofillReq, anon_id: str, token: str,
+                          request: Request | None = None,
+                          authorization: str | None = None):
+    """返回 (messages, profile)。优先 messages 直传；session_id 路径依赖 A 域 memory.py。
+    v5：session_ids[] 多会话合并（逐会话归属校验），include_facts 并入
+    confirmed facts（含随手记 manual），Bearer 用户另并 init_profile 预填。"""
     if req.messages:
         return req.messages, req.profile or {}
+    if req.session_ids:
+        try:
+            from .. import memory  # noqa: F401  (probe only)
+        except ImportError:
+            try:
+                import memory  # noqa: F401
+            except ImportError:
+                memory = None
+        if memory is None:
+            raise HTTPException(status_code=501, detail={
+                "code": "SESSION_STORE_NOT_READY",
+                "message": "会话存储未就绪；请先以 messages 直传调用"})
+        merged, profile = [], {}
+        for i, raw_sid in enumerate(req.session_ids[:6]):
+            sid, _ = security.require_access(
+                request, raw_sid, authorization, anon_id, token)
+            msgs, prof = _session_messages(sid)
+            merged.extend(_namespaced(msgs, f"s{i}"))
+            profile = prof or profile
+        if req.include_facts:
+            merged.extend(_owner_facts_messages(request, authorization))
+        return merged, req.profile or profile
     if req.session_id:
         try:
             from .. import memory
@@ -100,17 +184,44 @@ def _resolve_conversation(req: AutofillReq, anon_id: str, token: str):
             raise HTTPException(status_code=501, detail={
                 "code": "SESSION_STORE_NOT_READY",
                 "message": "会话存储未就绪；请先以 messages 直传调用"})
-        sid = security.require_owner(req.session_id, anon_id, token)
-        try:
-            bundle = memory.get_session_bundle(sid)
-        except memory.MemoryStoreError:
-            raise HTTPException(status_code=503, detail="存储暂时不可用") from None
-        if bundle is None or bundle.get("session") is None:
-            raise security.not_found()
-        return bundle["messages"], (bundle.get("profile") or {}).get("profile") or {}
+        sid, _ = security.require_access(
+            request, req.session_id, authorization, anon_id, token)
+        msgs, prof = _session_messages(sid)
+        if req.include_facts:
+            msgs = msgs + _owner_facts_messages(request, authorization)
+        return msgs, req.profile or prof
+    if req.include_facts:
+        return _owner_facts_messages(request, authorization), req.profile or {}
     raise HTTPException(status_code=400, detail={
         "code": "CONVERSATION_REQUIRED",
-        "message": "需要 session_id 或 messages 之一"})
+        "message": "需要 session_id / session_ids / include_facts 之一"})
+
+
+def _owner_facts_messages(request: Request | None,
+                          authorization: str | None) -> list[dict]:
+    """Bearer 用户 → 其 v3_owner 的 confirmed facts 转伪用户消息；无 Bearer 返回 []。
+    模块不可用 → []；存储故障按全站口径上抛 503，不静默丢素材。"""
+    if request is None:
+        return []
+    try:
+        from .. import memory_v3
+    except ImportError:
+        try:
+            import memory_v3
+        except ImportError:
+            return []
+    try:
+        user = security.current_user(authorization)
+        if user is None:
+            return []
+        owner = memory_v3.get_or_create_owner_by_user(user["id"])
+        facts = [f for f in memory_v3.facts_for_generation(owner["id"])
+                 if f.get("status") == "confirmed"]
+    except HTTPException:
+        raise                      # current_user 已包装过的 503/404 直接上抛
+    except memory_v3.MemoryStoreError:
+        raise HTTPException(503, "存储暂时不可用") from None
+    return _facts_as_messages(facts)
 
 
 def _contract_brief(tpl) -> str:
@@ -270,17 +381,52 @@ def _normalize_fields(tpl, raw: dict) -> dict:
     return out
 
 
+def _init_prefill(tpl, fields: dict, auth_user: dict | None,
+                  evidence_map: dict) -> dict:
+    """v5: merge init_profile basics/education into empty field slots; mark
+    provenance with msg_id='init_profile' (validated below without a message)."""
+    init = (auth_user or {}).get("init_profile") or {}
+    if not isinstance(init, dict) or not init:
+        return fields
+    basics = init.get("basics") or {}
+    target = fields.setdefault("basics", {})
+    for key in ("name", "phone", "email", "target_role", "city", "github", "blog"):
+        v = basics.get(key)
+        if isinstance(v, str) and v.strip() and not str(target.get(key) or "").strip():
+            target[key] = v.strip()
+            evidence_map[f"basics.{key}"] = [{"msg_id": "init_profile",
+                                              "quote": v.strip()}]
+    edu_init = init.get("education")
+    if isinstance(edu_init, list) and edu_init and isinstance(edu_init[0], dict):
+        edu = fields.setdefault("education", [])
+        src = edu_init[0]
+        if not edu:
+            edu.append({f.key: ([] if f.input in ("bullets", "tags") else "")
+                        for f in (get_section(tpl, "education").entry_fields
+                                  if get_section(tpl, "education") else [])})
+        for key in ("school", "major", "degree", "period", "gpa_or_rank"):
+            v = src.get(key)
+            if isinstance(v, str) and v.strip() and edu \
+                    and not str(edu[0].get(key) or "").strip():
+                edu[0][key] = v.strip()
+                evidence_map[f"education.0.{key}"] = [
+                    {"msg_id": "init_profile", "quote": v.strip()}]
+    return fields
+
+
 @router.post("/autofill")
 def autofill(req: AutofillReq, request: Request,
+             authorization: str | None = Header(default=None),
              x_anon_id: str = Header(default=""),
              x_session_token: str = Header(default="")):
     # §5/§10：IP+anon 校验+配额（messages 直传路径同样要求 X-Anon-Id）
     security.enforce_ip(request)
-    anon = security.require_anon(x_anon_id)
+    auth_user, anon = security.require_identity(request, authorization, x_anon_id)
     security.charge_turn(anon)
     tpl = _tpl()
     _require_version(tpl, req.template_version)
-    messages, profile = _resolve_conversation(req, anon, x_session_token)
+    messages, profile = _resolve_conversation(
+        req, anon, x_session_token, request, authorization)
     if not any(m.get("role") == "user" and m.get("content") for m in messages):
         return {"template_version": tpl.template_version,
                 "fields": empty_fields(tpl), "evidence_map": {},
@@ -301,6 +447,8 @@ def autofill(req: AutofillReq, request: Request,
 
     data = data if isinstance(data, dict) else {}
     fields = _normalize_fields(tpl, data.get("fields"))
+    evidence_map = {}
+    fields = _init_prefill(tpl, fields, auth_user, evidence_map)
     leaves = list(_iter_leaves(tpl, fields))
     leaf_values = {path: value for path, value, _, _ in leaves}
     raw_gaps = data.get("gaps")
@@ -314,7 +462,8 @@ def autofill(req: AutofillReq, request: Request,
 
     # Exact concrete leaf only. A genuine but unrelated quote cannot support a
     # value: retain only extractive strings occurring verbatim inside that quote.
-    evidence_map = {}
+    # init_profile-sourced values validate against the init record itself, not
+    # a chat message (msg_id='init_profile' is the provenance marker).
     raw_evidence = data.get("evidence_map")
     for path, evs in (raw_evidence if isinstance(raw_evidence, dict) else {}).items():
         value = leaf_values.get(path)
@@ -325,7 +474,7 @@ def autofill(req: AutofillReq, request: Request,
               and _user_quote_ok(e.get("quote"), messages, e.get("msg_id"))
               and value in e["quote"]]
         if ok:
-            evidence_map[path] = ok
+            evidence_map.setdefault(path, []).extend(ok)
 
     for path, v, required, label in leaves:
         filled = isinstance(v, str) and bool(v.strip())
@@ -362,6 +511,111 @@ def autofill(req: AutofillReq, request: Request,
             "fields": fields, "evidence_map": evidence_map, "gaps": gaps}
 
 
+# ---------------- expand：STAR 扩写为一段话（v5 §9.6 R4） ----------------
+
+class ExpandReq(BaseModel):
+    template_version: str = ""
+    fields: dict = {}
+    confirmed_facts: str = ""
+    jd: str | None = None
+
+
+def _entry_source(sec, entry: dict) -> str:
+    """该 entry 的全部非空素材（事实来源语料：名字/角色/时间/技术/bullets）。"""
+    parts = []
+    for f in sec.entry_fields:
+        v = entry.get(f.key)
+        if f.input in ("bullets", "tags"):
+            parts += [x for x in (v or []) if isinstance(x, str) and x.strip()]
+        elif isinstance(v, str) and v.strip():
+            parts.append(v.strip())
+    return "\n".join(parts)
+
+
+@router.post("/expand")
+def expand_entries(req: ExpandReq, request: Request,
+                   authorization: str | None = Header(default=None),
+                   x_anon_id: str = Header(default=None)):
+    """把 entries 区块每条经历按 STAR 扩写为「一段话」（单条 bullet 承载）。
+    数字守卫：paragraph 里出现的数字必须全部来自该 entry 的素材语料，
+    否则整条回退为原始 bullets（宁可不扩写，绝不编造）。"""
+    security.enforce_ip(request)
+    _, anon = security.require_identity(request, authorization, x_anon_id)
+    security.charge_turn(anon)
+    try:
+        from ..resume_optimizer import _numeric_atoms
+    except ImportError:
+        from resume_optimizer import _numeric_atoms
+    try:
+        from .. import kb as _kb
+    except ImportError:
+        import kb as _kb
+    import os as _os
+    _min_score = float(_os.getenv("MIN_RETRIEVE_SCORE", "0.25"))
+    tpl = _tpl()
+    _require_version(tpl, req.template_version)
+    fields = json.loads(json.dumps(req.fields or {}, ensure_ascii=False))
+    prompt = _prompt("v2_expand.md")
+    if req.confirmed_facts:
+        prompt += f"\n用户已确认事实（可作结果佐证）：{req.confirmed_facts[:1500]}\n"
+    if req.jd:
+        prompt += f"\n目标岗位 JD（突出相关素材，不新增事实）：{req.jd[:1500]}\n"
+
+    expanded, kept, placeholders = 0, 0, []
+    for sec in tpl.sections:
+        if sec.type != "entries":
+            continue
+        entries = fields.get(sec.key)
+        if not isinstance(entries, list):
+            continue
+        for i, entry in enumerate(entries):
+            if not isinstance(entry, dict):
+                continue
+            source = _entry_source(sec, entry)
+            if not source:
+                continue
+            # KB 检索只补细节词（§3.3）：高分命中给措辞参考，不新增事实；
+            # 检索失败/低分静默降级，不阻塞扩写。
+            kb_hints = ""
+            try:
+                hits = _kb.search(llm.embed(source[:200]), source[:200], "all", 3)
+                hits = [h for h in hits if h.get("score", 0) >= _min_score]
+                if hits:
+                    kb_hints = ("\n知识库措辞参考（只借细节词，不得新增事实）：\n"
+                                + "\n".join(h.get("text", "")[:150]
+                                            for h in hits[:3]))
+            except Exception:
+                kb_hints = ""
+            try:
+                data = llm.chat_json(
+                    [{"role": "system", "content": prompt},
+                     {"role": "user", "content":
+                      f"经历类型：{sec.title}\n素材：\n{source[:3000]}{kb_hints}"}],
+                    model=QWEN_CHAT, temperature=0.3)
+            except Exception:
+                kept += 1
+                continue
+            paragraph = (data or {}).get("paragraph")
+            if not isinstance(paragraph, str) or not paragraph.strip():
+                kept += 1
+                continue
+            paragraph = paragraph.strip()
+            # 数字守卫：段落中的数字原子必须都能在素材语料或【待补充】占位里找到
+            src_atoms = _numeric_atoms(source) | _numeric_atoms(req.confirmed_facts)
+            novel = [n for n in _numeric_atoms(paragraph) - src_atoms]
+            if novel:
+                kept += 1
+                continue
+            entry["bullets"] = [paragraph]
+            expanded += 1
+            if "【待补充" in paragraph:
+                placeholders.append({"field_path": f"{sec.key}.{i}.bullets.0",
+                                     "label": f"{sec.title} {i + 1}",
+                                     "placeholder": "【待补充】"})
+    return {"template_version": tpl.template_version, "fields": fields,
+            "expanded": expanded, "kept": kept, "placeholders": placeholders}
+
+
 # ---------------- optimize：分段黑箱优化（§9） ----------------
 
 class OptimizePlanReq(BaseModel):
@@ -390,9 +644,11 @@ def _sec_counts(sec, data) -> tuple[int, int]:
 
 @router.post("/optimize/plan")
 def optimize_plan(req: OptimizePlanReq, request: Request,
+                  authorization: str | None = Header(default=None),
                   x_anon_id: str = Header(default=None)):
     security.enforce_ip(request)
-    security.charge_turn(security.require_anon(x_anon_id))
+    _, anon = security.require_identity(request, authorization, x_anon_id)
+    security.charge_turn(anon)
     tpl = _tpl()
     _require_version(tpl, req.template_version)
     errs = validate_fields(tpl, req.fields)
@@ -435,9 +691,11 @@ def _facts_for_section(sec, data, confirmed: str) -> str:
 
 @router.post("/optimize/section")
 def optimize_section(req: OptimizeSectionReq, request: Request,
+                     authorization: str | None = Header(default=None),
                      x_anon_id: str = Header(default=None)):
     security.enforce_ip(request)
-    security.charge_turn(security.require_anon(x_anon_id))
+    _, anon = security.require_identity(request, authorization, x_anon_id)
+    security.charge_turn(anon)
     try:
         from ..resume_optimizer import rewrite_bullets, extract_placeholder
     except ImportError:

@@ -51,6 +51,9 @@ resources:
         V2_MEMORY_ENABLED: ${env(V2_MEMORY_ENABLED)}
         # v3 迁移/验收前保持 0；由部署环境显式设置，不在代码中自动启用。
         V3_MEMORY_ENABLED: ${env(V3_MEMORY_ENABLED)}
+        # v5 账号体系：本构建前端已依赖 /api/v4（guest 静默启动+Bearer 归属），
+        # 必须保持 1；回滚方式是部署前一版本构建，而不是关此开关。
+        V4_ACCOUNTS_ENABLED: "1"
         V2_SHARED_QUOTA: ${env(V2_SHARED_QUOTA)}
         V2_IP_LIMIT_PER_MIN: ${env(V2_IP_LIMIT_PER_MIN)}
         V2_ANON_TURNS_PER_DAY: ${env(V2_ANON_TURNS_PER_DAY)}
@@ -71,3 +74,10 @@ resources:
               - DELETE
               - OPTIONS
             authType: anonymous
+        # S1 保温：每 5 分钟唤醒一次（请求到 /invoke 早退，仅保活实例）
+        - triggerName: warmup
+          triggerType: timer
+          triggerConfig:
+            cronExpression: '@every 5m'
+            enable: true
+            payload: '{"warmup":true}'

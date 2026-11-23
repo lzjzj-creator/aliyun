@@ -50,6 +50,13 @@ except ImportError:
 if os.getenv("V3_MEMORY_ENABLED", "0") == "1":
     app.include_router(memory_v3_router)
     app.include_router(resumes_v3_router)
+try:
+    from routers.accounts_v4 import router as accounts_v4_router
+except ImportError:
+    from .routers.accounts_v4 import router as accounts_v4_router
+# v5 single-root accounts: off by default until migration lands.
+if os.getenv("V4_ACCOUNTS_ENABLED", "0") == "1":
+    app.include_router(accounts_v4_router)
 
 origins = [o.strip() for o in os.getenv("ALLOWED_ORIGINS",
            "http://localhost:5173,http://127.0.0.1:5173").split(",") if o.strip()]
@@ -82,6 +89,13 @@ class RewriteReq(BaseModel):
 @app.get("/health")
 def health():
     return {"ok": True, "service": "zhimai-api"}
+
+
+@app.post("/invoke")
+async def fc_timer_invoke():
+    """FC 计时触发器入口（S1 保温）：事件一律早退，不跑业务逻辑。
+    触发本身即完成实例保活；返回值无业务含义。"""
+    return {"ok": True}
 
 
 @app.post("/api/route")

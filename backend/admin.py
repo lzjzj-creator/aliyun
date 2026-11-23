@@ -248,19 +248,44 @@ def _audit(client: httpx.Client, action: str, detail: dict) -> None:
         pass
 
 
+@router.get("/api/admin/users")
+def admin_users(limit: int = Query(default=100, ge=1, le=500),
+                _: None = Depends(require_admin)):
+    """v5 账号列表（管理后台）：只给公共字段，绝不返回密码哈希。"""
+    with _sb_client() as client:
+        try:
+            r = client.get("/app_users", params={
+                "select": "id,kind,username,init_profile,guide_seen_at,"
+                          "created_at,last_login_at",
+                "deleted_at": "is.null",
+                "order": "created_at.desc", "limit": limit})
+            r.raise_for_status()
+            rows = r.json()
+        except httpx.HTTPError:
+            raise HTTPException(status_code=502,
+                                detail="账号数据源暂时不可用，请稍后重试")
+    users = [{"id": u["id"], "kind": u["kind"], "username": u.get("username"),
+              "init_done": bool((u.get("init_profile") or {}).get("_done")),
+              "guide_seen": bool(u.get("guide_seen_at")),
+              "created_at": u.get("created_at"),
+              "last_login_at": u.get("last_login_at")} for u in rows]
+    return {"ok": True, "data": {"users": users, "count": len(users)}}
+
+
 @router.get("/api/admin/stats")
 def admin_stats(_: None = Depends(require_admin)):
-    """运营概览：匿名会话/消息保留情况 + v3 记忆规模 + 当日 token 用量。
+    """运营概览：账号/会话/消息规模 + v3 记忆规模 + 当日 token 用量。
     只给计数，不返回任何聊天正文或用户标识。"""
-    cutoff = _memory._live_cutoff_iso()
     with _sb_client() as client:
         data = {
+            "users": {
+                "total": _count_where(client, "app_users", {"select": "id"}),
+                "registered": _count_where(client, "app_users", {
+                    "select": "id", "kind": "eq.user"}),
+            },
             "chat": {
                 "sessions": _count_where(client, "chat_sessions", {"select": "id"}),
-                "messages_live": _count_where(client, "chat_messages", {
-                    "select": "id", "created_at": f"gt.{cutoff}"}),
-                "messages_expired": _count_where(client, "chat_messages", {
-                    "select": "id", "created_at": f"lte.{cutoff}"}),
+                "messages": _count_where(client, "chat_messages", {"select": "id"}),
             },
             "v3": {
                 "owners": _count_where(client, "v3_owner", {"select": "id"}),

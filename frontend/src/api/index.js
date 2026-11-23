@@ -88,6 +88,10 @@ export function adminOverview(token) {
   return adminFetch("/api/admin/overview", { token });
 }
 
+export function adminUsers(token) {
+  return adminFetch("/api/admin/users", { token });
+}
+
 export function adminDocuments(token, q = "", scope = "") {
   const params = new URLSearchParams();
   if (q.trim()) params.set("q", q.trim());

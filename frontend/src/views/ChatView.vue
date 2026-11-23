@@ -3,7 +3,6 @@ import { ref, reactive, nextTick, onUnmounted } from "vue";
 import MarkdownIt from "markdown-it";
 import { chatStream } from "../api";
 import { writebackRound } from "../api/sessions";
-import { getCurrentSessionId, setCurrentSessionId, setSessionToken } from "../storage";
 import { toMirrorHref } from "../kbSource.mjs";
 
 const md = new MarkdownIt({ linkify: true, html: false, breaks: true });
@@ -76,7 +75,9 @@ const box = ref(null);
 let slowTimer = null;
 
 // P0 过渡落库：v1 链路不变，每轮结束回写新会话存储（接口未上线时静默停用）
-const sessionId = ref(getCurrentSessionId());
+// v5：会话 id 仅存内存；Bearer 归属下服务端按 user_id 找回会话，
+// 刷新另起会话在可接受范围（v1 为旧版问答）。
+const sessionId = ref("");
 let wbDisabled = false;
 async function writeback(query, ai) {
   if (wbDisabled || !ai.text) return;
@@ -89,11 +90,7 @@ async function writeback(query, ai) {
       assistant: ai.text,
       meta: { route: ai.route, sources: ai.sources },
     }, sessionId.value || undefined);
-    if (r?.session_id) {
-      sessionId.value = r.session_id;
-      setCurrentSessionId(r.session_id);
-      if (r.session_token) setSessionToken(r.session_id, r.session_token);
-    }
+    if (r?.session_id) sessionId.value = r.session_id;
   } catch (e) {
     if (e.status === 404 || e.status === 405) wbDisabled = true;
   }

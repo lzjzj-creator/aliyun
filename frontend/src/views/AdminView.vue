@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
-import { adminDocuments, adminLogin, adminOverview } from "../api";
+import { adminDocuments, adminLogin, adminOverview, adminUsers } from "../api";
 import { toMirrorHref } from "../kbSource.mjs";
 
 const TOKEN_KEY = "zhimai_admin_token";
@@ -22,6 +22,8 @@ const loginError = ref("");
 const loginBusy = ref(false);
 
 const overview = ref(null);
+const users = ref([]);
+const usersOpen = ref(false);
 const loading = ref(false);
 const loadError = ref("");
 const query = ref("");
@@ -88,6 +90,10 @@ async function loadOverview() {
   try {
     const res = await adminOverview(token.value);
     overview.value = res.data;
+    // v5 账号列表：失败不阻塞知识库面板
+    adminUsers(token.value)
+      .then((r) => { users.value = r.data?.users || []; })
+      .catch(() => {});
     rows.value = res.data.recent || [];
     tableTitle.value = "最近入库";
     query.value = "";
@@ -233,6 +239,31 @@ onMounted(async () => {
             </tbody>
           </table>
           <p v-else class="admin-hint">没有匹配的文档。</p>
+        </div>
+
+        <!-- v5 账号用户列表 -->
+        <div class="admin-table-wrap">
+          <div class="admin-table-head">
+            <h3>账号用户（{{ users.length }}）</h3>
+            <button type="button" class="ghost" @click="usersOpen = !usersOpen">
+              {{ usersOpen ? "收起" : "展开" }}
+            </button>
+          </div>
+          <table v-if="usersOpen && users.length" class="admin-table">
+            <thead>
+              <tr><th>用户名</th><th>类型</th><th>初始化</th><th>注册时间</th><th>最近登录</th></tr>
+            </thead>
+            <tbody>
+              <tr v-for="u in users" :key="u.id">
+                <td class="admin-title">{{ u.username || "（访客）" }}</td>
+                <td><span class="chip" :class="{ hit: u.kind === 'user' }">{{ u.kind === "user" ? "注册" : "访客" }}</span></td>
+                <td>{{ u.init_done ? "✓" : "—" }}</td>
+                <td>{{ (u.created_at || "").slice(0, 16).replace("T", " ") }}</td>
+                <td>{{ (u.last_login_at || "").slice(0, 16).replace("T", " ") || "—" }}</td>
+              </tr>
+            </tbody>
+          </table>
+          <p v-else-if="usersOpen" class="admin-hint">暂无账号数据。</p>
         </div>
       </template>
     </template>

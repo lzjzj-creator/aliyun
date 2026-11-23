@@ -9,11 +9,10 @@ import { replayEvents } from "../api/core";
 import ThinkingSteps from "../components/ThinkingSteps.vue";
 import ProfilePanel from "../components/ProfilePanel.vue";
 import UiIcon from "../components/UiIcon.vue";
-import {
-  getCurrentSessionId, setCurrentSessionId, setSessionToken,
-} from "../storage";
 import { toMirrorHref } from "../kbSource.mjs";
 
+// v5：会话归属 = Bearer user_id，路由 hash 承载 session 指针，本地不再存令牌。
+const props = defineProps({ sid: { type: String, default: "" } });
 const emit = defineEmits(["goto-resume", "session-created"]);
 
 const PATH_STEPS = ["聊出经历", "存为证据", "生成简历", "学会优化"];
@@ -33,10 +32,9 @@ const chips = ref([]);         // 建议回复：归位到输入框上方，不�
 const busy = ref(false);
 const slow = ref(false);
 const dead = ref("");         // 致命错误提示（引擎未开放/会话丢失）
-const historyExpired = ref(false); // 48h 保留期：本会话旧消息已到期清除（非致命）
 const deadFallbackV1 = ref(false);  // dead 时是否提供 v1 问答回退入口
 const box = ref(null);
-const sessionId = ref(getCurrentSessionId());
+const sessionId = ref(props.sid || "");
 const MSG_ENGINE_OFF = "访谈引擎暂未开放（服务端 COACH_ENABLED 未开启）。可先用问答模式。";
 const deadCanRetry = ref(false);  // dead 为瞬时故障（非 404/503）时可重试
 let itemKey = 0;                  // items 稳定 key（index key 在 splice 后错位）
@@ -85,7 +83,6 @@ function restoreMessages(bundle) {
     slot, value: typeof v === "object" && v !== null ? v.value : v,
   }));
   stage.value = (bundle.session && bundle.session.stage) || "probing";
-  historyExpired.value = !!bundle.history_expired;
   items.value = restored;
 }
 
@@ -99,10 +96,8 @@ function wireTurn(turn, lastUserText, demo = false) {
           if (d.stage) stage.value = d.stage;
           return;   // 演示回放不写会话令牌/当前会话
         }
-        if (d.session_token) setSessionToken(d.session_id, d.session_token);
         if (d.session_id && d.session_id !== sessionId.value) {
           sessionId.value = d.session_id;
-          setCurrentSessionId(d.session_id);
           history.replaceState(null, "", `#/chat/${d.session_id}`);
           emit("session-created", d.session_id);
         }
@@ -337,12 +332,8 @@ onMounted(boot);
       <a v-if="deadFallbackV1" href="#/chat-v1">去问答模式 →</a>
       <button v-if="deadCanRetry && !busy" class="demo-link" @click="boot">重试</button>
       <button v-if="!busy" class="demo-link" :disabled="demoLoading" @click="loadDemo">
-        ▶ 演示访谈（离线回放）
+        <UiIcon name="play" :size="12" /> 演示访谈（离线回放，无需联网）
       </button>
-    </div>
-
-    <div v-if="historyExpired" class="expired-banner">
-      本对话已超过 48 小时，历史消息已按隐私政策清除；可继续对话，或点上方「会话」新建。
     </div>
 
     <ol v-if="(!items.length && !busy) || stage === 'greeting'" class="iv-path"
@@ -354,7 +345,10 @@ onMounted(boot);
       <h2>先来聊聊你的经历</h2>
       <p class="empty-hint">我会主动追问，把能写进简历的素材一点点挖出来。</p>
       <button class="demo-chat" :disabled="demoLoading" @click="loadDemo">
-        ▶ 演示访谈（离线快照，无需联网）
+        <UiIcon name="play" :size="14" /> 演示访谈（离线回放，无需联网）
+      </button>
+      <button class="hero-resume-link" @click="emit('goto-resume')">
+        已有素材？直接去生成简历 →
       </button>
     </div>
 
@@ -409,17 +403,20 @@ onMounted(boot);
       </button>
     </div>
     <form class="composer" @submit.prevent="send()">
-      <textarea ref="inputEl" v-model="input" rows="1" :disabled="busy || !!dead"
-                :placeholder="busy ? (slow ? '首次唤醒服务，约 3–8 秒…' : '思考中…') : '聊聊你的经历，或直接提问…（Enter 发送，Shift+Enter 换行）'"
+      <textarea ref="inputEl" v-model="input" rows="1" :disabled="!!dead"
+                aria-label="输入消息"
+                :placeholder="busy ? (slow ? '首次唤醒服务，约 3–8 秒…' : '回复中，可先打好下一句…') : '聊聊你的经历，或直接提问…'"
                 @input="autoGrow" @keydown.enter.exact.prevent="onEnterKey"></textarea>
       <button type="submit" :disabled="busy || !input.trim() || !!dead">
         <UiIcon name="send" :size="15" /><span>发送</span>
       </button>
     </form>
+    <p class="composer-hint">Enter 发送 · Shift+Enter 换行</p>
     </div>
 
     <ProfilePanel class="iv-side" :coverage="profile.coverage" :gaps="profile.gaps"
-                  :updates="profile.updates" :labels="slotLabels" @ask="onAskGap" />
+                  :updates="profile.updates" :labels="slotLabels"
+                  @ask="onAskGap" @generate="emit('goto-resume')" />
   </section>
 </template>
 
@@ -469,4 +466,11 @@ onMounted(boot);
 .demo-link:hover { background: var(--agent-soft); }
 .empty { padding: 24px 0 8px; }
 .empty-hint { color: var(--ink-secondary); font-size: .85rem; margin: 4px 0 12px; }
+.hero-resume-link {
+  margin-top: 10px; padding: 0; border: none; background: none; cursor: pointer;
+  font: inherit; font-size: .8rem; color: var(--ink-secondary);
+}
+.hero-resume-link:hover { color: var(--brand); text-decoration: underline; }
+.hero-resume-link:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 4px; }
+.demo-link .ui-icon, .demo-chat .ui-icon { vertical-align: -0.15em; margin-right: 3px; }
 </style>

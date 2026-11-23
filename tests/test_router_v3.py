@@ -128,6 +128,7 @@ class RouterV3Test(unittest.TestCase):
         self.assertEqual(body["facts"][0]["id"], FACT["id"])
 
     def test_retention_warning_flag(self):
+        # v5：自动 365 天保留已废止——retention_warning 恒 False（契约位保留）。
         self._patch("fact_counts", lambda oid:
                     {"total": 0, "by_kind": {}, "by_status": {}})
         self._patch("last_extracted_at", lambda oid: None)
@@ -136,7 +137,7 @@ class RouterV3Test(unittest.TestCase):
         old = {**OWNER, "last_seen_at": "2024-01-01T00:00:00+00:00"}
         with patch.object(rv3.security_v3, "require_owner", lambda t, **kw: old):
             r = self.client.get("/api/v3/memory", headers=H)
-        self.assertTrue(r.json()["retention_warning"])
+        self.assertFalse(r.json()["retention_warning"])
         self.assertEqual(r.json()["retention_days"], 365)
 
     def test_protocol3_on_all_endpoints(self):

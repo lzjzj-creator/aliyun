@@ -135,6 +135,81 @@ def _valid_candidate(item, fed_ids, user_by_id, whitelist):
             "msg_id": msg_id, "quote": quote, "confidence": float(confidence)}
 
 
+# --- 对话建随手记（v5：边聊边记） ------------------------------------------------
+
+NOTE_DIALOG_PROMPT = (Path(__file__).resolve().parent / "prompts"
+                      / "v3_note_dialog.md").read_text(encoding="utf-8")
+DIALOG_HISTORY_MAX = 8
+DIALOG_FACTS_MAX = 12
+
+
+def _valid_dialog_fact(item, source_text, whitelist):
+    """Same extractive rules as _valid_candidate, but the evidence source is
+    the dialog's user text rather than a stored message id."""
+    if not isinstance(item, dict):
+        return None
+    if not {"kind", "slot_path", "value", "quote"} <= set(item):
+        return None
+    kind, slot_path, value, quote = (
+        item["kind"], item["slot_path"], item["value"], item["quote"])
+    if kind not in memory_v3.FACT_KINDS:
+        return None
+    if not isinstance(slot_path, str) or not whitelist.match(slot_path):
+        return None
+    if not isinstance(quote, str) or not quote.strip() \
+            or quote not in source_text:
+        return None
+    value_json = json.dumps(value, ensure_ascii=False)
+    if len(value_json) > MAX_VALUE_CHARS or not isinstance(
+            value, (str, int, float, dict, list)) or isinstance(value, bool):
+        return None
+    if isinstance(value, str):
+        if not value.strip() or value not in quote:
+            return None
+    elif _norm(value_json) not in _norm(quote):
+        return None
+    if _sensitive(quote) or _sensitive(value_json):
+        return None
+    return {"kind": kind, "slot_path": slot_path, "value": value,
+            "quote": quote}
+
+
+def extract_dialog(user_texts, history=None) -> dict:
+    """One note-dialog round: reply + draft facts pending user confirmation.
+
+    user_texts: the current and recent user messages (evidence source).
+    history: prior dialog turns [{role, content}] for model context only.
+    Returns {"reply": str, "draft_facts": [...]}. Raises BudgetExhausted /
+    ExtractionFailed on upstream failure.
+    """
+    user_texts = [t for t in (user_texts or []) if isinstance(t, str) and t.strip()]
+    source_text = "\n".join(user_texts)
+    msgs = [{"role": "system", "content": NOTE_DIALOG_PROMPT}]
+    for h in (history or [])[-DIALOG_HISTORY_MAX:]:
+        role = h.get("role") if isinstance(h, dict) else None
+        content = h.get("content") if isinstance(h, dict) else None
+        if role in ("user", "assistant") and isinstance(content, str) and content.strip():
+            msgs.append({"role": role, "content": content[:2000]})
+    msgs.append({"role": "user",
+                 "content": "用户最新消息：\n" + "\n".join(user_texts[-3:])})
+    try:
+        data = llm.chat_json(msgs, model=QWEN_ROUTER, temperature=0.2)
+    except model_budget.BudgetUnavailable:
+        raise BudgetExhausted("daily model budget exhausted") from None
+    except Exception:
+        raise ExtractionFailed("dialog extraction failed") from None
+    data = data if isinstance(data, dict) else {}
+    reply = data.get("reply")
+    reply = reply.strip() if isinstance(reply, str) else ""
+    whitelist = slot_whitelist()
+    drafts = []
+    for item in (data.get("facts") if isinstance(data.get("facts"), list) else [])[:DIALOG_FACTS_MAX]:
+        f = _valid_dialog_fact(item, source_text, whitelist)
+        if f is not None:
+            drafts.append(f)
+    return {"reply": reply, "draft_facts": drafts}
+
+
 def extract_incremental(owner_id: str, session_id: str) -> dict:
     """Run one incremental extraction for (owner, session).
 

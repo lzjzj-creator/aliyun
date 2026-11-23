@@ -53,6 +53,41 @@ def _err(code, message, retryable=False):
     return {"code": code, "message": message, "retryable": retryable}
 
 
+def _seed_profile(auth_user: dict) -> dict | None:
+    """v5: translate app_users.init_profile into a user_profiles.profile seed.
+
+    Profile paths follow coach._slot_filled's fallback reads (identity.*,
+    basics.target_role) plus the extractor's goal.target_role so both readers
+    see the initialized values. material_notes ride along so the interviewer
+    can use them as evidence hints without re-asking.
+    """
+    init = (auth_user or {}).get("init_profile") or {}
+    if not isinstance(init, dict) or not init:
+        return None
+    profile = {}
+    identity = dict(init.get("identity") or {})
+    edu = init.get("education")
+    if isinstance(edu, list) and edu and isinstance(edu[0], dict):
+        for key in ("school", "major", "degree", "period", "gpa_or_rank"):
+            if edu[0].get(key):
+                identity.setdefault(key, edu[0][key])
+    basics = init.get("basics") or {}
+    for key in ("name", "phone", "email", "city"):
+        if basics.get(key):
+            identity.setdefault(key, basics[key])
+    if identity:
+        profile["identity"] = {k: v for k, v in identity.items()
+                               if isinstance(v, str) and v.strip()}
+    if isinstance(basics.get("target_role"), str) and basics["target_role"].strip():
+        profile["goal"] = {"target_role": basics["target_role"].strip()}
+        profile["basics"] = {"target_role": basics["target_role"].strip()}
+    notes = init.get("material_notes")
+    if isinstance(notes, dict):
+        profile["material_notes"] = {k: v for k, v in notes.items()
+                                     if isinstance(v, str) and v.strip()}
+    return profile or None
+
+
 class _LeaseResponse(StreamingResponse):
     """Release even if ASGI send fails before the sync iterator is first advanced."""
     def __init__(self, *args, release, **kwargs):
@@ -100,11 +135,12 @@ def _retry_result(messages, user, text, key):
 @router.post("/chat/stream")
 def chat_stream(req: ChatReq, request: Request,
                 x_anon_id: str | None = Header(default=None),
-                x_session_token: str | None = Header(default=None)):
+                x_session_token: str | None = Header(default=None),
+                authorization: str | None = Header(default=None)):
     if os.getenv("COACH_ENABLED", "0") != "1":
         raise HTTPException(503, "访谈引擎暂未开放")
     security.enforce_ip(request)
-    anon = security.require_anon(x_anon_id)
+    auth_user, anon = security.require_identity(request, authorization, x_anon_id)
     if not coach.budget_ok():      # §10 日 token 预算触顶 → 停新访谈
         raise HTTPException(503, "今日访谈额度已用完，请明天再来")
 
@@ -112,10 +148,16 @@ def chat_stream(req: ChatReq, request: Request,
     lease = None
     if is_new:
         security.charge_turn(anon)   # 建会话+首轮计一次配额（与 /messages 同口径）
-        created = _storage(lambda: memory.create_session(anon))
+        # v5: init_profile seeds the new session's profile so initialized
+        # users are never re-asked grade/school/major/target_role.
+        seed = _seed_profile(auth_user) if auth_user else None
+        created = _storage(lambda: memory.create_session(
+            anon, user_id=auth_user["id"] if auth_user else None,
+            seed_profile=seed))
         session, token, sid = created["session"], created["token"], created["session"]["id"]
     else:
-        sid = security.require_owner(req.session_id, anon, x_session_token)
+        sid, _ = security.require_access(
+            request, req.session_id, authorization, anon, x_session_token)
         # 租约在响应前获取：竞争 → 429+Retry-After（§5/§10），查重/落库全在租约内
         lease = security.limiter.stream(sid)
         lease.__enter__()

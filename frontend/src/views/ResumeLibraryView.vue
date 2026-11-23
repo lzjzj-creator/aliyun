@@ -7,7 +7,7 @@ import { downloadResumePdf } from "../utils/resumeDownload";
 import { exportIssues } from "../../../backend/resume_assets/render.mjs";
 import { getTemplate, optimizePlan, optimizeSection } from "../api/resume";
 import {
-  createResume, deleteResume, duplicateResume, getOwnerToken, getResume,
+  createResume, deleteResume, duplicateResume, getResume,
   listResumes, exportResumePdf,
   listVersions, patchResume, regenerateResume, restoreVersion,
 } from "../api/v3";
@@ -29,7 +29,8 @@ function onPhotoBusy(event) {
   if (event.busy) { photoRequest = event.request; photoBusy.value = true; }
   else if (event.request === photoRequest) { photoRequest = null; photoBusy.value = false; }
 }
-const hasToken = ref(!!getOwnerToken());
+// v5：Bearer 归属下凭据天然存在；仅当服务端返回 404（记忆未开/已停）时落为 false。
+const hasToken = ref(true);
 const creating = ref(false);
 const newDoc = ref({ title: "", target_role: "", jd_text: "" });
 const editorTab = ref("edit");       // 左侧控制台：edit | coach | evidence（v-show 切换，SSR 保活 DOM）
@@ -782,8 +783,8 @@ onMounted(() => {
 .coach-sec { margin-top: 10px; }
 .coach-sec-title { font-size: .8rem; font-weight: 650; margin: 0 0 8px; color: var(--ink-secondary); }
 .coach-diff-card {
-  border-left: 3px solid var(--coach-border); background: var(--coach-soft);
-  border-radius: 0 8px 8px 0; padding: 9px 12px; margin-bottom: 8px;
+  border: 1px solid var(--coach-border); background: var(--coach-soft);
+  border-radius: 8px; padding: 9px 12px; margin-bottom: 8px;
 }
 .coach-diff-card p { margin: 0; }
 .diff-before { color: var(--ink-muted); font-size: .78rem; text-decoration: line-through; }

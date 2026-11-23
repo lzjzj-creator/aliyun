@@ -1,16 +1,15 @@
 <script setup>
-// 简历向导三步（B 域 #19/#20/#22）：
-// ① 一键填写（会话素材→字段+出处）② 人工修改+实时预览+打印导出 ③ 逐段黑箱优化+对比+导出
+// 简历向导两步（v5 §9.6）：
+// ① 选素材（多会话多选 + 事实库开关）+ 生成（autofill→STAR扩写→内部优化，聚合进度条）
+// ② 人工修改 + 实时预览 + 导出。草稿全部存服务端。
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import ResumeFieldsForm from "../components/ResumeFieldsForm.vue";
 import ResumePreview from "../components/ResumePreview.vue";
 import { downloadResumePdf } from "../utils/resumeDownload";
 import { exportIssues } from "../../../backend/resume_assets/render.mjs";
-import { getTemplate, autofill, optimizePlan, optimizeSection, exportDraftPdf } from "../api/resume";
-import { getSession, listSessions } from "../api/sessions";
-import {
-  DRAFT_KEY, OPT_DRAFT_KEY, saveDraft, loadDraft, getCurrentSessionId,
-} from "../storage";
+import { getTemplate, autofill, expand, optimizePlan, optimizeSection, exportDraftPdf } from "../api/resume";
+import { listSessions } from "../api/sessions";
+import { getDraft, putDraft } from "../api/auth";
 
 const step = ref(1);
 const tpl = ref(null);
@@ -34,7 +33,7 @@ function resetPhotoContext() {
   photoRequest = null; photoBusy.value = false;
 }
 onBeforeUnmount(resetPhotoContext);
-const formDisabled = computed(() => busy.value || optBusy.value || exporting.value);
+const formDisabled = computed(() => busy.value || pipeBusy.value || exporting.value);
 const locked = computed(() => formDisabled.value || photoBusy.value);
 
 // —— 草稿数据 ——
@@ -45,34 +44,34 @@ const evidenceRows = computed(() => Object.entries(evidence.value || {})
   .filter((row) => row.sources.length));
 const gaps = ref([]);
 const draftVer = ref("");
+const draftId = ref("current");
+const draftTitle = ref("简历草稿");
 
-// —— 素材来源 ——
+// —— 素材来源（v5：多选会话 + 事实库） ——
 const sessions = ref([]);
-const pickedSession = ref(getCurrentSessionId());
-const convo = ref([]); // [{role,content,id}]
+const pickedSessions = ref(new Set());
+const includeFacts = ref(true);
 
-// —— 优化 ——
-const plan = ref(null);
-const results = ref({});       // section_key → response
-const optFields = ref(null);   // 合并后的优化稿
-const optBusy = ref(false);
-const displaySaveState = computed(() => photoBusy.value ? "照片处理中…" : step.value === 3 && optFields.value ? "优化稿未保存 · 待采纳" : saveState.value);
-const placeholders = computed(() =>
-  Object.values(results.value).flatMap((r) => r.placeholders || []));
-const pendingQuestions = computed(() =>
-  Object.values(results.value).flatMap((r) => r.pending_questions || []));
+function toggleSession(sid) {
+  const s = new Set(pickedSessions.value);
+  if (s.has(sid)) s.delete(sid); else s.add(sid);
+  pickedSessions.value = s;
+}
+
+// —— 生成管线：autofill → expand(STAR) → optimize(内部) ——
+const pipeBusy = ref(false);
+const pipeStages = ref([]);   // [{key,label,status:'pending'|'running'|'done'|'error'|'skip'}]
+const pipeSummary = ref("");
 
 function onFieldsUpdate(nextFields) {
   if (formDisabled.value) return;
-  // 仅表单编辑使旧优化快照失效；采纳/保存不走此处，照片元数据随新字段保留。
-  optFields.value = null; plan.value = null; results.value = {};
   errMsg.value = "";
   exportProblems.value = [];
   fields.value = nextFields;
 }
 
 const emit = defineEmits(["goto-library"]);
-const STEP_CN = { 1: "① 一键填写", 2: "② 修改预览", 3: "③ 一键优化" };
+const STEP_CN = { 1: "① 选素材 · 生成", 2: "② 预览微调 · 导出" };
 
 // —— 工作台：区块导航 + 点击定位 ——
 const focusSec = ref("");
@@ -101,32 +100,36 @@ function gotoSec(key) {
   panelEl.value?.querySelector(`.rff-sec[data-key="${key}"]`)
     ?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
+// 反向通路：点预览区块 → 定位到左侧对应编辑区
+function onPreviewClick(e) {
+  const sec = e.target.closest(".resume-section[data-key]");
+  if (sec) gotoSec(sec.dataset.key);
+}
 
 onMounted(() => { loadTemplate(); loadSessions(); });
 
-// 存储层会静默降级，因此读回核对后才显示“已保存”，不把失败说成成功。
-function saveLocalDraft() {
-  if (photoBusy.value || !draftVer.value || !Object.keys(fields.value).length) return false;
+// —— 服务端草稿：防抖写入 PUT /api/v4/drafts ——
+let saveTimer = null;
+function saveDraft() {
+  if (photoBusy.value || !draftVer.value || !Object.keys(fields.value).length) return;
+  clearTimeout(saveTimer);
   saveState.value = "保存中…";
-  const snapshot = JSON.parse(JSON.stringify({
-    template_version: draftVer.value, fields: fields.value,
-    evidence_map: evidence.value, gaps: gaps.value,
-  }));
-  try {
-    saveDraft(DRAFT_KEY, snapshot);
-    const stored = loadDraft(DRAFT_KEY);
-    if (!stored || stored.template_version !== snapshot.template_version ||
-        JSON.stringify(stored.fields) !== JSON.stringify(snapshot.fields) ||
-        JSON.stringify(stored.evidence_map) !== JSON.stringify(snapshot.evidence_map) ||
-        JSON.stringify(stored.gaps) !== JSON.stringify(snapshot.gaps)) throw new Error("未写入本机");
-    saveState.value = "已保存到本机";
-    return true;
-  } catch {
-    saveState.value = "本机保存失败，请重试；仍可导出当前快照";
-    return false;
-  }
+  saveTimer = setTimeout(async () => {
+    try {
+      const snapshot = JSON.parse(JSON.stringify({
+        draft_id: draftId.value, title: draftTitle.value,
+        template_version: draftVer.value, fields: fields.value,
+        evidence_map: evidence.value, gaps: gaps.value,
+        photo: fields.value?._meta?.photo || null,
+      }));
+      await putDraft(snapshot);
+      saveState.value = "已保存到云端";
+    } catch {
+      saveState.value = "云端保存失败，请重试；仍可导出当前快照";
+    }
+  }, 3000);
 }
-watch([fields, draftVer, photoBusy], saveLocalDraft, { deep: true });
+watch([fields, draftVer, photoBusy], () => { if (step.value === 2) saveDraft(); }, { deep: true });
 
 async function loadTemplate() {
   try {
@@ -138,15 +141,20 @@ async function loadTemplate() {
       errMsg.value = "模板契约加载失败";
     }
   }
-  // 恢复草稿：template_version 匹配才用，不匹配提示重新填写（§11）
-  const d = loadDraft(DRAFT_KEY);
-  if (d && d.template_version === tpl.value?.template_version) {
-    resetPhotoContext();
-    fields.value = d.fields; evidence.value = d.evidence_map; gaps.value = d.gaps;
-    draftVer.value = d.template_version;
-  } else if (d) {
-    errMsg.value = "本地草稿的模板版本已过期，请重新一键填写。";
-  }
+  // 恢复服务端草稿：template_version 匹配才用
+  try {
+    const { draft } = await getDraft(draftId.value);
+    if (draft && draft.template_version === tpl.value?.template_version) {
+      resetPhotoContext();
+      fields.value = draft.fields || {};
+      evidence.value = draft.evidence_map || {};
+      gaps.value = draft.gaps || [];
+      draftVer.value = draft.template_version;
+      draftTitle.value = draft.title || "简历草稿";
+      step.value = 2;
+      saveState.value = "已从云端恢复草稿";
+    }
+  } catch { /* 无草稿从空白开始 */ }
 }
 
 async function loadSessions() {
@@ -160,130 +168,103 @@ async function loadSessions() {
   }
 }
 
-async function readConvo() {
-  errMsg.value = "";
-  if (!pickedSession.value) { errMsg.value = "请先选择一个会话"; return false; }
-  try {
-    const bundle = await getSession(pickedSession.value);
-    convo.value = bundle.messages || [];
-  } catch (e) {
-    if (import.meta.env.DEV) {
-      const demo = await fetch("/demo/v2/session.json").then((r) => r.json());
-      convo.value = demo.messages || [];
-    } else {
-      errMsg.value = e.status === 404 ? "会话不存在或无权访问" : "会话读取失败";
-      return false;
-    }
-  }
-  if (!convo.value.length) { errMsg.value = "该会话还没有消息"; return false; }
-  return true;
+function setStage(key, status) {
+  const s = pipeStages.value.find((x) => x.key === key);
+  if (s) s.status = status;
 }
 
-async function useDemoConvo() {
-  const demo = await fetch("/demo/v2/session.json").then((r) => r.json());
-  convo.value = demo.messages || [];
-  errMsg.value = "";
-}
-
-async function doAutofill() {
+// 一键生成：autofill（多源）→ expand（STAR 扩写）→ optimize（内部黑箱，自动采纳）
+async function generate() {
   if (!tpl.value || locked.value) return;
-  busy.value = true; errMsg.value = "";
+  const ids = [...pickedSessions.value];
+  if (!ids.length && !includeFacts.value) {
+    errMsg.value = "请至少勾选一个素材来源（会话或经历证据库）";
+    return;
+  }
+  pipeBusy.value = true;
+  errMsg.value = "";
+  pipeSummary.value = "";
+  pipeStages.value = [
+    { key: "autofill", label: "提取素材，填写字段", status: "running" },
+    { key: "expand", label: "STAR 法则扩写经历", status: "pending" },
+    { key: "optimize", label: "全面优化表达", status: "pending" },
+  ];
   try {
-    let payload = { template_version: tpl.value.template_version };
-    if (convo.value.length) {
-      payload.messages = convo.value;                 // 降级路径：消息直传
-      payload.session_id = undefined;
-    } else if (pickedSession.value) {
-      payload.session_id = pickedSession.value;       // A 域就绪后走会话读取
-    } else {
-      errMsg.value = "请先读取会话素材";
-      return;
-    }
+    // ① autofill：多会话 + 事实库合并提取
+    let payload = {
+      template_version: tpl.value.template_version,
+      session_ids: ids, include_facts: includeFacts.value,
+    };
     let r;
     try {
-      r = await autofill(payload, pickedSession.value || undefined);
+      r = await autofill(payload);
     } catch (e) {
-      if (e.status === 409) {                          // 版本漂移：重取契约重试一次
+      if (e.status === 409) {                    // 版本漂移：重取契约重试一次
         await loadTemplate();
         payload.template_version = tpl.value.template_version;
-        r = await autofill(payload, pickedSession.value || undefined);
+        r = await autofill(payload);
       } else throw e;
     }
     resetPhotoContext();
-    fields.value = r.fields;
+    fields.value = r.fields || {};
     evidence.value = r.evidence_map || {};
     gaps.value = r.gaps || [];
     draftVer.value = tpl.value.template_version;
-    optFields.value = null; plan.value = null; results.value = {};
-    saveLocalDraft();
+    setStage("autofill", "done");
+
+    // ② expand：每条经历按 STAR 扩写为一段话（数字守卫不成立则保留原样）
+    setStage("expand", "running");
+    try {
+      const ex = await expand({
+        template_version: tpl.value.template_version,
+        fields: fields.value,
+      });
+      if (ex.fields) fields.value = ex.fields;
+      pipeSummary.value = `扩写 ${ex.expanded || 0} 条经历` +
+        (ex.kept ? `，${ex.kept} 条素材不足保持原样` : "");
+      setStage("expand", "done");
+    } catch {
+      setStage("expand", "skip");                // 扩写失败不阻塞出稿
+    }
+
+    // ③ optimize：逐段优化，结果自动采纳（黑箱，不展示 diff）
+    setStage("optimize", "running");
+    try {
+      const ver = tpl.value.template_version;
+      const planRes = await optimizePlan({ template_version: ver, fields: fields.value });
+      const merged = JSON.parse(JSON.stringify(fields.value));
+      let optCount = 0;
+      for (const s of planRes.sections || []) {
+        if (!(s.optimizable && s.status === "pending")) continue;
+        try {
+          const sec = await optimizeSection({
+            template_version: ver, section: s.key, fields: fields.value,
+          });
+          if (sec.status === "done" && sec.optimized != null) {
+            merged[s.key] = sec.optimized;
+            optCount++;
+          }
+        } catch { /* 单段失败不阻塞其他段 */ }
+      }
+      fields.value = merged;
+      pipeSummary.value = (pipeSummary.value ? pipeSummary.value + "；" : "") +
+        (optCount ? `优化了 ${optCount} 个区块` : "表达已就绪");
+      setStage("optimize", "done");
+    } catch {
+      setStage("optimize", "skip");
+    }
+
+    saveState.value = "未保存";
+    step.value = 2;
+    mobilePanel.value = "edit";
   } catch (e) {
-    errMsg.value = e.status === 501
-      ? "会话存储未就绪：请先点「读取会话」用直传模式"
-      : `填写失败：${e.message}`;
+    errMsg.value = `生成失败：${e.message}`;
   } finally {
-    busy.value = false;
+    pipeBusy.value = false;
   }
 }
 
 const filled = computed(() => Object.keys(fields.value).length > 0);
-
-async function doOptimize() {
-  if (!tpl.value || !filled.value || locked.value) return;
-  optBusy.value = true; errMsg.value = "";
-  plan.value = null; results.value = {}; optFields.value = null;
-  try {
-    const ver = tpl.value.template_version;
-    plan.value = await optimizePlan({ template_version: ver, fields: fields.value });
-    optFields.value = JSON.parse(JSON.stringify(fields.value));
-    for (const s of plan.value.sections) {
-      if (!(s.optimizable && s.status === "pending")) continue;
-      s.status = "running";
-      try {
-        const r = await optimizeSection({
-          template_version: ver, section: s.key, fields: fields.value,
-        });
-        results.value = { ...results.value, [s.key]: r };
-        if (r.status === "done" && r.optimized != null) {
-          optFields.value = { ...optFields.value, [s.key]: r.optimized };
-        }
-        s.status = r.status === "error" ? "error" : "done";
-      } catch (e) {
-        results.value = {
-          ...results.value,
-          [s.key]: { status: "error", steps: [], change_log: [], placeholders: [],
-                     pending_questions: [], error: e.message },
-        };
-        s.status = "error";                              // 单段失败不阻塞其他段
-      }
-    }
-  } catch (e) {
-    errMsg.value = `优化失败：${e.message}`;
-  } finally {
-    optBusy.value = false;
-  }
-}
-
-function adoptAll() {
-  if (!optFields.value || locked.value) return;
-  fields.value = JSON.parse(JSON.stringify(optFields.value));
-  saveDraft(OPT_DRAFT_KEY, {
-    template_version: tpl.value.template_version,
-    fields: optFields.value, evidence_map: evidence.value, gaps: gaps.value,
-  });
-  saveLocalDraft();
-  optFields.value = null;
-  errMsg.value = "";
-}
-
-function discardOptimized() {
-  if (locked.value) return;
-  // 原稿及本机保存状态保持不变；不写 DRAFT_KEY / OPT_DRAFT_KEY。
-  optFields.value = null; plan.value = null; results.value = {};
-  errMsg.value = "";
-  exportProblems.value = [];
-  step.value = 2;
-  mobilePanel.value = "edit";
-}
 
 async function exportPrint() {
   if (!tpl.value || !filled.value || locked.value) return;
@@ -291,8 +272,7 @@ async function exportPrint() {
   errMsg.value = "";
   exportProblems.value = [];
   try {
-    // 只发送点击时纸面对应的明确快照；选中的素材会话不隐式绑定到导出请求。
-    const snapshot = JSON.parse(JSON.stringify(step.value === 3 && optFields.value ? optFields.value : fields.value));
+    const snapshot = JSON.parse(JSON.stringify(fields.value));
     exportProblems.value = exportIssues(tpl.value, snapshot);
     if (exportProblems.value.length) {
       errMsg.value = "请先补全或修正以下内容，再导出 PDF。";
@@ -315,7 +295,7 @@ async function exportPrint() {
 <template>
   <section class="pane wizard">
     <nav class="wiz-steps" aria-label="简历制作步骤">
-      <button v-for="n in [1, 2, 3]" :key="n" :class="{ on: step === n }"
+      <button v-for="n in [1, 2]" :key="n" :class="{ on: step === n }"
               :aria-current="step === n ? 'step' : undefined"
               :disabled="locked || (n > 1 && !filled)" @click="step = n">{{ STEP_CN[n] }}</button>
       <button class="wiz-lib" :disabled="locked" @click="emit('goto-library')">简历库 →</button>
@@ -327,12 +307,12 @@ async function exportPrint() {
           <option value="modern">中文现代</option>
         </select>
       </label>
-      <span class="save-state" role="status" aria-live="polite">{{ displaySaveState }}</span>
-      <button class="ghost" :disabled="locked" @click="saveLocalDraft">保存草稿</button>
+      <span class="save-state" role="status" aria-live="polite">{{ photoBusy ? "照片处理中…" : saveState }}</span>
+      <button class="ghost" :disabled="locked" @click="saveDraft">保存草稿</button>
       <button class="primary" :disabled="locked || !tpl" @click="exportPrint">
-        {{ exporting ? "导出中…" : step === 3 && optFields ? "导出优化稿" : "导出 PDF" }}
+        {{ exporting ? "导出中…" : "导出 PDF" }}
       </button>
-      <p class="snapshot-hint">导出当前预览快照，无需开启长期记忆；草稿仅保存在本机。</p>
+      <p class="snapshot-hint">导出当前预览快照；草稿自动保存在云端账号。</p>
     </div>
     <div v-if="errMsg || exportProblems.length" class="wiz-feedback" role="alert">
       <p v-if="errMsg" class="warn">{{ errMsg }}</p>
@@ -345,43 +325,53 @@ async function exportPrint() {
       <button :aria-pressed="mobilePanel === 'preview'" @click="mobilePanel = 'preview'">预览</button>
     </div>
 
-    <!-- ================= ① 一键填写 ================= -->
+    <!-- ================= ① 选素材 · 生成 ================= -->
     <div v-if="step === 1">
-      <h2>第一步：选择素材来源，一键填写</h2>
-      <div class="wiz-source">
-        <label>
-          访谈会话
-          <select v-model="pickedSession" :disabled="locked">
-            <option value="">— 选择会话 —</option>
-            <option v-for="s in sessions" :key="s.id" :value="s.id">
-              {{ s.title }}（{{ s.stage }}）
-            </option>
-          </select>
-        </label>
-        <button class="ghost" :disabled="locked || !pickedSession" @click="readConvo">读取会话</button>
-        <button class="ghost" :disabled="locked" @click="useDemoConvo">演示素材</button>
-        <button :disabled="locked || (!convo.length && !pickedSession)" @click="doAutofill">
-          {{ busy ? "填写中…" : "一键填写" }}
-        </button>
-      </div>
-      <p v-if="convo.length" class="wiz-hint">已载入 {{ convo.length }} 条对话素材</p>
-      <p v-if="tpl" class="wiz-hint">模板：{{ tpl.name }} · v{{ tpl.template_version }} · {{ tpl.page_rule }}</p>
+      <h2>第一步：选择素材来源，生成简历</h2>
+      <p class="wiz-hint">勾选聊过的访谈和经历库素材，多选会合并提取、去重后填进简历。</p>
 
-      <fieldset v-if="filled && tpl" class="wiz-fields" :disabled="formDisabled">
-        <legend class="sr-only">简历内容</legend>
-        <ResumeFieldsForm :model-value="fields" @update:model-value="onFieldsUpdate" :template="tpl" :gaps="gaps"
-                          :disabled="formDisabled" :context="photoContext" @photo-busy="onPhotoBusy" />
-      </fieldset>
-      <div v-if="filled" class="row">
-        <span />
-        <button :disabled="locked" @click="step = 2">下一步：预览导出 →</button>
+      <div class="src-grid">
+        <div class="src-card">
+          <div class="src-card-title">访谈会话</div>
+          <p v-if="!sessions.length" class="wiz-hint">还没有会话，先去「访谈挖掘」聊聊你的经历。</p>
+          <label v-for="s in sessions" :key="s.id" class="src-item">
+            <input type="checkbox" :checked="pickedSessions.has(s.id)"
+                   :disabled="locked" @change="toggleSession(s.id)" />
+            <span class="src-item-name">{{ s.title || s.id.slice(0, 8) }}</span>
+            <span class="src-item-meta">{{ s.stage }}</span>
+          </label>
+        </div>
+        <div class="src-card">
+          <div class="src-card-title">经历证据库</div>
+          <label class="src-item">
+            <input type="checkbox" v-model="includeFacts" :disabled="locked" />
+            <span class="src-item-name">纳入已确认的事实（含随手记）</span>
+          </label>
+          <p class="wiz-hint">你在「经历证据库」确认过的事实会作为素材一并提取。</p>
+        </div>
       </div>
+
+      <div class="wiz-generate">
+        <button class="primary gen-btn" :disabled="locked || (!pickedSessions.size && !includeFacts)"
+                @click="generate">
+          {{ pipeBusy ? "生成中…" : "生成简历" }}
+        </button>
+        <ul v-if="pipeStages.length" class="pipe-stages" aria-live="polite">
+          <li v-for="s in pipeStages" :key="s.key" :data-st="s.status">
+            <i class="pipe-dot" />{{ s.label }}
+            <span class="pipe-st">{{ { running: "进行中…", done: "完成", skip: "已跳过", pending: "" }[s.status] }}</span>
+          </li>
+        </ul>
+        <p v-if="pipeSummary" class="wiz-hint">{{ pipeSummary }}</p>
+      </div>
+
+      <p v-if="tpl" class="wiz-hint">模板：{{ tpl.name }} · v{{ tpl.template_version }} · {{ tpl.page_rule }}</p>
     </div>
 
-    <!-- 内容与正式预览双栏；区块导航收进编辑侧栏。 -->
-    <div v-else-if="step === 2" class="wiz-work" :data-panel="mobilePanel">
+    <!-- ================= ② 预览微调 · 导出 ================= -->
+    <div v-else class="wiz-work" :data-panel="mobilePanel">
       <aside class="wz-panel" ref="panelEl">
-        <h2 class="wz-panel-title">人工修改 · 即改即存本机</h2>
+        <h2 class="wz-panel-title">人工修改 · 自动存云端</h2>
         <details v-if="evidenceRows.length" class="evidence-panel">
           <summary>字段出处（仅供核对，不会导出）</summary>
           <div v-for="row in evidenceRows" :key="row.path" class="evidence-field">
@@ -415,91 +405,18 @@ async function exportPrint() {
                           :disabled="formDisabled" :context="photoContext" @photo-busy="onPhotoBusy" />
         </fieldset>
         <div class="row wz-actions">
-          <button class="ghost" :disabled="locked" @click="step = 1">← 上一步</button>
-          <button :disabled="locked" @click="step = 3">一键优化 →</button>
+          <button class="ghost" :disabled="locked" @click="step = 1">← 重选素材</button>
         </div>
       </aside>
       <div class="wz-canvas">
-        <p class="preview-caption">投递预览 · {{ layout === "classic" ? "中文经典" : "中文现代" }}</p>
-        <div class="paper-stage">
+        <p class="preview-caption">投递预览 · {{ layout === "classic" ? "中文经典" : "中文现代" }} · 点区块可定位到左侧编辑</p>
+        <div class="paper-stage" data-editable @click="onPreviewClick">
           <ResumePreview v-if="tpl" class="print-area" :template="tpl" :fields="fields" :layout="layout" />
-        </div>
-      </div>
-    </div>
-
-    <!-- ================= ③ 逐段优化 + 对比 + 导出 ================= -->
-    <div v-else class="wiz-work" :data-panel="mobilePanel">
-      <aside class="wz-panel">
-        <h2 class="wz-panel-title">优化建议与改动</h2>
-        <details v-if="evidenceRows.length" class="evidence-panel">
-          <summary>字段出处（仅供核对，不会导出）</summary>
-          <div v-for="row in evidenceRows" :key="row.path" class="evidence-field">
-            <b>{{ row.path }}</b>
-            <ul>
-              <li v-for="(source, i) in row.sources" :key="i">
-                <p>{{ source.quote || "未提供引用原文" }}</p>
-                <template v-for="key in ['session_id', 'msg_id', 'fact_id', 'fact_version', 'fact_status']" :key="key">
-                  <span v-if="source[key] != null && source[key] !== ''">{{ key }}：{{ source[key] }}</span>
-                </template>
-              </li>
-            </ul>
-          </div>
-        </details>
-        <div class="opt-panel">
-        <button class="opt-run" :disabled="locked || !filled" @click="doOptimize">
-          {{ optBusy ? "优化中…" : "一键优化" }}
-        </button>
-        <ul v-if="plan" class="opt-list">
-          <li v-for="s in plan.sections" :key="s.key" :data-st="s.status"
-              :class="{ on: focusSec === s.key }">
-            <b>{{ s.title }}</b>
-            <span class="st">
-              {{ { pending: "待优化", running: "优化中…", done: "完成", error: "失败", skipped: "跳过", ok: "无需改", check: "人工确认" }[s.status] || s.status }}
-            </span>
-            <span v-if="s.reason" class="rs">{{ s.reason }}</span>
-          </li>
-        </ul>
-        <button class="ghost back" :disabled="locked" @click="step = 2">← 返回修改</button>
-        </div>
-        <p v-if="!plan && !optBusy" class="wiz-hint">点击「一键优化」，只改表达，不改事实。原文、改动与待确认事项在这里查看，投递预览不附带批注。</p>
-        <p v-if="optFields" class="wiz-hint">当前预览为优化稿；可导出此快照、采纳，或放弃优化稿返回原稿。</p>
-
-        <template v-for="(r, key) in results" :key="key">
-          <div v-if="r.change_log?.length" class="rewrite">
-            <h3 class="coach-sec-title">改动明细 · {{ (plan?.sections || []).find(s => s.key === key)?.title || key }}</h3>
-            <div v-for="(c, i) in r.change_log" :key="i" class="coach-diff-card">
-              <p class="diff-before">{{ c.before }}</p>
-              <p class="diff-after">{{ c.after }}</p>
-              <p v-if="c.reason" class="diff-reason">{{ c.reason }}</p>
-            </div>
-          </div>
-          <div v-if="r.error" class="warn">{{ r.error }}</div>
-        </template>
-
-        <div v-if="placeholders.length" class="gaps">
-          <h3>待补充占位（{{ placeholders.length }} 处）</h3>
-          <p v-for="(p, i) in placeholders" :key="i">· {{ p.field_path }}：{{ p.placeholder }}</p>
-        </div>
-        <div v-if="pendingQuestions.length" class="questions">
-          <b>建议你确认的事实：</b>
-          <p v-for="(q, i) in pendingQuestions" :key="i">· {{ q }}</p>
-        </div>
-
-        <div v-if="optFields" class="row wz-actions">
-          <button :disabled="locked" @click="adoptAll">采纳优化稿</button>
-          <button class="ghost" :disabled="locked" @click="discardOptimized">放弃优化稿</button>
-        </div>
-      </aside>
-      <div class="wz-canvas">
-        <p class="preview-caption">{{ optFields ? "优化稿预览" : "投递预览" }} · {{ layout === "classic" ? "中文经典" : "中文现代" }}</p>
-        <div class="paper-stage">
-          <ResumePreview v-if="tpl" class="print-area" :template="tpl" :fields="optFields || fields" :layout="layout" />
         </div>
       </div>
     </div>
   </section>
 </template>
-
 
 <style scoped>
 .wizard { padding: 0 0 40px; }
@@ -529,12 +446,46 @@ async function exportPrint() {
   border-radius: var(--radius-pill); padding: 6px 14px; font-size: .82rem; cursor: pointer; font-family: inherit;
 }
 .wiz-steps button.on { border-color: var(--brand); background: var(--brand); color: #fff; }
-.wiz-source { display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
-.wiz-source label { display: flex; flex-direction: column; gap: 4px; font-size: .8rem; color: var(--ink-secondary); }
-.wiz-source select { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font: inherit; background: var(--bg-surface); min-width: 220px; color: var(--ink); }
 .wiz-hint { font-size: .78rem; color: var(--ink-muted); margin: 4px 0 12px; }
 
-/* 双栏工作台：导航和建议留在内容侧栏，纸面只展示投递内容。 */
+/* ① 素材选择 */
+.src-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 18px; }
+.src-card {
+  background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-md);
+  padding: 14px 16px; box-shadow: var(--shadow-xs);
+}
+.src-card-title { font-size: .85rem; font-weight: 650; margin-bottom: 8px; }
+.src-item {
+  display: flex; align-items: center; gap: 8px; padding: 7px 0;
+  font-size: .84rem; color: var(--ink); cursor: pointer;
+}
+.src-item + .src-item { border-top: 1px dashed var(--border-subtle); }
+.src-item-name { flex: 1; min-width: 0; }
+.src-item-meta { font-size: .7rem; color: var(--ink-muted); }
+.wiz-generate { margin: 16px 0; }
+.gen-btn {
+  border: none; border-radius: 10px; padding: 12px 32px; cursor: pointer;
+  background: var(--brand); color: #fff; font: inherit; font-weight: 650; font-size: .95rem;
+}
+.gen-btn:disabled { opacity: .55; cursor: default; }
+.pipe-stages { list-style: none; margin: 14px 0 0; padding: 0; }
+.pipe-stages li {
+  display: flex; align-items: center; gap: 8px; padding: 7px 0;
+  font-size: .84rem; color: var(--ink-muted);
+}
+.pipe-stages li[data-st="running"] { color: var(--brand); }
+.pipe-stages li[data-st="done"] { color: var(--agent); }
+.pipe-stages li[data-st="skip"] { color: var(--coach); }
+.pipe-dot {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--border); flex: none;
+}
+li[data-st="running"] .pipe-dot { background: var(--brand); animation: pulse 1s infinite alternate; }
+li[data-st="done"] .pipe-dot { background: var(--agent); }
+li[data-st="skip"] .pipe-dot { background: var(--coach); }
+@keyframes pulse { from { opacity: .4; } to { opacity: 1; } }
+.pipe-st { font-size: .75rem; }
+
+/* 双栏工作台 */
 .wiz-work { display: grid; grid-template-columns: minmax(300px, .85fr) minmax(0, 1.4fr); gap: 24px; align-items: start; }
 .wz-nav { display: grid; gap: 6px; padding-top: 8px; }
 .wz-nav-item {
@@ -545,7 +496,9 @@ async function exportPrint() {
 }
 .wz-nav-item:hover { border-color: var(--brand-border); }
 .wz-nav-item.on { border-color: var(--brand); background: var(--brand-soft); }
-.wz-nav-item.gap { border-left: 3px solid var(--coach-border); }
+.wz-nav-item.gap { border-color: var(--coach-border); }
+.paper-stage[data-editable] :deep(.resume-section) { cursor: pointer; border-radius: 4px; transition: background var(--dur-fast) var(--ease); }
+.paper-stage[data-editable] :deep(.resume-section:hover) { background: #f0f6ff; outline: 1.5px dashed var(--brand); outline-offset: 3px; }
 .wz-nav-badge { flex: none; font-size: .68rem; color: var(--agent); }
 .wz-nav-badge.warn { color: var(--coach); }
 .wz-nav-badge.dim { color: var(--ink-muted); }
@@ -560,35 +513,16 @@ async function exportPrint() {
   box-shadow: var(--shadow-xs);
 }
 .wz-panel-title { margin: 0 0 10px; font-size: .9rem; color: var(--brand); font-weight: 650; }
-.row-right { display: flex; gap: 8px; flex-wrap: wrap; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; }
+.row button, .ghost {
+  border: 1px solid var(--border-strong); background: var(--bg-surface); border-radius: 8px;
+  padding: 7px 14px; font-size: 13px; cursor: pointer; font-family: inherit; color: var(--ink);
+}
 .wz-actions { margin-top: 14px; }
 .primary { border-color: var(--brand) !important; background: var(--brand) !important; color: #fff !important; }
 
-/* 优化导航列 + Diff 教学卡 */
-.opt-run { margin-bottom: 10px; }
-.opt-list { list-style: none; padding: 0; margin: 0 0 10px; }
-.opt-list li {
-  padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px;
-  margin-bottom: 6px; background: var(--bg-surface); font-size: .85rem; cursor: pointer;
-}
-.opt-list li.on { border-color: var(--brand); background: var(--brand-soft); }
-.opt-list li[data-st="done"] { border-left: 3px solid var(--agent); }
-.opt-list li[data-st="error"] { border-left: 3px solid var(--danger); }
-.opt-list li[data-st="running"] { border-left: 3px solid var(--brand); }
-.opt-list .st { margin-left: 8px; font-size: .75rem; color: var(--ink-muted); }
-.opt-list .rs { display: block; font-size: .72rem; color: var(--ink-muted); }
-.coach-sec-title { font-size: .8rem; font-weight: 650; margin: 10px 0 8px; color: var(--ink-secondary); }
-.coach-diff-card {
-  border-left: 3px solid var(--coach-border); background: var(--coach-soft);
-  border-radius: 0 8px 8px 0; padding: 9px 12px; margin-bottom: 8px;
-}
-.coach-diff-card p { margin: 0; }
-.diff-before { color: var(--ink-muted); font-size: .78rem; text-decoration: line-through; }
-.diff-after { color: var(--agent); font-size: .85rem; margin-top: 3px !important; }
-.diff-reason { color: var(--ink-secondary); font-size: .75rem; margin-top: 5px !important; border-top: 1px dashed var(--coach-border); padding-top: 5px; }
-.wz-nav .back { margin-top: 4px; }
-
 @media (max-width: 760px) {
+  .src-grid { grid-template-columns: 1fr; }
   .wiz-work { grid-template-columns: minmax(0, 1fr); gap: 14px; }
   .wz-canvas { position: static; max-height: none; }
   .mobile-switch { display: flex; gap: 8px; margin-bottom: 14px; }

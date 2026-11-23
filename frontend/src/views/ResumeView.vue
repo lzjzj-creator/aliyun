@@ -1,7 +1,6 @@
 <script setup>
 import { ref, computed, onUnmounted } from "vue";
 import { analyzeResume, rewriteBullets } from "../api";
-import { downloadElementAsPdf } from "../utils/exportPdf";
 
 const MAX = 12000;
 const step = ref(1); // 1输入 2核对 3结果
@@ -128,6 +127,8 @@ const extraModelFields = computed(() =>
 async function exportPdf() {
   try {
     const el = document.querySelector(".pane");
+    // S4 瘦身：html2canvas/jspdf 几百 KB 的导出口粮点击时才下载
+    const { downloadElementAsPdf } = await import("../utils/exportPdf");
     await downloadElementAsPdf(el, "简历诊断报告.pdf");
   } catch (e) {
     errMsg.value = e.message || "PDF 导出失败，请重试";

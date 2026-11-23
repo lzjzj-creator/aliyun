@@ -50,8 +50,21 @@ const PATHS = {
     '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/>' +
     '<path d="M12 9v4"/><path d="M12 17h.01"/>',
   "chevron-down": '<path d="m6 9 6 6 6-6"/>',
+  "chevron-right": '<path d="m9 18 6-6-6-6"/>',
   "arrow-left":
     '<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>',
+  "arrow-right":
+    '<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>',
+  menu: '<line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="18" y2="18"/>',
+  play: '<polygon points="6 3 20 12 6 21 6 3"/>',
+  square: '<rect x="6" y="6" width="12" height="12" rx="2"/>',
+  user:
+    '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/>' +
+    '<circle cx="12" cy="7" r="4"/>',
+  "clipboard-list":
+    '<rect x="8" y="2" width="8" height="4" rx="1"/>' +
+    '<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>' +
+    '<path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/>',
 };
 
 const inner = computed(() => PATHS[props.name] || "");

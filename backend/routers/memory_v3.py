@@ -35,6 +35,9 @@ def _fact_public(row: dict) -> dict:
 
 def _owner(request: Request, x_owner_token) -> dict:
     security.enforce_ip(request)
+    owner = security_v3.owner_for_user(request)
+    if owner is not None:
+        return owner
     return security_v3.require_owner(x_owner_token)
 
 
@@ -210,8 +213,14 @@ def enable_memory(request: Request, req: EnableReq | None = None,
                   x_owner_token: str | None = Header(default=None),
                   x_anon_id: str | None = Header(default=None)):
     """First enable mints a token+recovery code (returned once); a disabled
-    owner presenting its old token reactivates instead of forking identity."""
+    owner presenting its old token reactivates instead of forking identity.
+    v5: Bearer identity auto-provisions an enabled owner — nothing to mint."""
     security.enforce_ip(request)
+    user = security.current_user(request.headers.get("authorization"))
+    if user is not None:
+        owner = _storage(lambda: memory_v3.get_or_create_owner_by_user(
+            user["id"]))
+        return {"protocol": 3, "enabled": True, "owner_id": owner["id"]}
     issued = _storage(
         lambda: memory_v3.get_owner_by_key_hash(
             security_v3.hash_token(x_owner_token)) if x_owner_token else None)
@@ -236,26 +245,17 @@ RETENTION_WARN_DAYS = 30
 def memory_status(request: Request,
                   x_owner_token: str | None = Header(default=None)):
     security.enforce_ip(request)
-    owner = security_v3.require_owner(x_owner_token, allow_disabled=True)
+    owner = security_v3.owner_for_user(request) or \
+        security_v3.require_owner(x_owner_token, allow_disabled=True)
     counts = _storage(lambda: memory_v3.fact_counts(owner["id"]))
-    # 保留期站内提示（§9/D4）：last_seen_at 距今 ≥335 天提示将到期
-    warn = False
-    last_seen = owner.get("last_seen_at") or owner.get("updated_at")
-    if isinstance(last_seen, str):
-        try:
-            from datetime import datetime, timezone
-            seen = datetime.fromisoformat(last_seen.replace("Z", "+00:00"))
-            age = (datetime.now(timezone.utc) - seen).days
-            warn = age >= RETENTION_DAYS - RETENTION_WARN_DAYS
-        except ValueError:
-            pass
+    # v5: 自动保留期已废止——retention_warning 恒为 false（契约位保留）。
     return {"protocol": 3, "enabled": owner["memory_enabled"],
             "consent_at": owner.get("consent_at"),
             "fact_count": counts["total"], "by_kind": counts["by_kind"],
             "by_status": counts["by_status"],
             "last_extracted_at": _storage(
                 lambda: memory_v3.last_extracted_at(owner["id"])),
-            "retention_days": RETENTION_DAYS, "retention_warning": warn}
+            "retention_days": RETENTION_DAYS, "retention_warning": False}
 
 
 @router.get("/memory/export")
@@ -368,8 +368,9 @@ def extract_facts(request: Request, req: ExtractReq,
                   x_anon_id: str | None = Header(default=None),
                   x_session_token: str | None = Header(default=None)):
     owner = _owner(request, x_owner_token)
-    anon = security.require_anon(x_anon_id)
-    sid = security.require_owner(req.session_id, anon, x_session_token)
+    sid, _ = security.require_access(
+        request, req.session_id, request.headers.get("authorization"),
+        x_anon_id, x_session_token)
     _extract_limit(owner["id"])
     try:
         result = fact_extractor.extract_incremental(owner["id"], sid)
@@ -382,6 +383,39 @@ def extract_facts(request: Request, req: ExtractReq,
     except fact_extractor.ExtractionFailed:
         raise HTTPException(503, "抽取暂时不可用") from None
     return result
+
+
+class DialogReq(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    message: str = Field(min_length=1, max_length=2000)
+    history_tail: list[dict] | None = Field(default=None, max_length=8)
+
+
+DIALOG_PER_DAY = 30
+
+
+@router.post("/facts/dialog")
+def facts_dialog(request: Request, req: DialogReq,
+                 x_owner_token: str | None = Header(default=None)):
+    """边聊边记：AI 起草随手记 → 待确认队列 → 用户确认后走 POST /facts 落库。
+    本端点只产出草稿，绝不直接写 facts（审核前置）。"""
+    owner = _owner(request, x_owner_token)
+    # 对话抽取走 extract 日配额桶（同属 LLM 抽取类消耗，共用 30/天上限）。
+    if _daily_spend(owner["id"], "extract", DIALOG_PER_DAY) < 0:
+        raise security.throttled(86400)
+    # 近几轮用户原话一起作为抽取的证据源（quote 须为其中逐字片段）
+    user_texts = [req.message]
+    for h in (req.history_tail or [])[-3:]:
+        if isinstance(h, dict) and h.get("role") == "user" \
+                and isinstance(h.get("content"), str):
+            user_texts.append(h["content"])
+    try:
+        result = fact_extractor.extract_dialog(user_texts, req.history_tail)
+    except fact_extractor.BudgetExhausted:
+        raise security.throttled(86400) from None
+    except fact_extractor.ExtractionFailed:
+        raise HTTPException(503, "抽取暂时不可用") from None
+    return {"protocol": 3, **result}
 
 
 @router.post("/memory/recover")
@@ -409,13 +443,16 @@ def backfill_memory(request: Request, req: BackfillReq,
     provenance, not a credential. Validate before charging quota or reading chats.
     """
     owner = _owner(request, x_owner_token)
-    anon = security.require_anon(x_anon_id)
+    authz = request.headers.get("authorization")
+    if security.current_user(authz) is None:
+        security.require_anon(x_anon_id)
     _backfill_limit(owner["id"])
     session_ids = req.session_ids if req.session_ids is not None else list(req.session_tokens)
     results = []
     for sid in session_ids:
         try:
-            security.require_owner(sid, anon, req.session_tokens.get(sid))
+            security.require_access(
+                request, sid, authz, x_anon_id, req.session_tokens.get(sid))
         except HTTPException as exc:
             if exc.status_code != 404:
                 raise

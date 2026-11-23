@@ -46,26 +46,31 @@ class MessageReq(BaseModel):
         return value
 
 
-def _owner(request, session_id, anon, token):
+def _owner(request, session_id, authorization, anon, token):
     security.enforce_ip(request)
-    anon = security.require_anon(anon)
-    return anon, security.require_owner(session_id, anon, token)
+    sid, user_id = security.require_access(
+        request, session_id, authorization, anon, token)
+    return sid, user_id
 
 
 @router.get("/sessions")
-def list_sessions(request: Request, x_anon_id: str | None = Header(default=None)):
+def list_sessions(request: Request,
+                  authorization: str | None = Header(default=None),
+                  x_anon_id: str | None = Header(default=None)):
     security.enforce_ip(request)
-    anon = security.require_anon(x_anon_id)
-    rows = _storage(lambda: memory.list_sessions(anon))
+    user, key = security.require_identity(request, authorization, x_anon_id)
+    rows = _storage(lambda: memory.list_sessions(
+        key, user_id=user["id"] if user else None))
     fields = {"id", "title", "stage", "created_at", "updated_at", "last_message_at"}
     return [{k: v for k, v in row.items() if k in fields} for row in rows]
 
 
 @router.get("/sessions/{session_id}")
 def get_session(request: Request, session_id: str,
+                authorization: str | None = Header(default=None),
                 x_anon_id: str | None = Header(default=None),
                 x_session_token: str | None = Header(default=None)):
-    _, sid = _owner(request, session_id, x_anon_id, x_session_token)
+    sid, _ = _owner(request, session_id, authorization, x_anon_id, x_session_token)
     bundle = _storage(lambda: memory.get_session_bundle(sid))
     if bundle is None:
         raise security.not_found()
@@ -74,9 +79,10 @@ def get_session(request: Request, session_id: str,
 
 @router.delete("/sessions/{session_id}")
 def delete_session(request: Request, session_id: str,
+                   authorization: str | None = Header(default=None),
                    x_anon_id: str | None = Header(default=None),
                    x_session_token: str | None = Header(default=None)):
-    _, sid = _owner(request, session_id, x_anon_id, x_session_token)
+    sid, _ = _owner(request, session_id, authorization, x_anon_id, x_session_token)
     # Use the same per-session lease as writers, avoiding deletion mid-pair.
     with security.limiter.stream(sid):
         if not _storage(lambda: memory.delete_session(sid)):
@@ -95,16 +101,18 @@ def _write_pair(sid, req):
 
 @router.post("/messages")
 def append_legacy_message(req: MessageReq, request: Request,
+                         authorization: str | None = Header(default=None),
                          x_anon_id: str | None = Header(default=None),
                          x_session_token: str | None = Header(default=None)):
     security.enforce_ip(request)
-    anon = security.require_anon(x_anon_id)
+    user, anon = security.require_identity(request, authorization, x_anon_id)
     if req.session_id is None:
         # First round: no session exists yet, so no token/ownership check. The
         # token is returned exactly once; clients must reuse session_id on retry
         # (a retried null session_id creates a new session by design).
         security.charge_turn(anon)
-        created = _storage(lambda: memory.create_session(anon))
+        created = _storage(lambda: memory.create_session(
+            anon, user_id=user["id"] if user else None))
         sid = created["session"]["id"]
         try:
             result = _write_pair(sid, req)
@@ -118,7 +126,8 @@ def append_legacy_message(req: MessageReq, request: Request,
                 pass  # Preserve the sanitized original error on storage outage.
             raise
         return {**result, "session_token": created["token"]}
-    sid = security.require_owner(req.session_id, anon, x_session_token)
+    sid, _ = security.require_access(
+        request, req.session_id, authorization, anon, x_session_token)
     # All pair checks and writes are inside the lease. A concurrent request gets
     # 429 and can retry; no stale pre-lock snapshot or double assistant insert.
     with security.limiter.stream(sid):

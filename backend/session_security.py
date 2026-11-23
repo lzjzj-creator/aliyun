@@ -163,6 +163,50 @@ def require_anon(x_anon_id: str | None = Header(default=None)) -> str:
         raise not_found() from None
 
 
+def current_user(authorization: str | None) -> dict | None:
+    """v5: Bearer -> app_users row (guest or user), or None; store error → 503.
+    Lazy import avoids a cycle: session_security_v4 imports this module."""
+    try:
+        import session_security_v4 as security_v4
+    except ImportError:
+        from . import session_security_v4 as security_v4  # type: ignore
+    return security_v4.optional_user(None, authorization)
+
+
+def require_access(request: Request, session_id: str,
+                   authorization: str | None = None,
+                   x_anon_id: str | None = None,
+                   x_session_token: str | None = None):
+    """Unified ownership check. Bearer user (v5): session.user_id must equal
+    the caller's app_users id — the bearer credential replaces the session
+    token entirely. No Bearer -> legacy anon_id + session token path."""
+    user = current_user(authorization)
+    if user is not None:
+        try:
+            canonical_id = str(UUID(session_id))
+        except (ValueError, AttributeError):
+            raise not_found() from None
+        try:
+            owner_id = memory.session_user_id(canonical_id)
+        except memory.MemoryStoreError:
+            raise HTTPException(503, "存储暂时不可用") from None
+        if owner_id != user["id"]:
+            raise not_found()
+        return canonical_id, user["id"]
+    anon = require_anon(x_anon_id)
+    return require_owner(session_id, anon, x_session_token), None
+
+
+def require_identity(request: Request,
+                     authorization: str | None = None,
+                     x_anon_id: str | None = None):
+    """Identity for writes/quota: returns (user_or_none, quota_key)."""
+    user = current_user(authorization)
+    if user is not None:
+        return user, user["id"]
+    return None, require_anon(x_anon_id)
+
+
 def require_owner(session_id: str, anon_id: str, token: str | None):
     if not isinstance(token, str) or not 1 <= len(token) <= 256:
         raise not_found()

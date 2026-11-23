@@ -89,6 +89,20 @@ def require_owner(x_owner_token, *, allow_disabled: bool = False) -> dict:
     return owner
 
 
+def owner_for_user(request) -> dict | None:
+    """v5: Bearer identity -> owner row keyed by app_users.id (auto-provisioned,
+    memory on by default). Returns None when no Bearer credential is present."""
+    user = security.current_user(request.headers.get("authorization"))
+    if user is None:
+        return None
+    try:
+        owner = memory_v3.get_or_create_owner_by_user(user["id"])
+    except memory_v3.MemoryStoreError:
+        raise HTTPException(503, "存储暂时不可用") from None
+    memory_v3.touch_owner(owner["id"])
+    return owner
+
+
 def redeem_recovery(recovery_code) -> dict:
     """Recovery-code redemption: a fresh owner_token plus a rotated code.
 

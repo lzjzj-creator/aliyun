@@ -47,3 +47,5 @@ mirror/site/
 mirror/site-html/
 mirror/dist/
 mirror/*-report.json
+.taste-skill/
+.devin/

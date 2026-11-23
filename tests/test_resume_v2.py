@@ -223,6 +223,74 @@ class EndpointShapeTest(unittest.TestCase):
             self.assertEqual(caught.exception.status_code, 503)
             self.assertNotIn("private upstream detail", str(caught.exception.detail))
 
+    def test_multi_session_merge_namespaces_msg_ids(self):
+        """G7 多源 evidence：session_ids 合并时 msg_id 加 s{i}: 前缀防跨源歧义。"""
+        from unittest.mock import patch
+        import backend.memory
+        import backend.routers.resume as rr
+        s1, s2 = "12345678-1234-4234-8234-123456789ab1", "12345678-1234-4234-8234-123456789ab2"
+        bundles = {
+            s1: {"session": {"id": s1},
+                 "messages": [{"id": 7, "role": "user", "content": "做了A"}],
+                 "profile": {}},
+            s2: {"session": {"id": s2},
+                 "messages": [{"id": 9, "role": "user", "content": "做了B"}],
+                 "profile": {}},
+        }
+        with patch.object(rr.security, "enforce_ip"), patch.object(
+                rr.security, "charge_turn"), patch.object(
+                rr.security, "require_access",
+                side_effect=lambda req_, sid, *a, **k: (sid, None)), patch.object(
+                backend.memory, "get_session_bundle",
+                side_effect=lambda sid: bundles[sid]), patch.object(
+                rr.llm, "chat_json", return_value={}):
+            from backend.routers.resume import AutofillReq as AR, _resolve_conversation
+            msgs, _ = _resolve_conversation(
+                AR(session_ids=[s1, s2], template_version=self.ver),
+                self.H["X-Anon-Id"], "tok")
+            self.assertEqual([m["id"] for m in msgs], ["s0:7", "s1:9"])
+            r = self.c.post("/api/v2/resume/autofill", headers=self.H,
+                            json={"template_version": self.ver,
+                                  "session_ids": [s1, s2]})
+        self.assertEqual(r.status_code, 200)
+
+    def test_expand_numeric_guard_keeps_fabricated(self):
+        """G7 STAR 守卫：段落出现素材外的数字 → 整条回退原始 bullets。"""
+        from unittest.mock import patch
+        import backend.routers.resume as rr
+        fields = {"projects": [{"name": "校园商城", "role": "后端",
+                                "period": "2023.03-2023.06",
+                                "bullets": ["写用户中心接口"]}]}
+        with patch.object(rr.llm, "embed", side_effect=RuntimeError("no-kb")), \
+             patch.object(rr.llm, "chat_json",
+                          return_value={"paragraph": "QPS 提升 300% 并完成接口开发"}):
+            r = self.c.post("/api/v2/resume/expand", headers=self.H,
+                            json={"template_version": self.ver, "fields": fields})
+        self.assertEqual(r.status_code, 200)
+        d = r.json()
+        self.assertEqual(d["expanded"], 0)
+        self.assertEqual(d["kept"], 1)
+        self.assertEqual(d["fields"]["projects"][0]["bullets"], ["写用户中心接口"])
+
+    def test_expand_adopts_compliant_paragraph(self):
+        """无新增数字的 STAR 段落 → 扩写成功，单条 bullet 承载。"""
+        from unittest.mock import patch
+        import backend.routers.resume as rr
+        fields = {"projects": [{"name": "校园商城", "role": "后端",
+                                "period": "2023.03-2023.06",
+                                "bullets": ["写用户中心接口"]}]}
+        with patch.object(rr.llm, "embed", side_effect=RuntimeError("no-kb")), \
+             patch.object(rr.llm, "chat_json",
+                          return_value={"paragraph":
+                                        "在校园商城项目中独立负责后端接口开发，按期交付"}):
+            r = self.c.post("/api/v2/resume/expand", headers=self.H,
+                            json={"template_version": self.ver, "fields": fields})
+        self.assertEqual(r.status_code, 200)
+        d = r.json()
+        self.assertEqual(d["expanded"], 1)
+        self.assertEqual(d["fields"]["projects"][0]["bullets"],
+                         ["在校园商城项目中独立负责后端接口开发，按期交付"])
+
     def test_nonempty_sections_reach_model_and_complete(self):
         from unittest.mock import patch
         from backend.routers import resume as routes

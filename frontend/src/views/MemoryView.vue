@@ -1,12 +1,14 @@
 <script setup>
-// v3 #memory 页：长期记忆总览 + 事实确认/拒绝/删除 + 导出/清空（§9）
+// v5 #memory 页：记忆总览 + 事实确认/拒绝/删除 + 随手记（分类+对话） + 导出/清空
+// 归属 = Bearer user_id：记忆随账号走，不再需要 owner_token/恢复码/会话凭据。
 import { computed, onMounted, ref } from "vue";
 import { listSessions } from "../api/sessions";
 import {
-  deleteAllMemory, deleteFact, disableMemory, enableMemory, exportMemory,
-  backfill, createFacts, hasSessionCredential, forgetSession, getMemory,
-  getOwnerToken, listFacts, patchFact, recoverMemory, setOwnerToken,
+  deleteAllMemory, deleteFact, dialogFact, disableMemory, enableMemory,
+  exportMemory, backfill, createFacts, forgetSession, getMemory,
+  listFacts, patchFact,
 } from "../api/v3";
+import { getDraft, putDraft } from "../api/auth";
 
 const enabled = ref(false);
 const booted = ref(false);
@@ -17,13 +19,8 @@ const filter = ref("");            // "" | proposed | confirmed | rejected
 const kindFilter = ref("");
 const busy = ref(false);
 const error = ref("");
-const onboarding = ref(null);      // {owner_token, recovery_code} 一次性展示
 const confirmingWipe = ref(false);
-const showConsent = ref(false);    // 开启前的明示同意弹窗
-const recoveryCode = ref("");
-const recoveryError = ref("");
 const disabledMemory = ref(false);
-const showRecovery = ref(false);
 const sessionTitles = ref({});     // session_id -> v2 会话标题
 const showPrivacy = ref(false);    // 隐私抽屉：导出/停用/清空集中在此
 
@@ -96,73 +93,85 @@ function sourceExpired(fact) {
     evs.every((e) => e.session_id == null && e.source_type !== "manual");
 }
 
-// ---- 随手记：按简历资料库模板随手梳理经历，填多少存多少（§9 事实库） ----
-const NOTE_FIELDS = [
-  { key: "identity", label: "个人情况", hint: "姓名 / 电话 / 邮箱 / 目前身份…",
-    kind: "identity", slot: "basics.notes", sec: "一、基本信息" },
-  { key: "goal", label: "意向岗位 / 方向", hint: "如：市场运营、销售、产品助理…",
-    kind: "goal", slot: "goal.notes", sec: "一、基本信息" },
-  { key: "club", label: "社团 / 学生工作", hint: "部门或社团、职务、时间、做了什么、成果（如播放量、营业额）",
-    kind: "experience", slot: "campus.社团", sec: "二、校内经历" },
-  { key: "classwork", label: "班级 / 学院事务", hint: "职务、时间、负责的事务",
-    kind: "experience", slot: "classwork.事务", sec: "二、校内经历" },
-  { key: "campus_project", label: "校内项目", hint: "项目名、你的角色、时间、做了什么、结果",
-    kind: "experience", slot: "campus.校内项目", sec: "二、校内经历" },
-  { key: "intern", label: "实习", hint: "公司、岗位、时间、工作内容、产出",
-    kind: "experience", slot: "internships.实习", sec: "三、校外经历" },
-  { key: "parttime", label: "兼职 / 社会实践", hint: "单位、时间、内容、收获",
-    kind: "experience", slot: "volunteer.兼职", sec: "三、校外经历" },
-  { key: "competition", label: "竞赛 / 获奖", hint: "赛事名、奖项、时间、你的角色",
-    kind: "award", slot: "awards.竞赛", sec: "三、校外经历" },
-  { key: "outside_other", label: "其他校外经历", hint: "志愿、支教、访学、副业…",
-    kind: "experience", slot: "experience.其他", sec: "三、校外经历" },
-  { key: "cert", label: "证书 / 荣誉", hint: "英语、计算机、专业证书、奖学金…",
-    kind: "award", slot: "awards.证书", sec: "四、证书资质" },
-  { key: "skill", label: "技能 / 工具", hint: "专业技能、软件工具、语言能力、通用能力",
-    kind: "skill", slot: "skills.notes", sec: "五、技能清单" },
-  { key: "extra", label: "作品 / 亮点 / 素材", hint: "作品链接、活动照片、个人优势、想补充的任何东西",
-    kind: "metric", slot: "summary.notes", sec: "六、其他亮点" },
+// ---- 随手记（v5：先选分类再写，可攒多条一次提交；草稿存服务端） ----
+// 随手记分类（v5 §4 规格：8 类 chip）——个人情况/意向走初始化与访谈，不进随手记。
+const NOTE_CATEGORIES = [
+  { key: "project", label: "项目经历", hint: "项目名、你的角色、时间、做了什么、结果",
+    kind: "experience", slot: "projects.项目" },
+  { key: "intern", label: "实习经历", hint: "公司、岗位、时间、工作内容、产出",
+    kind: "experience", slot: "internships.实习" },
+  { key: "campus", label: "校园经历", hint: "部门或社团、职务、时间、做了什么、成果",
+    kind: "experience", slot: "campus.校园" },
+  { key: "competition", label: "竞赛获奖", hint: "赛事名、奖项、时间、你的角色",
+    kind: "award", slot: "awards.竞赛" },
+  { key: "cert", label: "证书", hint: "英语、计算机、专业证书、奖学金…",
+    kind: "award", slot: "awards.证书" },
+  { key: "skill", label: "技能", hint: "专业技能、软件工具、语言能力、通用能力",
+    kind: "skill", slot: "skills.notes" },
+  { key: "self_eval", label: "自我评价", hint: "你的特点、优势、想突出的方面…",
+    kind: "metric", slot: "summary.notes" },
+  { key: "other", label: "其他", hint: "志愿、支教、访学、作品链接、活动照片说明…",
+    kind: "experience", slot: "experience.其他" },
 ];
-const NOTE_SECTIONS = computed(() => {
-  const out = [];
-  for (const f of NOTE_FIELDS) {
-    const last = out[out.length - 1];
-    if (last && last.title === f.sec) last.fields.push(f);
-    else out.push({ title: f.sec, fields: [f] });
-  }
-  return out;
-});
+const catByKey = (k) => NOTE_CATEGORIES.find((c) => c.key === k) || NOTE_CATEGORIES[0];
 
-const NOTE_DRAFT_KEY = "zm_notes_v1";
-const notes = ref({});          // fieldKey -> 草稿文本
 const notesOpen = ref(false);
+const noteCat = ref("project");
+const noteText = ref("");
+const pendingNotes = ref([]);      // [{cat, text}]
 const noteMsg = ref("");
 const noteBusy = ref(false);
+const noteDraftId = "notes";
 
-try {
-  const raw = localStorage.getItem(NOTE_DRAFT_KEY);
-  if (raw) notes.value = JSON.parse(raw) || {};
-} catch { notes.value = {}; }
-
+// 服务端草稿：pendingNotes + 当前输入，跨设备不丢
+let noteDraftTimer = null;
 function saveNoteDraft() {
-  try { localStorage.setItem(NOTE_DRAFT_KEY, JSON.stringify(notes.value)); } catch { /* 忽略存储失败 */ }
+  clearTimeout(noteDraftTimer);
+  noteDraftTimer = setTimeout(() => {
+    putDraft({
+      draft_id: noteDraftId, template_version: "notes", title: "随手记草稿",
+      fields: { cat: noteCat.value, text: noteText.value, pending: pendingNotes.value },
+    }).catch(() => { /* 草稿保存失败不打扰 */ });
+  }, 600);
 }
 
-const noteFilledCount = computed(() =>
-  NOTE_FIELDS.filter((f) => (notes.value[f.key] || "").trim()).length);
+async function loadNoteDraft() {
+  try {
+    const { draft } = await getDraft(noteDraftId);
+    const f = draft?.fields || {};
+    if (f.cat) noteCat.value = f.cat;
+    if (typeof f.text === "string") noteText.value = f.text;
+    if (Array.isArray(f.pending)) pendingNotes.value = f.pending;
+  } catch { /* 无草稿即空 */ }
+}
+
+function addNote() {
+  const text = noteText.value.trim();
+  if (!text) return;
+  pendingNotes.value.push({ cat: noteCat.value, text });
+  noteText.value = "";
+  saveNoteDraft();
+}
+
+function removePending(i) {
+  pendingNotes.value.splice(i, 1);
+  saveNoteDraft();
+}
 
 async function submitNotes() {
-  const filled = NOTE_FIELDS.filter((f) => (notes.value[f.key] || "").trim());
-  if (!filled.length) { noteMsg.value = "先写点什么再提交，填多少算多少。"; return; }
+  const items = [...pendingNotes.value];
+  if (noteText.value.trim()) items.push({ cat: noteCat.value, text: noteText.value.trim() });
+  if (!items.length) { noteMsg.value = "先写点什么再提交，填多少算多少。"; return; }
   noteBusy.value = true;
   noteMsg.value = "";
   try {
-    const res = await createFacts(filled.map((f) => {
-      const text = notes.value[f.key].trim();
-      return { kind: f.kind, slot_path: f.slot,
-               value: text.slice(0, 480), quote: text.slice(0, 2000) };
+    const res = await createFacts(items.map((n) => {
+      const c = catByKey(n.cat);
+      return { kind: c.kind, slot_path: c.slot,
+               value: n.text.slice(0, 480), quote: n.text.slice(0, 2000) };
     }));
-    for (const f of filled) delete notes.value[f.key];
+    pendingNotes.value = [];
+    noteText.value = "";
     saveNoteDraft();
     noteMsg.value = `已存入 ${res.created} 条新事实` +
       (res.merged ? `，${res.merged} 条与已有事实合并` : "") + "，下方列表可见。";
@@ -170,14 +179,68 @@ async function submitNotes() {
     status.value = await getMemory();
   } catch (e) {
     noteMsg.value = e.status === 429 ? "提交太频繁，请稍后再试。"
-      : e.status === 404 ? "请先开启长期记忆再提交。"
-      : "保存失败，请稍后重试；草稿已保留在本地。";
+      : "保存失败，请稍后重试；草稿已保留在云端。";
   } finally {
     noteBusy.value = false;
   }
 }
 
-// ---- #70 历史回填：会话多选 + 分块顺序调用 + 进度 ----
+// ---- 边聊边记（R3）：AI 对话起草 → 待确认 → 确认落库 ----
+const dialogOpen = ref(false);
+const dialogMsgs = ref([]);        // [{role:'user'|'assistant', text, drafts?}]
+const dialogInput = ref("");
+const dialogBusy = ref(false);
+let dialogKey = 0;
+
+async function sendDialog() {
+  const text = dialogInput.value.trim();
+  if (!text || dialogBusy.value) return;
+  dialogInput.value = "";
+  dialogMsgs.value.push({ role: "user", text, _k: ++dialogKey });
+  dialogBusy.value = true;
+  try {
+    const res = await dialogFact({
+      message: text,
+      history_tail: dialogMsgs.value.slice(-8)
+        .map((m) => ({ role: m.role, content: m.text })),
+    });
+    dialogMsgs.value.push({
+      role: "assistant", _k: ++dialogKey,
+      text: res.reply || "我整理了一下，看看这几条对不对：",
+      drafts: res.draft_facts || [],
+    });
+  } catch (e) {
+    dialogMsgs.value.push({
+      role: "assistant", _k: ++dialogKey,
+      text: e.status === 429 ? "今天的对话条数用完了，明天再聊。"
+          : "整理失败了，换种说法再试试。",
+      drafts: [],
+    });
+  } finally {
+    dialogBusy.value = false;
+  }
+}
+
+async function confirmDialogFact(msg, draft, i) {
+  busy.value = true;
+  try {
+    await createFacts([{ kind: draft.kind, slot_path: draft.slot_path,
+                         value: draft.value, quote: draft.quote }]);
+    msg.drafts.splice(i, 1);
+    status.value = await getMemory();
+    await reload();
+  } catch {
+    error.value = "保存失败，请重试";
+  } finally {
+    busy.value = false;
+  }
+}
+
+function dismissDialogFact(msg, i) {
+  msg.drafts.splice(i, 1);
+}
+
+// ---- 历史回填：会话多选 + 分块顺序调用 + 进度 ----
 const allSessions = ref([]);       // v2 会话全量（供勾选）
 const picked = ref(new Set());
 const backfilling = ref(false);
@@ -186,10 +249,6 @@ const backfillTotal = ref(0);
 const backfillResults = ref([]);   // 每会话 {session_id, added/.../error}
 
 function togglePick(sid) {
-  if (!hasSessionCredential(sid)) {
-    error.value = "缺少该会话的本地凭据，无法回填；请使用原浏览器。";
-    return;
-  }
   const s = new Set(picked.value);
   if (s.has(sid)) s.delete(sid); else s.add(sid);
   picked.value = s;
@@ -199,10 +258,6 @@ async function onBackfill() {
   const ids = [...picked.value];
   if (!ids.length) return;
   error.value = "";
-  if (ids.some((sid) => !hasSessionCredential(sid))) {
-    error.value = "所选会话缺少本地凭据，无法回填；请重新选择。";
-    return;
-  }
   backfilling.value = true;
   backfillDone.value = 0;
   backfillTotal.value = ids.length;
@@ -224,7 +279,7 @@ async function onBackfill() {
   }
 }
 
-// 事实证据里出现过的会话列表（§9 来源级删除入口）
+// 事实证据里出现过的会话列表（来源级删除入口）
 const sessions = computed(() => {
   const map = new Map();
   for (const f of facts.value) {
@@ -244,91 +299,47 @@ const forgetting = ref(null);   // 待确认忘掉的 session_id
 async function boot() {
   booted.value = false;
   error.value = "";
-  if (!getOwnerToken()) { enabled.value = false; booted.value = true; return; }
   try {
-    status.value = await getMemory();
+    try {
+      status.value = await getMemory();
+    } catch (e) {
+      // Bearer 下 owner 自动供给；仍 404 说明从未初始化 → 开通一次
+      if (e.status === 404) {
+        await enableMemory();
+        status.value = await getMemory();
+      } else throw e;
+    }
     enabled.value = status.value.enabled === true;
     disabledMemory.value = status.value.enabled === false;
     if (!enabled.value) { facts.value = []; return; }
-    // 会话标题映射用于事实卡片来源标注；拿不到（无 v2 会话）不阻塞
     listSessions().then((list) => {
       const map = {};
       for (const s of list || []) if (s && s.id) map[s.id] = s.title;
       sessionTitles.value = map;
       allSessions.value = list || [];
     }).catch(() => {});
+    loadNoteDraft();
     await reload();
   } catch (e) {
     enabled.value = false;
     facts.value = [];
     status.value = null;
-    error.value = e.status === 404
-      ? "当前令牌无效或记忆已停用。可用原令牌重新开启，或用恢复码换发新凭据。"
-      : "记忆服务暂时不可用，请稍后重试";
+    error.value = "记忆服务暂时不可用，请稍后重试";
   } finally {
     booted.value = true;
   }
 }
 
 async function onEnable() {
-  showConsent.value = false;
   busy.value = true;
   try {
-    const res = await enableMemory({ recovery: true });
-    if (res.owner_token) {
-      setOwnerToken(res.owner_token);
-      onboarding.value = res;       // 明文仅此一次展示
-    }
+    await enableMemory();
     await boot();
   } catch {
     error.value = "开启失败，请稍后重试";
   } finally {
     busy.value = false;
   }
-}
-
-async function onRecover() {
-  recoveryError.value = "";
-  if (!recoveryCode.value.trim()) { recoveryError.value = "请输入恢复码"; return; }
-  busy.value = true;
-  try {
-    const res = await recoverMemory(recoveryCode.value);
-    onboarding.value = res;
-    recoveryCode.value = "";
-    showRecovery.value = false;
-    disabledMemory.value = false;
-    await boot();
-  } catch (e) {
-    recoveryError.value = e.status === 404 ? "恢复码无效或已使用，请核对最新保存的恢复码。"
-      : e.status === 429 ? "尝试过于频繁，请稍后重试。"
-      : e.status === 422 ? "恢复码格式不正确，请检查输入。"
-      : "恢复失败，请稍后重试；原有本地令牌未被清除。";
-  } finally {
-    busy.value = false;
-  }
-}
-
-function copyCredentials() {
-  const o = onboarding.value;
-  if (!o) return;
-  const text = `知脉长期记忆凭据\n访问令牌: ${o.owner_token}\n` +
-    (o.recovery_code ? `恢复码: ${o.recovery_code}\n` : "");
-  navigator.clipboard?.writeText(text).catch(() => {});
-}
-
-function downloadCredentials() {
-  const o = onboarding.value;
-  if (!o) return;
-  const text = `知脉长期记忆凭据（请离线保存，勿泄露）\n\n` +
-    `访问令牌: ${o.owner_token}\n` +
-    (o.recovery_code ? `恢复码: ${o.recovery_code}\n` : "") +
-    `\n令牌与恢复码只显示这一次，丢失后可用恢复码换发新令牌。`;
-  const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = "zhimai-credentials.txt";
-  a.click();
-  URL.revokeObjectURL(a.href);
 }
 
 async function confirmAll() {
@@ -344,10 +355,6 @@ async function confirmAll() {
   } finally {
     busy.value = false;
   }
-}
-
-function dismissOnboarding() {
-  onboarding.value = null;
 }
 
 async function reload() {
@@ -411,7 +418,6 @@ async function onDisable() {
     facts.value = [];
     status.value = null;
     picked.value = new Set();
-    onboarding.value = null;
   } catch {
     error.value = "操作失败";
   } finally {
@@ -436,8 +442,6 @@ async function onWipe() {
   busy.value = true;
   try {
     await deleteAllMemory();
-    setOwnerToken("");
-    onboarding.value = null;
     disabledMemory.value = false;
     facts.value = [];
     status.value = null;
@@ -455,69 +459,21 @@ onMounted(boot);
 
 <template>
   <div class="mem-page">
-    <h2 class="mem-title">长期记忆</h2>
-
-    <div v-if="onboarding" class="mem-onboard">
-      <p><b>请立即保存以下新凭据，关闭后不再显示；换发后旧令牌与旧恢复码失效：</b></p>
-      <p>访问令牌：<code>{{ onboarding.owner_token }}</code></p>
-      <p v-if="onboarding.recovery_code">恢复码：<code>{{ onboarding.recovery_code }}</code></p>
-      <div class="mem-ops">
-        <button class="mem-btn" @click="copyCredentials">复制</button>
-        <button class="mem-btn" @click="downloadCredentials">下载保存</button>
-        <button class="mem-btn" @click="dismissOnboarding">我已保存</button>
-      </div>
-    </div>
-
-    <div class="mem-card">
-      <button class="mem-btn" :disabled="busy" @click="showRecovery = !showRecovery">使用恢复码换发凭据</button>
-      <form v-if="showRecovery" @submit.prevent="onRecover">
-        <p class="mem-sub">换发后旧令牌及旧恢复码失效，请保存新凭据。恢复记忆不会自动恢复本机缺失的会话凭据。</p>
-        <label>恢复码 <input v-model="recoveryCode" type="password" autocomplete="off" :disabled="busy" /></label>
-        <button class="mem-btn primary" type="submit" :disabled="busy || !recoveryCode.trim()">确认兑换</button>
-        <p v-if="recoveryError" class="mem-err" role="alert">{{ recoveryError }}</p>
-      </form>
-    </div>
+    <h2 class="mem-title">经历证据库</h2>
 
     <div v-if="!booted" class="mem-hint">加载中…</div>
 
-    <!-- 未开启：引导而非空壳 -->
+    <!-- 停用状态：一键重新开启（数据都在，记忆随账号走） -->
     <div v-else-if="!enabled" class="mem-empty">
-      <p>长期记忆会在会话间记住你的经历、技能与成果，用于生成多份岗位简历。</p>
-      <p class="mem-sub">默认关闭，需明示开启；事实可逐条查看、确认、拒绝或删除。</p>
-      <button class="mem-btn primary" :disabled="busy"
-              @click="showConsent = true">
-        {{ disabledMemory ? '重新开启长期记忆' : '开启长期记忆' }}
+      <p>经历证据库会跨会话记住你的经历、技能与成果，用于生成多份岗位简历。</p>
+      <p class="mem-sub">数据存在你的云端账号里，每条事实都可查看、确认、拒绝或删除。</p>
+      <button class="mem-btn primary" :disabled="busy" @click="onEnable">
+        {{ disabledMemory ? "重新开启" : "开启经历证据库" }}
       </button>
-      <p v-if="disabledMemory" class="mem-sub">长期记忆已停用，已有事实保留。重新开启将使用本机原令牌恢复同一份记忆。</p>
       <p v-if="error" class="mem-err">{{ error }}</p>
-
-      <!-- 明示同意弹窗（§9：确认后才调 enable 接口） -->
-      <div v-if="showConsent" class="mem-consent">
-        <div class="mem-consent-box">
-          <h3>开启长期记忆前请确认</h3>
-          <ul>
-            <li>将跨会话记住你主动说出的经历、技能与成果，用于生成岗位简历。</li>
-            <li>每条事实都带原话证据，可随时查看、确认、拒绝、删除或导出。</li>
-            <li>数据保留 365 天，可随时一键清空全部；关闭后不再抽取。</li>
-            <li>令牌与恢复码只显示一次，请妥善保存；丢失可用恢复码找回。</li>
-          </ul>
-          <div class="mem-ops">
-            <button class="mem-btn primary" :disabled="busy" @click="onEnable">
-              我同意，开启长期记忆
-            </button>
-            <button class="mem-btn" @click="showConsent = false">再想想</button>
-          </div>
-        </div>
-      </div>
     </div>
 
     <template v-else>
-
-      <div v-if="status?.retention_warning" class="mem-stale">
-        你的记忆已 {{ status.retention_days }} 天保留期临近到期（30 天内无活动将删除），
-        建议先「导出 JSON」备份。
-      </div>
-
       <!-- KPI 卡片：事实总量与各状态计数 -->
       <div v-if="status" class="mem-kpis">
         <div class="kpi"><b>{{ status.fact_count }}</b><span>事实总数</span></div>
@@ -533,34 +489,79 @@ onMounted(boot);
         <button class="mem-btn" :disabled="busy" @click="showPrivacy = true">隐私与数据</button>
       </div>
 
-      <!-- 随手记：按简历资料库模板随手梳理经历，填多少存多少 -->
+      <!-- 随手记（v5）：先选分类再写，攒多条一次提交；草稿存云端 -->
       <div class="mem-card notes-card">
         <button class="notes-head" :aria-expanded="notesOpen" @click="notesOpen = !notesOpen">
           <span>
             <b>随手记</b>
-            <span class="notes-sub">想到什么就按模板记一笔，填不完整也能提交</span>
+            <span class="notes-sub">选个分类记一笔，攒几条一起存</span>
           </span>
-          <span class="notes-count" v-if="noteFilledCount">{{ noteFilledCount }} 项待提交</span>
+          <span class="notes-count" v-if="pendingNotes.length">{{ pendingNotes.length }} 条待提交</span>
           <span class="notes-arrow" :class="{ open: notesOpen }">›</span>
         </button>
         <div v-if="notesOpen" class="notes-body">
-          <section v-for="sec in NOTE_SECTIONS" :key="sec.title" class="notes-sec">
-            <div class="notes-sec-title">{{ sec.title }}</div>
-            <div v-for="f in sec.fields" :key="f.key" class="notes-field">
-              <label :for="`note-${f.key}`">{{ f.label }}</label>
-              <textarea :id="`note-${f.key}`" v-model="notes[f.key]" rows="2"
-                        :placeholder="f.hint" :disabled="noteBusy"
-                        @input="saveNoteDraft" />
-            </div>
-          </section>
+          <div class="note-cats" role="radiogroup" aria-label="随手记分类">
+            <button v-for="c in NOTE_CATEGORIES" :key="c.key" type="button"
+                    class="mem-chip note-chip" :class="{ on: noteCat === c.key }"
+                    :disabled="noteBusy" role="radio" :aria-checked="noteCat === c.key"
+                    @click="noteCat = c.key; saveNoteDraft()">{{ c.label }}</button>
+          </div>
+          <div class="note-row">
+            <textarea v-model="noteText" rows="2" class="note-text" :disabled="noteBusy"
+                      :placeholder="catByKey(noteCat).hint" @input="saveNoteDraft" />
+            <button class="mem-btn" :disabled="!noteText.trim()" @click="addNote">加入</button>
+          </div>
+          <ul v-if="pendingNotes.length" class="note-pending">
+            <li v-for="(n, i) in pendingNotes" :key="i">
+              <span class="note-pending-cat">{{ catByKey(n.cat).label }}</span>
+              <span class="note-pending-text">{{ n.text }}</span>
+              <button class="note-x" aria-label="移除" @click="removePending(i)">×</button>
+            </li>
+          </ul>
           <div class="mem-ops notes-ops">
-            <button class="mem-btn primary" :disabled="noteBusy || !noteFilledCount"
+            <button class="mem-btn primary" :disabled="noteBusy || (!pendingNotes.length && !noteText.trim())"
                     @click="submitNotes">
-              {{ noteBusy ? "提交中…" : `提交到记忆（${noteFilledCount} 项）` }}
+              {{ noteBusy ? "提交中…" : `提交到记忆（${pendingNotes.length + (noteText.trim() ? 1 : 0)} 条）` }}
             </button>
-            <span class="mem-sub">草稿自动保存在本机；提交后存为「已确认」事实，可随时改删。</span>
+            <span class="mem-sub">草稿自动存云端；提交后存为「已确认」事实，可随时改删。</span>
           </div>
           <p v-if="noteMsg" class="notes-msg">{{ noteMsg }}</p>
+        </div>
+      </div>
+
+      <!-- 边聊边记（R3）：对话起草 → 待确认队列 → 确认落库 -->
+      <div class="mem-card notes-card">
+        <button class="notes-head" :aria-expanded="dialogOpen" @click="dialogOpen = !dialogOpen">
+          <span>
+            <b>边聊边记</b>
+            <span class="notes-sub">直接说出来，我帮你整理成随手记，你确认后入库</span>
+          </span>
+          <span class="notes-arrow" :class="{ open: dialogOpen }">›</span>
+        </button>
+        <div v-if="dialogOpen" class="notes-body">
+          <div class="dlg-stream">
+            <div v-for="m in dialogMsgs" :key="m._k" :class="['dlg-msg', m.role]">
+              <p>{{ m.text }}</p>
+              <ul v-if="m.drafts?.length" class="dlg-drafts">
+                <li v-for="(d, i) in m.drafts" :key="i">
+                  <span class="note-pending-cat">{{ slotLabel(d.slot_path) }}</span>
+                  <span class="dlg-draft-text">{{ d.value }}</span>
+                  <span class="dlg-draft-ops">
+                    <button class="mem-btn sm" :disabled="busy"
+                            @click="confirmDialogFact(m, d, i)">存入</button>
+                    <button class="mem-btn sm" @click="dismissDialogFact(m, i)">不要</button>
+                  </span>
+                </li>
+              </ul>
+            </div>
+            <p v-if="dialogBusy" class="mem-sub">整理中…</p>
+          </div>
+          <form class="dlg-form" @submit.prevent="sendDialog">
+            <input v-model="dialogInput" :disabled="dialogBusy"
+                   placeholder="比如：我大二在字节做过三个月后端实习，用 Go 写了订单服务…" />
+            <button class="mem-btn primary" type="submit" :disabled="dialogBusy || !dialogInput.trim()">发送</button>
+          </form>
+          <p class="mem-sub">我只产出草稿，点「存入」才进证据库。</p>
         </div>
       </div>
 
@@ -593,9 +594,8 @@ onMounted(boot);
         <div class="bf-list">
           <label v-for="s in allSessions" :key="s.id" class="bf-item">
             <input type="checkbox" :checked="picked.has(s.id)"
-                   :disabled="backfilling || !hasSessionCredential(s.id)" @change="togglePick(s.id)" />
+                   :disabled="backfilling" @change="togglePick(s.id)" />
             {{ s.title || s.id.slice(0, 8) }}
-            <span v-if="!hasSessionCredential(s.id)" class="mem-sub">（缺少本地会话凭据，无法回填，请使用原浏览器）</span>
           </label>
         </div>
         <div class="mem-ops">
@@ -735,7 +735,7 @@ onMounted(boot);
 <style scoped>
 .mem-page { max-width: 720px; margin: 0 auto; padding: 20px 16px 60px; }
 .mem-title { font-size: 20px; margin: 0 0 16px; font-weight: 650; }
-.mem-empty, .mem-card, .mem-onboard, .mem-wipe {
+.mem-empty, .mem-card, .mem-wipe {
   background: var(--bg-surface); border: 1px solid var(--border);
   border-radius: var(--radius-md); padding: 16px; margin-bottom: 14px;
 }
@@ -787,7 +787,7 @@ onMounted(boot);
 .md-danger b { font-size: .8rem; color: var(--danger); }
 .mem-wipe-text { font-size: .8rem; color: var(--danger); margin: 0; }
 
-/* 随手记：模板填写面板 */
+/* 随手记/边聊边记卡片 */
 .notes-card { padding: 0; overflow: hidden; }
 .notes-head {
   display: flex; align-items: center; gap: 10px; width: 100%;
@@ -809,22 +809,57 @@ onMounted(boot);
 .notes-count + .notes-arrow { margin-left: 0; }
 .notes-arrow.open { transform: rotate(-90deg); }
 .notes-body { border-top: 1px solid var(--border-subtle); padding: 12px 16px 16px; }
-.notes-sec { margin-bottom: 14px; }
-.notes-sec-title {
-  font-size: .78rem; font-weight: 650; color: var(--brand);
-  margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px dashed var(--border-subtle);
-}
-.notes-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
-.notes-field label { font-size: .78rem; color: var(--ink-secondary); font-weight: 550; }
-.notes-field textarea {
-  font-family: inherit; font-size: .84rem; color: var(--ink); resize: vertical;
+.note-cats { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.note-chip { font-size: .78rem; padding: 4px 10px; }
+.note-row { display: flex; gap: 8px; align-items: stretch; }
+.note-text {
+  flex: 1; font-family: inherit; font-size: .84rem; color: var(--ink); resize: vertical;
   border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px;
   background: var(--bg-surface); min-height: 40px; line-height: 1.5;
 }
-.notes-field textarea:focus { outline: none; border-color: var(--brand-border); }
-.notes-field textarea::placeholder { color: var(--ink-muted); font-size: .8rem; }
+.note-text:focus { outline: none; border-color: var(--brand-border); }
+.note-text::placeholder { color: var(--ink-muted); font-size: .8rem; }
+.note-pending { list-style: none; margin: 10px 0; padding: 0; }
+.note-pending li {
+  display: flex; align-items: baseline; gap: 8px; padding: 6px 8px;
+  border: 1px dashed var(--border-subtle); border-radius: 8px; margin-bottom: 6px;
+  font-size: .82rem;
+}
+.note-pending-cat {
+  flex: none; font-size: .68rem; color: var(--brand);
+  background: var(--brand-soft); border-radius: 4px; padding: 1px 6px;
+}
+.note-pending-text { flex: 1; min-width: 0; color: var(--ink); }
+.note-x {
+  flex: none; border: none; background: none; color: var(--ink-muted);
+  cursor: pointer; font-size: 14px; padding: 0 4px;
+}
+.note-x:hover { color: var(--danger); }
 .notes-ops { align-items: center; }
 .notes-msg { font-size: .8rem; color: var(--agent); margin: 8px 0 0; }
+
+/* 边聊边记 */
+.dlg-stream { max-height: 320px; overflow-y: auto; margin-bottom: 10px; }
+.dlg-msg { margin-bottom: 10px; font-size: .84rem; }
+.dlg-msg p { margin: 0; padding: 8px 12px; border-radius: 10px; display: inline-block; max-width: 92%; }
+.dlg-msg.user { text-align: right; }
+.dlg-msg.user p { background: var(--brand-soft); color: var(--ink); }
+.dlg-msg.assistant p { background: var(--bg-subtle); color: var(--ink); }
+.dlg-drafts { list-style: none; margin: 6px 0 0; padding: 0; }
+.dlg-drafts li {
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  border: 1px dashed var(--border-subtle); border-radius: 8px;
+  padding: 6px 10px; margin-top: 6px; font-size: .8rem;
+}
+.dlg-draft-text { flex: 1; min-width: 0; color: var(--ink); }
+.dlg-draft-ops { flex: none; display: flex; gap: 4px; }
+.dlg-form { display: flex; gap: 8px; }
+.dlg-form input {
+  flex: 1; font: inherit; font-size: .84rem; padding: 8px 12px;
+  border: 1px solid var(--border); border-radius: 10px;
+  background: var(--bg-surface); color: var(--ink);
+}
+.dlg-form input:focus { outline: none; border-color: var(--brand-border); }
 
 .mem-filters { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
 .mem-mode { margin-left: auto; display: flex; gap: 4px; }
@@ -849,8 +884,8 @@ onMounted(boot);
 /* 证据引用卡 */
 .mf-quote {
   font-size: .78rem; color: var(--ink-secondary); margin: 6px 0;
-  background: var(--agent-soft); border-left: 2px solid var(--agent);
-  border-radius: 0 8px 8px 0; padding: 7px 10px;
+  background: var(--agent-soft); border: 1px solid var(--agent-border);
+  border-radius: 8px; padding: 7px 10px;
 }
 .mf-src { display: block; font-size: 11px; color: var(--agent); margin-bottom: 2px; }
 
@@ -892,18 +927,6 @@ onMounted(boot);
   .ms-value { flex-basis: 100%; order: -1; }
   .ms-quotes { padding-left: 14px; }
 }
-.mem-consent {
-  position: fixed; inset: 0; background: rgba(15, 23, 42, .42); z-index: 50;
-  display: flex; align-items: center; justify-content: center; padding: 16px;
-}
-.mem-consent-box {
-  background: var(--bg-surface); border-radius: var(--radius-md); padding: 20px;
-  max-width: 480px; width: 100%; box-shadow: var(--shadow-md);
-}
-.mem-consent-box h3 { margin: 0 0 10px; font-size: 16px; }
-.mem-consent-box ul { margin: 0 0 14px; padding-left: 20px; font-size: 13px;
-  color: var(--ink-secondary); }
-.mem-consent-box li { margin: 6px 0; }
 .mem-session-row { display: flex; gap: 10px; align-items: center;
   flex-wrap: wrap; font-size: 13px; margin: 6px 0; }
 .mem-sec-title { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
@@ -916,11 +939,10 @@ onMounted(boot);
   color: var(--ink-secondary); }
 @media (max-width: 560px) {
   .mem-kpis { grid-template-columns: repeat(2, 1fr); }
+  .note-row { flex-direction: column; }
 }
 .mf-ops { display: flex; gap: 8px; margin-top: 8px; }
 .mem-wipe { border-color: #fca5a5; color: #b91c1c; font-size: 13px; }
-.mem-stale { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px;
-  padding: 10px 12px; font-size: 13px; color: #92400e; margin-bottom: 14px; }
 code { background: #f3f4f6; padding: 2px 6px; border-radius: 4px;
   word-break: break-all; font-size: 12px; }
 @media (max-width: 420px) { .mem-page { padding: 14px 10px 40px; } }

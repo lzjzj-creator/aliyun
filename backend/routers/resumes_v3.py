@@ -47,6 +47,9 @@ def _gen_limit(owner_id: str):
 
 def _owner(request: Request, x_owner_token) -> dict:
     security.enforce_ip(request)
+    owner = security_v3.owner_for_user(request)
+    if owner is not None:
+        return owner
     return security_v3.require_owner(x_owner_token)
 
 

@@ -74,8 +74,8 @@ const kindCn = (k) => KIND_CN[k] || k || "步骤";
 .tstep-title { font-weight: 600; color: var(--ink); }
 .tstep-detail { color: var(--ink-muted); font-size: .75rem; overflow-wrap: anywhere; }
 .tstep-reasoning {
-  margin: 6px 0 0; padding: 8px 12px; border-left: 2px solid var(--agent);
-  background: var(--agent-soft); border-radius: 0 8px 8px 0;
+  margin: 6px 0 0; padding: 8px 12px; border: 1px solid var(--agent-border);
+  background: var(--agent-soft); border-radius: 8px;
   color: var(--ink-secondary); font-size: .78rem; line-height: 1.6;
 }
 </style>

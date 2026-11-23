@@ -35,15 +35,15 @@
   --coach-border: #fde68a;
 
   /* === 6. 错误与危险 === */
-  --danger: #dc2626;
-  --danger-hover: #b91c1c;
+  --danger: #b91c1c;
+  --danger-hover: #991b1b;
   --danger-soft: #fef2f2;
   --danger-border: #fecaca;
 
   /* === 7. 文字层级 === */
   --ink: #111827;                /* 主正文、标题 */
   --ink-secondary: #4b5563;      /* 副标题、辅助说明、表单标签 */
-  --ink-muted: #9ca3af;          /* 时间戳、弱提示、占位符 */
+  --ink-muted: #6b7280;          /* 时间戳、弱提示、占位符 */
 
   /* === 8. 旧变量语义兼容别名（防未改造片段失效） === */
   --paper: var(--bg-canvas);
@@ -257,7 +257,7 @@ select:focus-visible, a:focus-visible, summary:focus-visible {
   background: var(--bg-surface); border-bottom: 1px solid var(--border);
 }
 .tb-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.tb-title { font-size: .95rem; font-weight: 650; color: var(--ink); white-space: nowrap; }
+.tb-title { font-size: .95rem; font-weight: 650; color: var(--ink); white-space: nowrap; margin: 0; }
 .tb-sub { font-size: .74rem; color: var(--ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tb-sessions {
   display: none; border: 1px solid var(--border-strong); background: var(--bg-surface);
@@ -303,7 +303,7 @@ select:focus-visible, a:focus-visible, summary:focus-visible {
 .iv-workbench { display: flex; gap: 18px; align-items: stretch; height: calc(100vh - var(--topbar-h)); padding: 14px 18px; }
 .iv-side-col { flex: none; width: var(--col-side); min-height: 0; }
 .iv-main-col { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
-.iv-grid { display: flex; gap: 18px; align-items: stretch; flex: 1; min-width: 0; min-height: 0; }
+.iv-grid { display: flex; flex-direction: row; gap: 18px; align-items: stretch; flex: 1; min-width: 0; min-height: 0; }
 .iv-main { flex: 1; min-width: 0; display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .iv-side {
   flex: none; width: var(--col-panel); align-self: stretch; min-height: 0;
@@ -316,7 +316,7 @@ select:focus-visible, a:focus-visible, summary:focus-visible {
 .msg.user { justify-content: flex-end; }
 .msg-avatar {
   flex: none; width: 28px; height: 28px; margin-top: 2px; border-radius: 8px;
-  background: var(--brand); color: #fff; font-size: 12px; font-weight: 650;
+  background: var(--agent); color: #fff; font-size: 12px; font-weight: 650;
   display: flex; align-items: center; justify-content: center;
 }
 .bubble { min-width: 0; max-width: 760px; padding: 2px 0; line-height: 1.7; font-size: .906rem; }
@@ -442,10 +442,10 @@ select:focus-visible, a:focus-visible, summary:focus-visible {
 }
 .suggested button:hover { background: var(--brand-soft); }
 .demo-chat {
-  margin-top: 14px; border: 1px solid var(--agent-border); background: var(--agent-soft); color: var(--agent);
-  border-radius: var(--radius-pill); padding: 8px 18px; cursor: pointer; font-size: .88rem; font-family: inherit;
+  margin-top: 14px; border: 1px solid var(--border); background: var(--bg-surface); color: var(--brand);
+  border-radius: var(--radius-sm); padding: 8px 14px; cursor: pointer; font-size: .88rem; font-family: inherit;
 }
-.demo-chat:hover { filter: brightness(.97); }
+.demo-chat:hover { border-color: var(--brand); background: var(--brand-soft); }
 .demo-chat:disabled { opacity: .6; cursor: default; }
 
 /* 简历 v1 */
@@ -464,7 +464,7 @@ textarea {
 .row { display: flex; justify-content: space-between; margin-top: 12px; }
 .pane .ghost { border-color: var(--border-strong); color: var(--ink-secondary); background: var(--bg-surface); }
 .pane .ghost:hover { background: var(--bg-hover); }
-.summary { background: var(--bg-surface); border-left: 3px solid var(--agent); padding: 10px 14px; border-radius: 8px; }
+.summary { background: var(--agent-soft); border: 1px solid var(--agent-border); padding: 10px 14px; border-radius: 8px; }
 .issues li { margin-bottom: 10px; line-height: 1.6; }
 .follow { color: var(--danger); font-size: .85rem; margin: 4px 0 0; }
 .gaps, .rewrite { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-top: 14px; }
@@ -642,3 +642,7 @@ textarea {
   .issues { padding-left: 1.2em; }
   a { color: inherit; text-decoration: none; }
 }
+
+/* ===== 第二轮补充 ===== */
+.composer-hint { font-size: .68rem; color: var(--ink-muted); margin: 6px 2px 0; text-align: right; }
+@media (max-width: 760px) { .composer-hint { display: none; } }

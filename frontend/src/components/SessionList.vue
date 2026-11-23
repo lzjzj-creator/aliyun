@@ -1,9 +1,8 @@
 <script setup>
 // v2 会话侧栏（抽屉式，移动端全屏）。真实接口未就绪时（A 的 #3 上线前），
 // 开发环境自动回落 demo/v2/sessions.json 契约快照。
-import { onMounted, ref } from "vue";
+import { computed, onMounted, reactive, ref } from "vue";
 import { listSessions, deleteSession } from "../api/sessions";
-import { removeSessionToken } from "../storage";
 import UiIcon from "./UiIcon.vue";
 
 const emit = defineEmits(["select", "new", "close"]);
@@ -13,6 +12,15 @@ const props = defineProps({
 });
 
 const STAGE_CN = { greeting: "招呼", probing: "访谈中", wrapping: "收尾", done: "已完成" };
+// 按阶段分组：进行中（招呼/访谈/收尾）置顶，已完成靠后；组可折叠
+const GROUPS = [
+  { key: "active", label: "进行中", match: (s) => s.stage !== "done" },
+  { key: "done", label: "已完成", match: (s) => s.stage === "done" },
+];
+const groupOpen = reactive({ active: true, done: true });
+const groups = computed(() =>
+  GROUPS.map((g) => ({ ...g, items: sessions.value.filter(g.match) }))
+        .filter((g) => g.items.length));
 
 const sessions = ref([]);
 const loading = ref(true);
@@ -62,14 +70,13 @@ async function doDelete(id) {
   try {
     if (!demoMode.value) await deleteSession(id);
     sessions.value = sessions.value.filter((s) => s.id !== id);
-    removeSessionToken(id);
-    emit("select", "");
+    // 只有删掉的是当前会话才跳回新访谈；删别的会话不打断用户
+    if (id === props.activeId) emit("select", "");
   } catch (e) {
     if (e.status === 404) {
       // 已不存在：本地同步移除
       sessions.value = sessions.value.filter((s) => s.id !== id);
-      removeSessionToken(id);
-    } else {
+      } else {
       errMsg.value = "删除失败，请重试";
     }
   } finally {
@@ -99,8 +106,16 @@ defineExpose({ reload: load });
     <p v-else-if="errMsg" class="sd-hint">{{ errMsg }}</p>
     <p v-else-if="!sessions.length" class="sd-hint">还没有会话，开始一段访谈吧。</p>
 
-    <ul v-else class="sd-list">
-      <li v-for="s in sessions" :key="s.id" class="sd-item" :class="{ active: s.id === activeId }">
+    <div v-else class="sd-list">
+      <div v-for="g in groups" :key="g.key" class="sd-grp">
+        <button class="sd-grp-head" :class="{ open: groupOpen[g.key] }"
+                :aria-expanded="groupOpen[g.key]"
+                @click="groupOpen[g.key] = !groupOpen[g.key]">
+          <UiIcon class="grp-chev" name="chevron-right" :size="12" />
+          {{ g.label }}<span class="grp-count">{{ g.items.length }}</span>
+        </button>
+        <ul v-show="groupOpen[g.key]">
+      <li v-for="s in g.items" :key="s.id" class="sd-item" :class="{ active: s.id === activeId }">
         <button class="sd-sess" @click="emit('select', s.id)">
           <span class="t">{{ s.title }}</span>
           <span class="meta">
@@ -120,7 +135,9 @@ defineExpose({ reload: load });
           <UiIcon name="trash" :size="15" />
         </button>
       </li>
-    </ul>
+        </ul>
+      </div>
+    </div>
 
     <p v-if="demoMode" class="sd-demo">示例数据（接口未接入）</p>
   </aside>
@@ -150,17 +167,27 @@ defineExpose({ reload: load });
 .sd-close:hover { background: var(--bg-hover); color: var(--ink); }
 .sd-new {
   display: inline-flex; align-items: center; justify-content: center; gap: 5px;
-  border: 1px solid var(--brand); background: var(--brand); color: #fff;
+  border: 1px solid var(--border); background: var(--bg-surface); color: var(--brand);
   border-radius: var(--radius-sm); padding: 8px 14px; cursor: pointer;
   font: inherit; font-size: 13.5px; font-weight: 500;
-  transition: background var(--dur-fast) var(--ease);
+  transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
 }
-.sd-new:hover { background: var(--brand-hover); }
+.sd-new:hover { border-color: var(--brand); background: var(--brand-soft); }
 .sd-hint { font-size: .82rem; color: var(--ink-muted); padding: 4px 6px; }
 .sd-list {
-  list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; min-height: 0;
-  display: flex; flex-direction: column; gap: 4px;
+  overflow-y: auto; flex: 1; min-height: 0;
+  display: flex; flex-direction: column; gap: 2px;
 }
+.sd-list ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.sd-grp-head {
+  display: flex; align-items: center; gap: 5px; width: 100%;
+  padding: 7px 6px 4px; border: none; background: none; cursor: pointer;
+  font: inherit; font-size: .72rem; color: var(--ink-muted); letter-spacing: .04em;
+}
+.sd-grp-head .grp-count { margin-left: auto; font-size: .68rem; color: var(--ink-faint, var(--ink-muted)); }
+.sd-grp-head .grp-chev { transition: transform var(--dur-fast) var(--ease); }
+.sd-grp-head.open .grp-chev { transform: rotate(90deg); }
+.sd-grp-head:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; border-radius: 6px; }
 .sd-item {
   position: relative; display: flex; align-items: flex-start; gap: 2px;
   padding: 8px 8px 8px 11px; border-radius: 10px;
@@ -168,11 +195,12 @@ defineExpose({ reload: load });
 }
 .sd-item:hover { background: var(--bg-subtle); }
 .sd-item.active {
-  background: var(--bg-surface); box-shadow: var(--shadow-xs);
+  background: var(--bg-subtle); box-shadow: var(--shadow-xs);
 }
+.sd-item.active .sd-sess .t { color: var(--brand); font-weight: 600; }
 .sd-item.active::before {
   content: ""; position: absolute; left: 0; top: 18%; bottom: 18%;
-  width: 3px; border-radius: 2px; background: var(--agent);
+  width: 3px; border-radius: 2px; background: var(--brand);
 }
 .sd-sess {
   flex: 1; min-width: 0; text-align: left; border: none; background: none;

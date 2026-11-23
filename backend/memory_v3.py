@@ -14,6 +14,7 @@ import copy
 from datetime import datetime, timezone
 import hashlib
 import json
+import secrets
 from uuid import UUID
 
 try:
@@ -107,6 +108,27 @@ def get_owner(owner_id: str) -> dict | None:
         "id": f"eq.{_check_owner_id(owner_id)}", "deleted_at": "is.null",
         "select": "id,recovery_hash," + OWNER_FIELDS, "limit": 1,
     })))
+
+
+def get_or_create_owner_by_user(user_id: str) -> dict:
+    """v5: v3_owner keyed by app_users.id. Long-term memory is on by default
+    for any Bearer identity (guest or user) — no owner_token/recovery-code
+    flow; the random owner_key_hash is an unusable placeholder credential."""
+    owner = _one(_json(_request("GET", "/v3_owner", params={
+        "user_id": f"eq.{_uuid(user_id)}", "deleted_at": "is.null",
+        "select": OWNER_FIELDS, "limit": 1,
+    })))
+    if owner is not None:
+        return owner
+    rows = _json(_request("POST", "/v3_owner", params={"select": OWNER_FIELDS},
+                          headers={"Prefer": "return=representation"},
+                          json={"user_id": _uuid(user_id),
+                                "owner_key_hash": _sha256(secrets.token_hex(32)),
+                                "memory_enabled": True,
+                                "consent_at": _now()}))
+    if not rows:
+        raise MemoryStoreError("Owner insert returned no row")
+    return rows[0]
 
 
 def touch_owner(owner_id: str) -> bool:
