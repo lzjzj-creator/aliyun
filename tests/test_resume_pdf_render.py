@@ -85,7 +85,8 @@ class PdfRenderTest(unittest.TestCase):
                 self.assertIn("后端开发工程师", compact)
                 section_order = (["education", "internships", "projects", "skills", "awards", "summary"]
                                  if layout == "classic" else
-                                 ["internships", "projects", "education", "skills", "awards", "summary"])
+                                 # 双栏：侧栏教育+奖项 → 主栏技能+实习+项目+自评（DOM 序=提取序）
+                                 ["education", "awards", "skills", "internships", "projects", "summary"])
                 titles = {section.key: section.title for section in load().sections}
                 populated = {
                     "education": bool(fields.get("education")),

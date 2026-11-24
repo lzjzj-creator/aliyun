@@ -3,6 +3,8 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import ResumeFieldsForm from "../components/ResumeFieldsForm.vue";
 import ResumePreview from "../components/ResumePreview.vue";
+import TemplatePicker from "../components/TemplatePicker.vue";
+import { templateName } from "../components/resumeTemplates";
 import { downloadResumePdf } from "../utils/resumeDownload";
 import { exportIssues } from "../../../backend/resume_assets/render.mjs";
 import { getTemplate, optimizePlan, optimizeSection } from "../api/resume";
@@ -49,7 +51,7 @@ const savedFields = ref("{}");
 const dirty = computed(() => !!doc.value && JSON.stringify(fields.value) !== savedFields.value);
 const saving = ref(false);
 const exporting = ref(false);
-const layout = ref("classic");
+const layout = ref("classic");   // 读自 fields._meta.layout；切换会标脏随保存落库
 const mobilePanel = ref("edit");
 const exportProblems = ref([]);
 const saveState = computed(() => photoBusy.value ? "照片处理中…" : saving.value ? "保存中…" : optFields.value ? "优化稿待采纳" : dirty.value ? "有未保存修改" : "已保存");
@@ -65,6 +67,13 @@ const captureContext = () => ({ id: props.docId, generation: docGeneration });
 const isCurrent = (context) => context.generation === docGeneration && context.id === props.docId;
 const isCurrentDocument = (context) => isCurrent(context) && !loading.value && !!doc.value && doc.value.id === context.id;
 onBeforeUnmount(() => { photoContext.value = ++docGeneration; });
+
+// 换模板 → 写入 fields._meta.layout（标脏，走既有"保存修改"流持久化）
+watch(layout, (v) => {
+  if (!doc.value || !Object.keys(fields.value).length) return;
+  if (fields.value?._meta?.layout === v) return;
+  fields.value._meta = { ...(fields.value._meta || {}), layout: v };
+});
 
 function clearOptimization() {
   optFields.value = null; optPlan.value = null; optResults.value = {};
@@ -86,6 +95,8 @@ function resetDocument() {
 function acceptDocument(document) {
   doc.value = document;
   fields.value = cloneFields(document.fields);
+  // 恢复文档保存的模板选择；老文档无标记 → classic
+  layout.value = fields.value?._meta?.layout === "modern" ? "modern" : "classic";
   savedFields.value = JSON.stringify(fields.value);
   clearOptimization();
 }
@@ -520,12 +531,7 @@ onMounted(() => {
         <span class="ld-status" :data-s="doc.status">
           {{ { draft: "草稿", ready: "就绪", stale: "需更新" }[doc.status] || doc.status }}
         </span>
-        <label class="layout-control">版式
-          <select v-model="layout" :disabled="busy || optBusy || photoBusy">
-            <option value="classic">中文经典</option>
-            <option value="modern">中文现代</option>
-          </select>
-        </label>
+        <TemplatePicker v-model="layout" :disabled="busy || optBusy || photoBusy" />
         <span class="save-state" role="status" aria-live="polite">{{ saveState }}</span>
         <span class="lt-spacer"></span>
         <details v-if="versions.length" class="lv-dropdown">
@@ -646,7 +652,7 @@ onMounted(() => {
           </div>
         </aside>
         <div class="lib-preview">
-          <p class="preview-caption">{{ optFields ? "待采纳优化稿" : "投递预览" }} · {{ layout === "classic" ? "中文经典" : "中文现代" }}</p>
+          <p class="preview-caption">{{ optFields ? "待采纳优化稿" : "投递预览" }} · {{ templateName(layout) }}</p>
           <div class="paper-stage">
             <ResumePreview v-if="tpl" class="print-area" :template="tpl" :fields="optFields || fields" :layout="layout" />
           </div>

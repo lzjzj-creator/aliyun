@@ -35,28 +35,26 @@
 }
 
 .resume-paper .resume-header {
-  text-align: center;
-  margin-bottom: 5mm;
-}
-
-.resume-paper .resume-header-with-photo {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 24mm;
+  display: flex;
+  align-items: center;
   gap: 6mm;
-  align-items: start;
+  text-align: left;
+  margin-bottom: 5mm;
   break-inside: avoid;
-}
-
-.resume-paper .resume-header-text {
-  min-width: 0;
 }
 
 .resume-paper .resume-photo {
   display: block;
+  flex: 0 0 auto;
   width: 24mm;
   height: 32mm;
-  object-fit: contain;
+  object-fit: cover;
   object-position: center top;
+}
+
+.resume-paper .resume-id {
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 .resume-paper .resume-name {
@@ -73,13 +71,32 @@
   font-size: 11pt;
 }
 
-.resume-paper .resume-contact {
-  margin-top: 1mm;
-  color: #333;
+.resume-paper .resume-contacts {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1mm 5mm;
 }
 
-.resume-paper .resume-separator {
-  color: #666;
+.resume-paper .resume-contact-item {
+  display: flex;
+  align-items: baseline;
+  gap: 1.5mm;
+  margin: 0;
+  min-width: 0;
+  color: #333;
+  font-size: 9.5pt;
+}
+
+.resume-paper .resume-contact-label {
+  flex: 0 0 auto;
+  color: #888;
+  font-size: 8.5pt;
+}
+
+.resume-paper .resume-contact-value {
+  min-width: 0;
 }
 
 .resume-paper .resume-section {
@@ -151,25 +168,126 @@
 .resume-paper .resume-period,
 .resume-paper .resume-name,
 .resume-paper .resume-role,
-.resume-paper .resume-contact span,
+.resume-paper .resume-contact-item span,
 .resume-paper li {
   white-space: pre-wrap;
   orphans: 2;
   widows: 2;
 }
 
-.resume-paper[data-layout="modern"] .resume-header {
-  text-align: left;
+/* ============ 现代双栏：深墨蓝侧栏 + 主栏（行业通用 sidebar 版式，自研实现） ============ */
+.resume-paper[data-layout="modern"] {
+  padding: 0;
 }
 
-.resume-paper[data-layout="modern"] .resume-section-title {
-  color: #233446;
-  border-bottom-color: #526171;
+.resume-paper[data-layout="modern"] .resume-cols {
+  width: 100%;
+  height: 297mm;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.resume-paper[data-layout="modern"] .resume-cols > tbody > tr > td {
+  vertical-align: top;
+}
+
+.resume-paper[data-layout="modern"] .resume-side {
+  width: 62mm;
+  background: #2b3a4a;
+  color: #eef2f6;
+  padding: 12mm 6mm 12mm 11mm;   /* 出血版式下左缘留白仍 ≥11mm（≈31pt 文本安全区） */
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+.resume-paper[data-layout="modern"] .resume-side-head {
+  text-align: center;
+  margin-bottom: 6mm;
+  break-inside: avoid;
+}
+
+.resume-paper[data-layout="modern"] .resume-side-head .resume-photo {
+  width: 27mm;
+  height: 36mm;
+  margin: 0 auto 4mm;
+  object-fit: cover;
+}
+
+.resume-paper[data-layout="modern"] .resume-side-head .resume-name {
+  color: #fff;
+  font-size: 16pt;
+  letter-spacing: 1.5pt;
+}
+
+.resume-paper[data-layout="modern"] .resume-side-head .resume-role {
+  margin-top: 1mm;
+  font-size: 9.5pt;
+  color: #c8d4e0;
+}
+
+.resume-paper[data-layout="modern"] .resume-side-head .resume-contact-item {
+  display: block;
+  text-align: left;
+  margin-top: 2.2mm;
+  font-size: 8.5pt;
+  color: #dfe7ee;
+}
+
+.resume-paper[data-layout="modern"] .resume-side-head .resume-contact-label {
+  display: block;
+  font-size: 7pt;
+  color: #93a7bb;
+  letter-spacing: .5pt;
+}
+
+.resume-paper[data-layout="modern"] .resume-side .resume-section {
+  margin-top: 5mm;
+}
+
+.resume-paper[data-layout="modern"] .resume-side .resume-section-title {
+  color: #fff;
+  font-size: 11pt;
+  letter-spacing: 1pt;
+  border-bottom: 0.5pt solid rgba(255, 255, 255, 0.35);
+}
+
+.resume-paper[data-layout="modern"] .resume-side .resume-entry-head {
+  row-gap: 0.5mm;
+}
+
+.resume-paper[data-layout="modern"] .resume-side .resume-period,
+.resume-paper[data-layout="modern"] .resume-side .resume-detail,
+.resume-paper[data-layout="modern"] .resume-side .resume-text {
+  color: #c6d2de;
+}
+
+.resume-paper[data-layout="modern"] .resume-side .resume-awards {
+  color: #dfe7ee;
+}
+
+.resume-paper[data-layout="modern"] .resume-main {
+  padding: 12mm 10mm 12mm 8mm;
+}
+
+.resume-paper[data-layout="modern"] .resume-main .resume-section-title {
+  color: #2b3a4a;
+  font-size: 12.5pt;
+  letter-spacing: 1pt;
+  border-bottom: 1pt solid #2b3a4a;
+}
+
+.resume-paper[data-layout="modern"] .resume-main .resume-period {
+  color: #5a6a7a;
 }
 
 @page zhimai-resume {
   size: A4;
   margin: 14mm;
+}
+
+@page zhimai-resume-modern {
+  size: A4;
+  margin: 0;
 }
 
 @media print {
@@ -183,5 +301,9 @@
     border: 0;
     border-radius: 0;
     box-shadow: none;
+  }
+  /* 现代双栏：页边距归零，侧栏底色直达纸张边缘，栏内边距控制留白 */
+  .resume-paper[data-layout="modern"] {
+    page: zhimai-resume-modern;
   }
 }

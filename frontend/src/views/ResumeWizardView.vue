@@ -5,6 +5,8 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import ResumeFieldsForm from "../components/ResumeFieldsForm.vue";
 import ResumePreview from "../components/ResumePreview.vue";
+import TemplatePicker from "../components/TemplatePicker.vue";
+import { templateName } from "../components/resumeTemplates";
 import { downloadResumePdf } from "../utils/resumeDownload";
 import { exportIssues } from "../../../backend/resume_assets/render.mjs";
 import { getTemplate, autofill, expand, optimizePlan, optimizeSection, exportDraftPdf } from "../api/resume";
@@ -17,7 +19,7 @@ const tpl = ref(null);
 const errMsg = ref("");
 const busy = ref(false);
 const exporting = ref(false);
-const layout = ref("classic");
+const layout = ref("classic");   // fields._meta.layout 持久化：草稿/简历库都记住所选模板
 const mobilePanel = ref("edit");
 const exportProblems = ref([]);
 const saveState = ref("未保存");
@@ -158,6 +160,10 @@ function saveDraft() {
   }, 3000);
 }
 watch([fields, draftVer, photoBusy], () => { if (step.value === 2) saveDraft(); }, { deep: true });
+watch(layout, (v) => {
+  const f = fields.value;
+  if (Object.keys(f).length) f._meta = { ...(f._meta || {}), layout: v };
+});
 
 async function loadTemplate() {
   try {
@@ -175,6 +181,7 @@ async function loadTemplate() {
     if (draft && draft.template_version === tpl.value?.template_version) {
       resetPhotoContext();
       fields.value = draft.fields || {};
+      layout.value = fields.value?._meta?.layout === "modern" ? "modern" : "classic";
       evidence.value = draft.evidence_map || {};
       gaps.value = draft.gaps || [];
       draftVer.value = draft.template_version;
@@ -235,6 +242,9 @@ async function generate() {
     }
     resetPhotoContext();
     fields.value = r.fields || {};
+    if (Object.keys(fields.value).length) {
+      fields.value._meta = { ...(fields.value._meta || {}), layout: layout.value };
+    }
     evidence.value = r.evidence_map || {};
     gaps.value = r.gaps || [];
     draftVer.value = tpl.value.template_version;
@@ -335,12 +345,7 @@ async function exportPrint() {
       <button class="wiz-lib" :disabled="locked" @click="emit('goto-library')">简历库 →</button>
     </nav>
     <div v-if="filled" class="wiz-toolbar">
-      <label class="layout-control">版式
-        <select v-model="layout" :disabled="locked">
-          <option value="classic">中文经典</option>
-          <option value="modern">中文现代</option>
-        </select>
-      </label>
+      <TemplatePicker v-model="layout" :disabled="locked" />
       <span class="save-state" role="status" aria-live="polite">{{ photoBusy ? "照片处理中…" : saveState }}</span>
       <button class="ghost" :disabled="locked" @click="saveDraft">保存草稿</button>
       <button class="ghost" :disabled="locked" @click="addToLibrary">
@@ -460,7 +465,7 @@ async function exportPrint() {
         </details>
       </aside>
       <div class="wz-canvas">
-        <p class="preview-caption">投递预览 · {{ layout === "classic" ? "中文经典" : "中文现代" }} · 点区块可定位到左侧编辑</p>
+        <p class="preview-caption">投递预览 · {{ templateName(layout) }} · 点区块可定位到左侧编辑</p>
         <div class="paper-stage" data-editable @click="onPreviewClick">
           <ResumePreview v-if="tpl" class="print-area" :template="tpl" :fields="fields" :layout="layout" />
         </div>

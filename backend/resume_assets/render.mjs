@@ -1,11 +1,15 @@
 // Browser and server share this dependency-free renderer. Template definitions
 // are the field whitelist; editor state is deliberately not part of the API.
-export const RENDER_VERSION = "3.1.0";
+export const RENDER_VERSION = "3.2.0";
 
 const SECTION_ORDER = {
   classic: ["basics", "education", "internships", "projects", "skills", "awards", "summary"],
-  modern: ["basics", "internships", "projects", "education", "skills", "awards", "summary"],
+  // 现代双栏：侧栏=教育+奖项，主栏=技能+实习+项目+自评（阅读顺序即 DOM 顺序）
+  modern: ["basics", "education", "awards", "skills", "internships", "projects", "summary"],
 };
+// 现代双栏分栏：侧栏放短内容（教育/奖项），主栏放主体（技能/经历/自评）
+const MODERN_SIDE_KEYS = ["education", "awards"];
+const MODERN_MAIN_KEYS = ["skills", "internships", "projects", "summary"];
 const SECTION_TYPES = new Set(["kv", "entries", "skillgroups", "lines", "text"]);
 const PLACEHOLDER = /[【\[［]\s*待补充|待补充\s*[:：]|^\s*待补充\s*$/u;
 const own = (object, key) => object && typeof object === "object" && Object.hasOwn(object, key) ? object[key] : undefined;
@@ -134,13 +138,26 @@ function renderHeader(fields, photo) {
   const name = joined(fields.filter((field) => field.key === "name"));
   const role = joined(fields.filter((field) => field.key === "target_role"));
   const contacts = fields.filter((field) => !["name", "target_role"].includes(field.key) && field.leaves.length);
-  const content = (name ? `<h1 class="resume-name">${name}</h1>` : "")
+  const identity = (name ? `<h1 class="resume-name">${name}</h1>` : "") + paragraph("resume-role", role);
+  const contactGrid = contacts.length
+    ? `<div class="resume-contacts">${contacts.map((field) => `<p class="resume-contact-item"><span class="resume-contact-label">${escape(field.label)}</span><span class="resume-contact-value">${inline(field.leaves)}</span></p>`).join("")}</div>`
+    : "";
+  return `<header class="resume-header">`
+    + (photo ? `<img class="resume-photo" src="${escape(photo)}" alt="简历照片" />` : "")
+    + `<div class="resume-id">${identity}</div>${contactGrid}</header>`;
+}
+
+function renderSideHeader(fields, photo) {
+  if (!hasContent(fields) && !photo) return "";
+  const name = joined(fields.filter((field) => field.key === "name"));
+  const role = joined(fields.filter((field) => field.key === "target_role"));
+  const contacts = fields.filter((field) => !["name", "target_role"].includes(field.key) && field.leaves.length);
+  return `<header class="resume-side-head">`
+    + (photo ? `<img class="resume-photo" src="${escape(photo)}" alt="简历照片" />` : "")
+    + (name ? `<h1 class="resume-name">${name}</h1>` : "")
     + paragraph("resume-role", role)
-    + (contacts.length ? `<p class="resume-contact">${contacts.map((field) => `<span>${inline(field.leaves)}</span>`).join('<span class="resume-separator" aria-hidden="true"> · </span>')}</p>` : "");
-  // Keep no-photo HTML identical to the existing renderer.
-  return photo
-    ? `<header class="resume-header resume-header-with-photo"><div class="resume-header-text">${content}</div><img class="resume-photo" src="${escape(photo)}" alt="简历照片" /></header>`
-    : `<header class="resume-header">${content}</header>`;
+    + contacts.map((field) => `<p class="resume-contact-item"><span class="resume-contact-label">${escape(field.label)}</span><span class="resume-contact-value">${inline(field.leaves)}</span></p>`).join("")
+    + `</header>`;
 }
 
 function renderEntry(fields) {
@@ -182,14 +199,31 @@ export function renderResume(template, fields, layout = "classic") {
   const selectedLayout = layout === "modern" ? "modern" : "classic";
   const candidate = own(own(fields, "_meta"), "photo");
   const photo = isValidResumePhoto(candidate) ? candidate : "";
-  const content = model(template, fields, selectedLayout).map((section) => {
-    if (section.key === "basics") return renderHeader(section.fields, photo);
-    const body = section.type === "entries"
-      ? section.entries.map(renderEntry).join("") : section.fields.map(renderField).join("");
+  const sections = model(template, fields, selectedLayout);
+  const sectionBody = (section) => section.type === "entries"
+    ? section.entries.map(renderEntry).join("") : section.fields.map(renderField).join("");
+  const sectionHtml = (section) => {
+    const body = sectionBody(section);
     if (!body) return "";
     return `<section class="resume-section" data-key="${escape(section.key)}"><h2 class="resume-section-title">${escape(section.title)}</h2>${body}</section>`;
+  };
+  if (selectedLayout === "modern") {
+    const byKey = {};
+    for (const section of sections) byKey[section.key] = section;
+    const known = new Set(["basics", ...MODERN_SIDE_KEYS, ...MODERN_MAIN_KEYS]);
+    const extras = sections.filter((section) => !known.has(section.key));
+    const side = (byKey.basics ? renderSideHeader(byKey.basics.fields, photo) : "")
+      + MODERN_SIDE_KEYS.map((key) => byKey[key]).filter(Boolean).map(sectionHtml).join("");
+    const main = MODERN_MAIN_KEYS.map((key) => byKey[key]).filter(Boolean)
+      .concat(extras).map(sectionHtml).join("");
+    return `<article class="resume-paper" data-layout="modern" data-render-version="${RENDER_VERSION}">`
+      + `<table class="resume-cols"><tbody><tr><td class="resume-side">${side}</td><td class="resume-main">${main}</td></tr></tbody></table></article>`;
+  }
+  const content = sections.map((section) => {
+    if (section.key === "basics") return renderHeader(section.fields, photo);
+    return sectionHtml(section);
   }).join("");
-  return `<article class="resume-paper" data-layout="${selectedLayout}" data-render-version="${RENDER_VERSION}">${content}</article>`;
+  return `<article class="resume-paper" data-layout="classic" data-render-version="${RENDER_VERSION}">${content}</article>`;
 }
 
 /** Export eligibility is about actual facts, not interview quotas or manual gaps. */
