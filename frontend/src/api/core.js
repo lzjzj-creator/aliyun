@@ -5,6 +5,19 @@ import { getAuthToken } from "../storage";
 
 export const API_BASE = import.meta.env.VITE_API_BASE || "";
 
+// 首访静默签 guest 的完成信号：子视图 onMounted 早于 App 的 await，
+// 业务请求须等签发完成，否则会以无 Bearer 打到服务端拿到 404。
+let authGate = null;
+
+export function setAuthGate(promise) {
+  authGate = promise;
+}
+
+async function waitAuth(path) {
+  if (!authGate || path.startsWith("/api/v4/auth/")) return;
+  await authGate;
+}
+
 export function authHeaders(_sessionId, extra = {}) {
   // 参数保留 sessionId 兼容旧调用签名；Bearer 下不需要会话级令牌。
   const h = { ...extra };
@@ -16,6 +29,7 @@ export function authHeaders(_sessionId, extra = {}) {
 // 统一 JSON 请求；非 2xx 抛带 status/code/issues 的 Error（404 用于越权判定，
 // detail 可能是字符串或 {code,message,retryable,issues} 对象——两种都展开）
 export async function req(path, { method = "GET", body, sessionId, headers } = {}) {
+  await waitAuth(path);
   const h = authHeaders(sessionId, headers);
   if (body !== undefined) h["Content-Type"] = "application/json";
   const res = await fetch(`${API_BASE}${path}`, {
@@ -41,6 +55,7 @@ export async function req(path, { method = "GET", body, sessionId, headers } = {
 
 // SSE POST 流解析（与 v1 chatStream 同一套手解协议），handlers[event](data)
 export async function sse(path, { body, sessionId, headers, handlers } = {}) {
+  await waitAuth(path);
   const res = await fetch(`${API_BASE}${path}`, {
     method: "POST",
     headers: authHeaders(sessionId, { "Content-Type": "application/json", ...headers }),
