@@ -15,7 +15,7 @@ try:
     from ..llm import llm, QWEN_CHAT
     from ..resume_pdf import SnapshotPdfReq, pdf_response
     from ..resume_template import (
-        load, check_version, TemplateError, get_section,
+        load, check_version, TemplateError, get_section, required_slots,
         validate_fields, empty_fields, iter_field_paths, valid_path_syntax,
     )
     from .. import session_security as security
@@ -23,7 +23,7 @@ except ImportError:  # FC 以 backend 目录为根启动
     from llm import llm, QWEN_CHAT
     from resume_pdf import SnapshotPdfReq, pdf_response
     from resume_template import (
-        load, check_version, TemplateError, get_section,
+        load, check_version, TemplateError, get_section, required_slots,
         validate_fields, empty_fields, iter_field_paths, valid_path_syntax,
     )
     import session_security as security
@@ -459,10 +459,26 @@ def autofill(req: AutofillReq, request: Request,
     fields = _init_prefill(tpl, fields, auth_user, evidence_map)
     leaves = list(_iter_leaves(tpl, fields))
     leaf_values = {path: value for path, value, _, _ in leaves}
+    # 缺口分级：required=自适应必填（required_slots 感知无实习等豁免），
+    # 前端据此把"可选字段缺口"渲染成中性提示而非黄色警告。
+    req_slot_ids = {s.id for s in required_slots(tpl, profile)}
+    leaf_req = {p: bool(req) for p, _, req, _ in leaves}
+    sec_of = {s.key: s for s in tpl.sections}
+
+    def gap_required(path):
+        sec_key = path.split(".")[0]
+        sec = sec_of.get(sec_key)
+        if sec is not None and sec.type == "entries":
+            return sec_key in req_slot_ids        # 经历类看自适应槽位
+        if path in leaf_req:
+            return leaf_req[path]
+        return bool(sec.required) if sec else False
+
     raw_gaps = data.get("gaps")
     gaps = [{"field_path": g["field_path"],
              "label": g.get("label") if isinstance(g.get("label"), str) else g["field_path"],
-             "reason": g.get("reason") if isinstance(g.get("reason"), str) else "请确认或手动填写"}
+             "reason": g.get("reason") if isinstance(g.get("reason"), str) else "请确认或手动填写",
+             "required": gap_required(g["field_path"])}
             for g in (raw_gaps if isinstance(raw_gaps, list) else [])
             if isinstance(g, dict) and isinstance(g.get("field_path"), str)
             and (g["field_path"] in leaf_values or g["field_path"] in fields)]
@@ -489,11 +505,11 @@ def autofill(req: AutofillReq, request: Request,
         if filled and path not in evidence_map:
             _set_leaf(fields, path, "")
             if path not in gap_paths:
-                gaps.append({"field_path": path, "label": label,
+                gaps.append({"field_path": path, "label": label, "required": required,
                              "reason": "无逐字支持该字段的用户消息证据，请确认或手动填写"})
                 gap_paths.add(path)
         elif not filled and required and path not in gap_paths:
-            gaps.append({"field_path": path, "label": label,
+            gaps.append({"field_path": path, "label": label, "required": True,
                          "reason": "对话中未提及，请手动填写"})
             gap_paths.add(path)
 
@@ -509,18 +525,20 @@ def autofill(req: AutofillReq, request: Request,
     # silently retarget evidence and gaps. Clients must accept sparse blank rows;
     # any later compaction must remap fields, evidence_map and gaps together.
 
-    # 区块级缺口：必填 entries 区块为空 → section 级 gap
+    # 区块级缺口：entries 区块为空 → section 级 gap（required 按自适应必填标记）
     for sec in tpl.sections:
         if sec.type != "entries" or sec.key == "education":
             continue
         if not fields.get(sec.key) and sec.key not in gap_paths:
             optional = "可留空" if not sec.required else "建议补充"
             gaps.append({"field_path": sec.key, "label": sec.title,
+                         "required": gap_required(sec.key),
                          "reason": f"暂无{sec.title}素材，{optional}"})
             gap_paths.add(sec.key)
         elif fields.get(sec.key) and len(fields[sec.key]) < (sec.min or 0):
             if sec.key not in gap_paths:
                 gaps.append({"field_path": sec.key, "label": sec.title,
+                             "required": gap_required(sec.key),
                              "reason": f"仅 {len(fields[sec.key])} 段，建议补足 {sec.min} 段"})
 
     return {"template_version": tpl.template_version,

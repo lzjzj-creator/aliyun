@@ -273,7 +273,7 @@ class CoachRouteTest(unittest.TestCase):
         kinds = [e for e, _ in evs]
         self.assertEqual(kinds[0], "session")
         self.assertIn("token", kinds)
-        self.assertIn("card", kinds)
+        self.assertNotIn("card", kinds)  # v5：greeting 不再发建议 chip 卡
         self.assertEqual(kinds[-1], "done")
 
     def test_turn_flow_end_to_end_and_persisted(self):

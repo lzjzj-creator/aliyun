@@ -1,0 +1,8 @@
+# 字体资产走 LF：reproducible-build 哈希校验依赖字节级一致
+backend/resume_assets/*.txt text eol=lf
+backend/resume_assets/*.css text eol=lf
+backend/resume_assets/*.json text eol=lf
+backend/resume_assets/*.mjs text eol=lf
+frontend/public/fonts/*.txt text eol=lf
+*.ttf binary
+*.woff2 binary

@@ -69,10 +69,13 @@ function removePhoto() {
 
 const gapMap = computed(() => {
   const m = {};
-  for (const g of props.gaps) m[g.field_path] = g.reason || "待补充";
+  for (const g of props.gaps) m[g.field_path] = { reason: g.reason || "待补充", req: g.required !== false };
   return m;
 });
-const gapAt = (p) => gapMap.value[p];
+const gapAt = (p) => gapMap.value[p]?.reason;
+const gapReq = (p) => gapMap.value[p]?.req !== false;
+// 必填缺口黄标警示；可选缺口中性提示（不强制填写）。
+const gapClass = (p) => (gapAt(p) ? (gapReq(p) ? "gap" : "opt-gap") : "");
 
 const sections = computed(() =>
   (props.template.sections || []).slice().sort((a, b) => a.order - b.order));
@@ -141,7 +144,7 @@ const isOptSec = (sec) => sec.required === false;
 
       <!-- kv：基本信息 -->
       <div v-if="sec.type === 'kv'" class="rff-kv">
-        <label v-for="f in sec.fields" :key="f.key" class="rff-field" :class="{ gap: gapAt(`${sec.key}.${f.key}`) }">
+        <label v-for="f in sec.fields" :key="f.key" class="rff-field" :class="gapClass(`${sec.key}.${f.key}`)">
           <span>{{ f.label }}<i v-if="f.required" class="req">*</i></span>
           <input :value="modelValue[sec.key]?.[f.key] || ''"
                  @input="setKv(sec.key, f.key, $event.target.value)"
@@ -157,7 +160,7 @@ const isOptSec = (sec) => sec.required === false;
             <button type="button" class="mini" @click="removeEntry(sec.key, i)">删除</button>
           </div>
           <label v-for="f in sec.entry_fields" :key="f.key"
-                 class="rff-field" :class="{ gap: gapAt(`${sec.key}.${i}.${f.key}`) }">
+                 class="rff-field" :class="gapClass(`${sec.key}.${i}.${f.key}`)">
             <span>{{ f.label }}<i v-if="f.required" class="req">*</i></span>
             <textarea v-if="f.input === 'bullets'" rows="3"
                       :value="(e[f.key] || []).join('\n')"
@@ -171,8 +174,8 @@ const isOptSec = (sec) => sec.required === false;
                    :placeholder="gapAt(`${sec.key}.${i}.${f.key}`) || f.rules || ''" />
           </label>
         </div>
-        <p v-if="!(modelValue[sec.key] || []).length && gapAt(sec.key)" class="rff-gap-hint">
-          【待补充】{{ gapAt(sec.key) }}
+        <p v-if="!(modelValue[sec.key] || []).length && gapAt(sec.key)" class="rff-gap-hint" :class="{ opt: !gapReq(sec.key) }">
+          {{ gapReq(sec.key) ? "【待补充】" : "" }}{{ gapAt(sec.key) }}
         </p>
         <button v-if="!sec.max || (modelValue[sec.key] || []).length < sec.max"
                 type="button" class="rff-add" @click="addEntry(sec)">
@@ -189,14 +192,14 @@ const isOptSec = (sec) => sec.required === false;
             <button type="button" class="mini"
                     @click="setNested(sec.key, 'groups', modelValue[sec.key].groups.filter((_, xi) => xi !== gi))">删除</button>
           </div>
-          <label class="rff-field" :class="{ gap: gapAt(`${sec.key}.groups.${gi}`) }">
+          <label class="rff-field" :class="gapClass(`${sec.key}.groups.${gi}`)">
             <span>技能（顿号分隔）</span>
             <input :value="join(g.items)"
                    @input="setNested(sec.key, 'groups', modelValue[sec.key].groups.map((x, xi) => xi === gi ? { ...x, items: split($event.target.value) } : x))" />
           </label>
         </div>
-        <p v-if="!(modelValue[sec.key]?.groups || []).length && gapAt(sec.key)" class="rff-gap-hint">
-          【待补充】{{ gapAt(sec.key) }}
+        <p v-if="!(modelValue[sec.key]?.groups || []).length && gapAt(sec.key)" class="rff-gap-hint" :class="{ opt: !gapReq(sec.key) }">
+          {{ gapReq(sec.key) ? "【待补充】" : "" }}{{ gapAt(sec.key) }}
         </p>
         <button type="button" class="rff-add"
                 @click="setNested(sec.key, 'groups', [...(modelValue[sec.key]?.groups || []), { name: '', items: [] }])">
@@ -222,7 +225,7 @@ const isOptSec = (sec) => sec.required === false;
 
       <!-- text：自我评价 -->
       <template v-if="sec.type === 'text'">
-        <label class="rff-field" :class="{ gap: gapAt(`${sec.key}.text`) }">
+        <label class="rff-field" :class="gapClass(`${sec.key}.text`)">
           <textarea rows="2" :value="modelValue[sec.key]?.text || ''"
                     @input="setNested(sec.key, 'text', $event.target.value)"
                     :placeholder="sec.entry_fields?.[0]?.rules || ''" />
@@ -256,6 +259,8 @@ const isOptSec = (sec) => sec.required === false;
   font: inherit; font-size: .88rem; background: var(--bg-surface); width: 100%; color: var(--ink);
 }
 .rff-field.gap input, .rff-field.gap textarea { border-color: var(--coach); background: var(--coach-soft); }
+.rff-field.opt-gap input, .rff-field.opt-gap textarea { border-color: var(--border-strong); }
+.rff-field.opt-gap input::placeholder, .rff-field.opt-gap textarea::placeholder { color: var(--ink-muted); opacity: .8; }
 .rff-entry { border: 1px dashed var(--border-strong); border-radius: 10px; padding: 10px; margin-bottom: 8px; background: var(--bg-surface); }
 .rff-entry-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: .75rem; color: var(--ink-muted); }
 .rff-entry-head .grp-name { flex: 1; border: 1px solid var(--border); border-radius: 8px; padding: 5px 9px; font-size: .85rem; margin-right: 8px; background: var(--bg-surface); color: var(--ink); }
@@ -270,6 +275,7 @@ const isOptSec = (sec) => sec.required === false;
 .rff-line .grow { flex: 1; }
 .rff-line .per { width: 90px; }
 .rff-gap-hint { font-size: .78rem; color: var(--coach); background: var(--coach-soft); border-radius: 8px; padding: 6px 10px; margin: 4px 0 8px; }
+.rff-gap-hint.opt { color: var(--ink-muted); background: var(--bg-subtle); }
 @media (max-width: 640px) {
   .rff-kv { grid-template-columns: 1fr; }
 }
