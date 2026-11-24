@@ -365,5 +365,88 @@ class V4AppTest(unittest.TestCase):
         self.assertFalse(security_v4.verify_password("x", "garbage"))
 
 
+class EnsureSeedTest(unittest.TestCase):
+    """老会话（初始化之前创建）打开时按 Bearer 用户回填 init_profile 种子。"""
+
+    INIT = {"identity": {"grade": "大三"},
+            "basics": {"name": "李雷", "target_role": "后端实习"},
+            "education": [{"school": "清华", "major": "计算机",
+                           "degree": "本科", "period": "2022-2026"}],
+            "material_notes": {"skills": "Python,SQL"}}
+
+    @classmethod
+    def setUpClass(cls):
+        cls.coach_routes = importlib.import_module("backend.routers.coach")
+
+    def ensure_seed(self, user, bundle):
+        return self.coach_routes.ensure_seed(user, bundle)
+
+    def _bundle(self, profile):
+        return {"session": {"id": str(uuid4())},
+                "profile": {"profile": profile, "coverage_detail": {}, "version": 3},
+                "messages": []}
+
+    def _user(self, init=None):
+        return {"id": str(uuid4()), "init_profile": init if init is not None else self.INIT}
+
+    def _merge_spy(self, bundle):
+        def _fake(sid, prof, ver, **kw):
+            return {**bundle["profile"], "profile": prof,
+                    "coverage": kw.get("coverage"), "version": ver + 1}
+        return _fake
+
+    def test_backfills_missing_seed_paths(self):
+        bundle = self._bundle({})
+        with patch.object(memory, "merge_profile",
+                          side_effect=self._merge_spy(bundle)) as mp:
+            out = self.ensure_seed(self._user(), bundle)
+        mp.assert_called_once()
+        prof = out["profile"]["profile"]
+        self.assertEqual(prof["identity"]["grade"], "大三")
+        self.assertEqual(prof["identity"]["school"], "清华")
+        self.assertEqual(prof["goal"]["target_role"], "后端实习")
+        self.assertEqual(prof["material_notes"]["skills"], "Python,SQL")
+
+    def test_existing_values_win_over_seed(self):
+        bundle = self._bundle({"identity": {"grade": "研一"},
+                               "goal": {"target_role": "算法实习"}})
+        with patch.object(memory, "merge_profile",
+                          side_effect=self._merge_spy(bundle)) as mp:
+            self.ensure_seed(self._user(), bundle)
+        prof = mp.call_args.args[1]
+        self.assertEqual(prof["identity"]["grade"], "研一")       # 已有值不被覆盖
+        self.assertEqual(prof["identity"]["school"], "清华")      # 缺失项仍补齐
+        self.assertEqual(prof["goal"]["target_role"], "算法实习")
+
+    def test_noop_when_no_user_or_seed(self):
+        bundle = self._bundle({})
+        with patch.object(memory, "merge_profile") as mp:
+            self.assertIs(self.ensure_seed(None, bundle), bundle)
+            self.assertIs(self.ensure_seed(self._user({}), bundle), bundle)
+            self.assertIs(self.ensure_seed(
+                {"id": str(uuid4()), "init_profile": None}, bundle), bundle)
+        mp.assert_not_called()
+
+    def test_fully_seeded_profile_skips_write(self):
+        seeded = {"identity": {"grade": "大三", "school": "清华",
+                               "major": "计算机", "degree": "本科",
+                               "period": "2022-2026", "name": "李雷"},
+                  "goal": {"target_role": "后端实习"},
+                  "basics": {"target_role": "后端实习"},
+                  "material_notes": {"skills": "Python,SQL"}}
+        bundle = self._bundle(seeded)
+        with patch.object(memory, "merge_profile") as mp:
+            self.ensure_seed(self._user(), bundle)
+        mp.assert_not_called()
+
+    def test_conflict_is_best_effort(self):
+        bundle = self._bundle({})
+        with patch.object(memory, "merge_profile",
+                          side_effect=memory.ProfileConflict("v")) as mp:
+            out = self.ensure_seed(self._user(), bundle)
+        mp.assert_called_once()
+        self.assertEqual(out["profile"]["profile"], {})   # 冲突不炸调用方
+
+
 if __name__ == "__main__":
     unittest.main()

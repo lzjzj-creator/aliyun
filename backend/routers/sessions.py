@@ -74,7 +74,12 @@ def get_session(request: Request, session_id: str,
     bundle = _storage(lambda: memory.get_session_bundle(sid))
     if bundle is None:
         raise security.not_found()
-    return bundle
+    # v5: 初始化之前建的老会话按 Bearer 身份回填种子画像（懒加载 coach 路由模块）
+    try:
+        from ..routers.coach import ensure_seed
+    except ImportError:
+        from routers.coach import ensure_seed  # type: ignore
+    return ensure_seed(security.current_user(authorization), bundle)
 
 
 @router.delete("/sessions/{session_id}")

@@ -88,6 +88,48 @@ def _seed_profile(auth_user: dict) -> dict | None:
     return profile or None
 
 
+def ensure_seed(auth_user: dict | None, bundle: dict | None) -> dict | None:
+    """v5: backfill init_profile into an existing session's profile.
+
+    Sessions created before init (guest phase, or before onboarding) never
+    got the create-time seed. On Bearer access, merge missing seed paths and
+    persist with recomputed coverage. Session values always win — interview
+    corrections are never overwritten by the seed."""
+    if not auth_user or not bundle or not bundle.get("session"):
+        return bundle
+    seed = _seed_profile(auth_user)
+    if not seed:
+        return bundle
+    row = bundle.get("profile") or {}
+    profile = row.get("profile") or {}
+    # 两层深合并：seed 只补缺，会话已有值（含访谈修正）一律优先
+    merged = dict(profile)
+    changed = False
+    for key, val in seed.items():
+        cur = merged.get(key)
+        if isinstance(val, dict) and isinstance(cur, dict):
+            fill = {k: v for k, v in val.items() if not cur.get(k)}
+            if fill:
+                merged[key] = {**cur, **fill}
+                changed = True
+        elif not cur:
+            merged[key] = val
+            changed = True
+    if not changed:
+        return bundle
+    detail = row.get("coverage_detail") or {}
+    try:
+        updated = memory.merge_profile(
+            bundle["session"]["id"], merged, int(row.get("version") or 0),
+            coverage=coach.coverage_of(merged, detail)[0],
+            coverage_detail=detail)
+    except (memory.ProfileConflict, memory.SessionNotFound,
+            memory.MemoryStoreError):
+        return bundle          # 并发冲突/存储故障：best-effort，下一轮再补
+    bundle["profile"] = updated
+    return bundle
+
+
 class _LeaseResponse(StreamingResponse):
     """Release even if ASGI send fails before the sync iterator is first advanced."""
     def __init__(self, *args, release, **kwargs):
@@ -184,6 +226,9 @@ def chat_stream(req: ChatReq, request: Request,
         bundle = _storage(lambda: memory.get_session_bundle(sid))
         if bundle is None or bundle.get("session") is None:
             raise security.not_found()     # verify→删除竞态下统一 404（同 sessions.py）
+        # v5: 初始化之前建的老会话按 Bearer 身份回填种子画像
+        if not is_new:
+            bundle = ensure_seed(auth_user, bundle)
         session = bundle["session"]
         profile_row = bundle.get("profile") or {}
         messages = bundle.get("messages") or []
