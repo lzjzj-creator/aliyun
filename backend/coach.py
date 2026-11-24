@@ -601,10 +601,8 @@ GREETING_TEXT = (
 
 
 def greeting_events():
-    """新会话招呼流（#13）：招呼文 + 两枚引导 chips。"""
+    """新会话招呼流：招呼文（引导 chips 已并入输入框 placeholder，不再下发）。"""
     yield ("token", GREETING_TEXT)
-    yield ("card", {"type": "suggest_reply",
-                    "payload": {"replies": [CHIP_START, CHIP_ASK]}})
 
 
 def _persist_merge(session_id, new_profile, new_detail, version):

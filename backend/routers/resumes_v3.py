@@ -119,6 +119,16 @@ class CreateDocReq(BaseModel):
     target_role: str | None = Field(default=None, max_length=80)
     jd_text: str | None = Field(default=None, max_length=MAX_JD_TEXT)
     template_version: str | None = Field(default=None, max_length=64)
+    fields: dict | None = None
+
+    @field_validator("fields")
+    @classmethod
+    def fields_bounded(cls, value):
+        if value is not None:
+            photo_from_fields(value)
+            if len(json.dumps(value, ensure_ascii=False)) > 120000:
+                raise ValueError("fields too large")
+        return value
 
 
 class PatchDocReq(BaseModel):
@@ -176,6 +186,19 @@ def list_resumes(request: Request,
 def create_resume(request: Request, req: CreateDocReq,
                   x_owner_token: str | None = Header(default=None)):
     owner = _owner(request, x_owner_token)
+    if req.fields is not None:
+        # 直接入库（向导人工微调后的成稿）：不走 LLM 生成，不扣生成配额
+        try:
+            doc = memory_v3.create_document(
+                owner["id"], title=req.title,
+                template_version=req.template_version or load().template_version,
+                target_role=req.target_role,
+                fields=req.fields, status="draft")
+        except ValueError:
+            raise HTTPException(422, "请求参数无效") from None
+        except memory_v3.MemoryStoreError:
+            raise HTTPException(503, "存储暂时不可用") from None
+        return {"protocol": 3, "document": _detail_public(owner["id"], doc)}
     _gen_limit(owner["id"])
     try:
         doc = resume_builder_v3.create_document(

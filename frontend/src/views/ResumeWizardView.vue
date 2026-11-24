@@ -8,6 +8,7 @@ import ResumePreview from "../components/ResumePreview.vue";
 import { downloadResumePdf } from "../utils/resumeDownload";
 import { exportIssues } from "../../../backend/resume_assets/render.mjs";
 import { getTemplate, autofill, expand, optimizePlan, optimizeSection, exportDraftPdf } from "../api/resume";
+import { createResume } from "../api/v3";
 import { listSessions } from "../api/sessions";
 import { getDraft, putDraft } from "../api/auth";
 
@@ -20,6 +21,32 @@ const layout = ref("classic");
 const mobilePanel = ref("edit");
 const exportProblems = ref([]);
 const saveState = ref("未保存");
+const libBusy = ref(false);
+const libDone = ref(false);
+const libMsg = ref("");
+
+// 添加到简历库：当前 fields 原样入库（不走 LLM 生成），命名自动取目标岗位
+async function addToLibrary() {
+  if (libBusy.value || locked.value || !Object.keys(fields.value).length) return;
+  if (libDone.value) { emit("goto-library"); return; }
+  libBusy.value = true; libMsg.value = "";
+  try {
+    const role = fields.value?.basics?.target_role || "通用";
+    const date = new Date().toLocaleDateString("zh-CN", { month: "2-digit", day: "2-digit" });
+    await createResume({
+      title: `${role}简历 ${date}`.slice(0, 80),
+      target_role: fields.value?.basics?.target_role || undefined,
+      template_version: tpl.value?.template_version,
+      fields: fields.value,
+    });
+    libDone.value = true;
+    libMsg.value = "已存入简历库，再点一次可打开查看。";
+  } catch (e) {
+    libMsg.value = `入库失败：${e.message}`;
+  } finally {
+    libBusy.value = false;
+  }
+}
 const photoBusy = ref(false);
 const photoContext = ref(0);
 let photoRequest = null;
@@ -316,10 +343,13 @@ async function exportPrint() {
       </label>
       <span class="save-state" role="status" aria-live="polite">{{ photoBusy ? "照片处理中…" : saveState }}</span>
       <button class="ghost" :disabled="locked" @click="saveDraft">保存草稿</button>
+      <button class="ghost" :disabled="locked" @click="addToLibrary">
+        {{ libDone ? "打开简历库 →" : (libBusy ? "入库中…" : "添加到简历库") }}
+      </button>
       <button class="primary" :disabled="locked || !tpl" @click="exportPrint">
         {{ exporting ? "导出中…" : "导出 PDF" }}
       </button>
-      <p class="snapshot-hint">导出当前预览快照；草稿自动保存在云端账号。</p>
+      <p class="snapshot-hint">导出当前预览快照；草稿自动保存在云端账号。{{ libMsg }}</p>
     </div>
     <div v-if="errMsg || exportProblems.length" class="wiz-feedback" role="alert">
       <p v-if="errMsg" class="warn">{{ errMsg }}</p>
