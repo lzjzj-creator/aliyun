@@ -5,7 +5,7 @@ import UiIcon from "./components/UiIcon.vue";
 import AuthWall from "./components/AuthWall.vue";
 import GuideTour from "./components/GuideTour.vue";
 import { authwallAllowed } from "./components/authwall";
-import { API_BASE } from "./api/core";
+import { API_BASE, setAuthGate } from "./api/core";
 import { ensureAuth, getMe, logout, deleteAccount } from "./api/auth";
 
 // S4 首包瘦身：非首屏视图全部异步 chunk，进入路由时才下载（S6 骨架屏兜底）
@@ -40,6 +40,10 @@ const deleteArmed = ref(false);      // 顶栏删除账号的两步确认态
 const deleting = ref(false);
 const authReturn = ref("#/chat");    // 登录/注册成功后的回原页目标
 let authwallArmed = false;           // 本次会话内是否已在价值时刻弹过一次
+
+// 在子视图挂载前发起 guest 签发，并让业务请求等它完成（首访竞态）
+const bootAuth = ensureAuth();
+setAuthGate(bootAuth);
 
 try {
   collapsed.value = localStorage.getItem("zm_sidebar_collapsed") === "1";
@@ -250,9 +254,39 @@ onUnmounted(() => window.removeEventListener("hashchange", syncRoute));
         <span v-if="!collapsed">{{ item.label }}</span>
       </button>
 
-      <div v-if="!collapsed" class="sb-foot">
-        <span class="sb-foot-title">成长闭环</span>
-        <span class="sb-foot-line">聊经历 → 存证据 →<br />定制简历 → 学优化</span>
+      <div class="sb-foot">
+        <details class="sb-privacy">
+          <summary title="数据在云端">
+            <UiIcon name="shield" :size="13" /><span v-if="!collapsed">数据在云端</span>
+          </summary>
+          <div class="sb-privacy-card">
+            所有数据存在你的云端账号里：可随时逐条删除，注销账号即清空。
+            {{ isGuest ? "当前为访客身份，注册后数据自动归入账号。" : "" }}
+          </div>
+        </details>
+        <template v-if="isGuest">
+          <div v-if="!collapsed" class="sb-auth">
+            <button class="tb-auth-btn ghost" @click="navAuth()">登录</button>
+            <button class="tb-auth-btn" @click="navAuth('register')">注册</button>
+          </div>
+          <button v-else class="sb-icon-btn" title="登录 / 注册" @click="navAuth()">
+            <UiIcon name="user" :size="15" />
+          </button>
+        </template>
+        <details v-else class="sb-account">
+          <summary class="sb-user" :title="accountLabel">
+            <UiIcon name="user" :size="14" />
+            <span v-if="!collapsed" class="sb-user-name">{{ accountLabel }}</span>
+            <UiIcon v-if="!collapsed" name="chevron-down" :size="11" />
+          </summary>
+          <div class="sb-menu-card">
+            <button class="tb-menu-item" @click="nav('#/onboarding')">资料初始化</button>
+            <button class="tb-menu-item" @click="onLogout">退出登录</button>
+            <button class="tb-menu-item danger" :disabled="deleting" @click="onDeleteAccount">
+              {{ deleteArmed ? (deleting ? "删除中…" : "确认删除（不可恢复）") : "删除账号" }}
+            </button>
+          </div>
+        </details>
       </div>
     </nav>
 
@@ -265,6 +299,7 @@ onUnmounted(() => window.removeEventListener("hashchange", syncRoute));
           <h1 class="tb-title">{{ pageTitle }}</h1>
           <span v-if="pageSub" class="tb-sub">{{ pageSub }}</span>
         </div>
+        <!-- 桌面端账号区在左侧栏底部；移动端侧栏隐藏，顶栏兜底 -->
         <div class="tb-right">
           <details class="tb-privacy-pop">
             <summary><UiIcon name="shield" :size="13" /> 数据在云端</summary>
@@ -348,7 +383,9 @@ onUnmounted(() => window.removeEventListener("hashchange", syncRoute));
 </template>
 
 <style scoped>
-.tb-right { display: flex; align-items: center; gap: 10px; }
+/* 桌面端顶栏不重复账号区（在左侧栏底部）；≤768px 侧栏隐藏时顶栏兜底 */
+.tb-right { display: none; align-items: center; gap: 10px; }
+@media (max-width: 768px) { .tb-right { display: flex; } }
 .tb-account { display: flex; align-items: center; gap: 6px; }
 .tb-user {
   display: inline-flex; align-items: center; gap: 4px;
