@@ -74,13 +74,44 @@ async function skip() {
   emit("skip");
 }
 
-watch(idx, place);
+// 会话区/素材面板异步渲染会把目标挪位，首次测量会失效；布局一变就重新贴靠。
+let ro = null;
+let mo = null;
+let raf = 0;
+let timers = [];
+
+function schedulePlace() {
+  if (raf) return;
+  raf = requestAnimationFrame(() => { raf = 0; place(); });
+}
+
+// 切步骤/重新挂载时会话区还没渲染出来，先居中兜底，等它出来再锚定
+function placeSoon() {
+  place();
+  timers.forEach(clearTimeout);
+  timers = [setTimeout(place, 180), setTimeout(place, 700)];
+}
+
+watch(idx, placeSoon);
 onMounted(() => {
   if (step.value.nav && location.hash !== step.value.nav) emit("goto", step.value.nav);
-  place();
+  placeSoon();
   window.addEventListener("resize", place);
+  window.addEventListener("scroll", schedulePlace, true);
+  ro = new ResizeObserver(schedulePlace);
+  ro.observe(document.body);
+  // 目标上方的消息/快捷入口是插入出来的，body 高度不变，只靠尺寸观测追不到
+  mo = new MutationObserver(schedulePlace);
+  mo.observe(document.body, { childList: true, subtree: true });
 });
-onUnmounted(() => window.removeEventListener("resize", place));
+onUnmounted(() => {
+  window.removeEventListener("resize", place);
+  window.removeEventListener("scroll", schedulePlace, true);
+  ro?.disconnect();
+  mo?.disconnect();
+  timers.forEach(clearTimeout);
+  if (raf) cancelAnimationFrame(raf);
+});
 </script>
 
 <template>
