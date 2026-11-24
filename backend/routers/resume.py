@@ -530,9 +530,12 @@ def autofill(req: AutofillReq, request: Request,
         if sec.type != "entries" or sec.key == "education":
             continue
         if not fields.get(sec.key) and sec.key not in gap_paths:
-            optional = "可留空" if not sec.required else "建议补充"
+            # 文案与缺口级别保持一致：无实习素材时该区块已降为可选，
+            # 不能再说"建议补充"。
+            required_here = gap_required(sec.key)
+            optional = "可留空" if not required_here else "建议补充"
             gaps.append({"field_path": sec.key, "label": sec.title,
-                         "required": gap_required(sec.key),
+                         "required": required_here,
                          "reason": f"暂无{sec.title}素材，{optional}"})
             gap_paths.add(sec.key)
         elif fields.get(sec.key) and len(fields[sec.key]) < (sec.min or 0):
