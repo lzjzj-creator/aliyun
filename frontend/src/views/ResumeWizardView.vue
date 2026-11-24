@@ -38,6 +38,7 @@ const locked = computed(() => formDisabled.value || photoBusy.value);
 
 // —— 草稿数据 ——
 const fields = ref({});
+const kbRefs = ref([]);              // expand 实际借用的知识库条目（步骤②底部展示）
 const evidence = ref({});
 const evidenceRows = computed(() => Object.entries(evidence.value || {})
   .map(([path, sources]) => ({ path, sources: Array.isArray(sources) ? sources.filter((s) => s && typeof s === "object") : [] }))
@@ -215,6 +216,7 @@ async function generate() {
     // ② expand：每条经历按 STAR 扩写为一段话（素材单薄以知识库为基底补足）
     setStage("expand", "running");
     const expandedSecs = new Set();
+    kbRefs.value = [];
     try {
       const ex = await expand({
         template_version: tpl.value.template_version,
@@ -222,6 +224,7 @@ async function generate() {
       });
       if (ex.fields) fields.value = ex.fields;
       for (const k of ex.sections || []) expandedSecs.add(k);
+      kbRefs.value = ex.kb_refs || [];
       pipeSummary.value = `扩写 ${ex.expanded || 0} 条经历` +
         (ex.kept ? `，${ex.kept} 条素材不足保持原样` : "");
       setStage("expand", "done");
@@ -411,6 +414,20 @@ async function exportPrint() {
         <div class="row wz-actions">
           <button class="ghost" :disabled="locked" @click="step = 1">← 重选素材</button>
         </div>
+        <details v-if="kbRefs.length" class="kb-refs" open>
+          <summary>本次生成参考了 {{ kbRefs.length }} 处知识库内容</summary>
+          <div v-for="r in kbRefs" :key="r.field_path" class="kb-ref">
+            <b>{{ r.entry }}</b>
+            <ul>
+              <li v-for="(ref, i) in r.refs" :key="i">
+                <a v-if="ref.source_url" :href="ref.source_url" target="_blank"
+                   rel="noopener noreferrer">{{ ref.title }}</a>
+                <span v-else>{{ ref.title }}</span>
+                <em>相关度 {{ Math.round((ref.score || 0) * 100) }}%</em>
+              </li>
+            </ul>
+          </div>
+        </details>
       </aside>
       <div class="wz-canvas">
         <p class="preview-caption">投递预览 · {{ layout === "classic" ? "中文经典" : "中文现代" }} · 点区块可定位到左侧编辑</p>
@@ -440,6 +457,16 @@ async function exportPrint() {
 .evidence-field ul { margin: 6px 0; padding-left: 20px; }
 .evidence-field p { white-space: pre-wrap; margin: 6px 0; }
 .evidence-field span { display: block; color: var(--ink-secondary); font-size: .75rem; }
+/* 知识库引用：步骤②编辑栏底部，展示本次扩写借用的条目 */
+.kb-refs { margin-top: 14px; border-top: 1px solid var(--border-subtle); padding-top: 10px; font-size: .8rem; }
+.kb-refs summary { cursor: pointer; padding: 4px 0; color: var(--ink-secondary); font-weight: 600; }
+.kb-ref { margin-top: 10px; }
+.kb-ref > b { display: block; font-size: .78rem; color: var(--agent); margin-bottom: 3px; }
+.kb-ref ul { margin: 0; padding-left: 16px; }
+.kb-ref li { margin: 4px 0; color: var(--ink-secondary); }
+.kb-ref li a { color: var(--brand); text-decoration: none; }
+.kb-ref li a:hover { text-decoration: underline; }
+.kb-ref li em { display: inline-block; margin-left: 6px; font-style: normal; font-size: .7rem; color: var(--ink-muted); }
 .preview-caption { margin: 0 0 10px; font-size: .75rem; color: var(--ink-muted); }
 .mobile-switch { display: none; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }

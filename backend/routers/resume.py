@@ -574,6 +574,7 @@ def expand_entries(req: ExpandReq, request: Request,
         prompt += f"\n目标岗位 JD（突出相关素材，不新增事实）：{req.jd[:1500]}\n"
 
     expanded, kept, placeholders, expanded_secs = 0, 0, [], set()
+    kb_refs = []   # 本次扩写实际借用的知识库条目（仅采纳段落时记录）
     for sec in tpl.sections:
         if sec.type != "entries":
             continue
@@ -588,13 +589,15 @@ def expand_entries(req: ExpandReq, request: Request,
                 continue
             # KB 检索：素材单薄时以命中内容为基底补写；检索失败静默降级。
             kb_hints = ""
+            used_hits = []
             try:
                 hits = _kb.search(llm.embed(source[:200]), source[:200], "all", 3)
                 hits = [h for h in hits if h.get("score", 0) >= _min_score]
                 if hits:
+                    used_hits = hits[:3]
                     kb_hints = ("\n知识库参考（素材单薄时以其为基底按 STAR 补写）：\n"
                                 + "\n".join(h.get("text", "")[:150]
-                                            for h in hits[:3]))
+                                            for h in used_hits))
             except Exception:
                 kb_hints = ""
             try:
@@ -619,9 +622,19 @@ def expand_entries(req: ExpandReq, request: Request,
             entry["bullets"] = [paragraph]
             expanded += 1
             expanded_secs.add(sec.key)
+            if used_hits:
+                kb_refs.append({
+                    "field_path": f"{sec.key}.{i}",
+                    "entry": str(entry.get("name") or entry.get("title")
+                                 or f"{sec.title} {i + 1}")[:40],
+                    "refs": [{"title": h.get("title") or h.get("doc_slug") or "知识库条目",
+                              "source_url": h.get("source_url") or "",
+                              "score": round(float(h.get("score") or 0), 3)}
+                             for h in used_hits]})
     return {"template_version": tpl.template_version, "fields": fields,
             "expanded": expanded, "kept": kept,
-            "sections": sorted(expanded_secs), "placeholders": placeholders}
+            "sections": sorted(expanded_secs),
+            "kb_refs": kb_refs, "placeholders": placeholders}
 
 
 # ---------------- optimize：分段黑箱优化（§9） ----------------
