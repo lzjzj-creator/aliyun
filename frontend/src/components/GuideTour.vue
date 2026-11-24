@@ -25,6 +25,7 @@ const STEPS = [
 const idx = ref(0);
 const step = computed(() => STEPS[idx.value]);
 const bubbleStyle = ref({});
+const bubbleEl = ref(null);
 const seenMarked = ref(false);
 const busy = ref(false);
 
@@ -34,9 +35,14 @@ async function place() {
   const el = sel ? document.querySelector(sel) : null;
   if (el) {
     const r = el.getBoundingClientRect();
-    const top = Math.min(Math.max(r.bottom + 8, 12), window.innerHeight - 140);
-    const left = Math.min(Math.max(r.left, 12), window.innerWidth - 320);
-    bubbleStyle.value = { top: `${top}px`, left: `${left}px` };
+    const bh = bubbleEl.value?.offsetHeight || 180;
+    const bw = bubbleEl.value?.offsetWidth || 300;
+    // 目标在视口下半部（如底部输入框）→ 气泡放其上方，否则下方
+    const top = r.top > window.innerHeight * 0.55
+      ? Math.max(r.top - bh - 10, 12)
+      : Math.min(r.bottom + 8, Math.max(window.innerHeight - bh - 12, 12));
+    const left = Math.min(Math.max(r.left, 12), Math.max(window.innerWidth - bw - 12, 12));
+    bubbleStyle.value = { top: `${top}px`, left: `${left}px`, transform: "none" };
     el.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
   } else {
     bubbleStyle.value = { top: "50%", left: "50%", transform: "translate(-50%,-50%)" };
@@ -80,7 +86,7 @@ onUnmounted(() => window.removeEventListener("resize", place));
 <template>
   <div class="gt-layer" role="dialog" aria-modal="true" aria-label="新手引导">
     <div class="gt-dim" />
-    <div class="gt-bubble" :style="bubbleStyle">
+    <div ref="bubbleEl" class="gt-bubble" :style="bubbleStyle">
       <p class="gt-mascot">🦉</p>
       <h3>{{ step.title }}</h3>
       <p class="gt-text">{{ step.text }}</p>
