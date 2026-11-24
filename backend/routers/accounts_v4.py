@@ -128,7 +128,8 @@ class DraftReq(BaseModel):
     fields: dict = Field(default_factory=dict)
     evidence_map: dict = Field(default_factory=dict)
     gaps: list = Field(default_factory=list)
-    photo: dict | None = None
+    # 前端发 data-url 字符串（与 fields._meta.photo 同形状）；dict 兼容旧客户端
+    photo: dict | str | None = None
     draft_id: str | None = Field(default=None, max_length=64)
 
 

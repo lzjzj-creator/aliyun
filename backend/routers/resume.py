@@ -497,6 +497,14 @@ def autofill(req: AutofillReq, request: Request,
                          "reason": "对话中未提及，请手动填写"})
             gap_paths.add(path)
 
+    # 模型若从事实库补出了基础信息却没有逐字消息证据，上面的校验会清空它；
+    # 账号初始化画像是权威来源，最后回填一次并撤掉对应缺口。
+    fields = _init_prefill(tpl, fields, auth_user, evidence_map)
+    init_paths = {p for p in evidence_map
+                  if p.startswith(("basics.", "education.0."))}
+    if init_paths:
+        gaps = [g for g in gaps if g["field_path"] not in init_paths]
+
     # Preserve indexes, including empty entries/list slots. Removing them would
     # silently retarget evidence and gaps. Clients must accept sparse blank rows;
     # any later compaction must remap fields, evidence_map and gaps together.
