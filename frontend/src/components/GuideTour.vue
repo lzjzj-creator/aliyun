@@ -37,8 +37,9 @@ async function place() {
     const r = el.getBoundingClientRect();
     const bh = bubbleEl.value?.offsetHeight || 180;
     const bw = bubbleEl.value?.offsetWidth || 300;
-    // 目标在视口下半部（如底部输入框）→ 气泡放其上方，否则下方
-    const top = r.top > window.innerHeight * 0.55
+    // 输入框锚点固定放上方（不被软键盘/快捷卡挡住）；其余目标在下半屏才上移
+    const above = sel === ".composer" || r.top > window.innerHeight * 0.55;
+    const top = above
       ? Math.max(r.top - bh - 10, 12)
       : Math.min(r.bottom + 8, Math.max(window.innerHeight - bh - 12, 12));
     const left = Math.min(Math.max(r.left, 12), Math.max(window.innerWidth - bw - 12, 12));
