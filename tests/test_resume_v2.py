@@ -254,8 +254,8 @@ class EndpointShapeTest(unittest.TestCase):
                                   "session_ids": [s1, s2]})
         self.assertEqual(r.status_code, 200)
 
-    def test_expand_numeric_guard_keeps_fabricated(self):
-        """G7 STAR 守卫：段落出现素材外的数字 → 整条回退原始 bullets。"""
+    def test_expand_adopts_paragraph_with_kb_grounded_detail(self):
+        """v5 扩写放开：素材单薄也直接采用段落（知识库基底+STAR），不回退、无占位。"""
         from unittest.mock import patch
         import backend.routers.resume as rr
         fields = {"projects": [{"name": "校园商城", "role": "后端",
@@ -263,14 +263,33 @@ class EndpointShapeTest(unittest.TestCase):
                                 "bullets": ["写用户中心接口"]}]}
         with patch.object(rr.llm, "embed", side_effect=RuntimeError("no-kb")), \
              patch.object(rr.llm, "chat_json",
-                          return_value={"paragraph": "QPS 提升 300% 并完成接口开发"}):
+                          return_value={"paragraph":
+                                        "在校园商城项目中独立负责后端接口开发，日均处理请求三千次，按期交付"}):
             r = self.c.post("/api/v2/resume/expand", headers=self.H,
                             json={"template_version": self.ver, "fields": fields})
         self.assertEqual(r.status_code, 200)
         d = r.json()
-        self.assertEqual(d["expanded"], 0)
-        self.assertEqual(d["kept"], 1)
-        self.assertEqual(d["fields"]["projects"][0]["bullets"], ["写用户中心接口"])
+        self.assertEqual(d["expanded"], 1)
+        self.assertEqual(d["sections"], ["projects"])
+        self.assertEqual(d["fields"]["projects"][0]["bullets"],
+                         ["在校园商城项目中独立负责后端接口开发，日均处理请求三千次，按期交付"])
+
+    def test_expand_strips_leftover_placeholder_marks(self):
+        """模型万一漏出占位标记，写库前清除兜底。"""
+        from unittest.mock import patch
+        import backend.routers.resume as rr
+        fields = {"projects": [{"name": "创赛PPT", "role": "负责人",
+                                "bullets": ["全程自己做的", "拿了省银奖"]}]}
+        with patch.object(rr.llm, "embed", side_effect=RuntimeError("no-kb")), \
+             patch.object(rr.llm, "chat_json",
+                          return_value={"paragraph":
+                                        "独立负责创赛PPT项目【待补充：需要的数据】，获省级银奖"}):
+            r = self.c.post("/api/v2/resume/expand", headers=self.H,
+                            json={"template_version": self.ver, "fields": fields})
+        d = r.json()
+        self.assertEqual(d["expanded"], 1)
+        self.assertEqual(d["fields"]["projects"][0]["bullets"],
+                         ["独立负责创赛PPT项目，获省级银奖"])
 
     def test_expand_adopts_compliant_paragraph(self):
         """无新增数字的 STAR 段落 → 扩写成功，单条 bullet 承载。"""

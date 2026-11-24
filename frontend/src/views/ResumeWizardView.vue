@@ -212,14 +212,16 @@ async function generate() {
     draftVer.value = tpl.value.template_version;
     setStage("autofill", "done");
 
-    // ② expand：每条经历按 STAR 扩写为一段话（数字守卫不成立则保留原样）
+    // ② expand：每条经历按 STAR 扩写为一段话（素材单薄以知识库为基底补足）
     setStage("expand", "running");
+    const expandedSecs = new Set();
     try {
       const ex = await expand({
         template_version: tpl.value.template_version,
         fields: fields.value,
       });
       if (ex.fields) fields.value = ex.fields;
+      for (const k of ex.sections || []) expandedSecs.add(k);
       pipeSummary.value = `扩写 ${ex.expanded || 0} 条经历` +
         (ex.kept ? `，${ex.kept} 条素材不足保持原样` : "");
       setStage("expand", "done");
@@ -236,6 +238,8 @@ async function generate() {
       let optCount = 0;
       for (const s of planRes.sections || []) {
         if (!(s.optimizable && s.status === "pending")) continue;
+        // 已 STAR 扩写的板块不再逐条改写，避免段落被拆回 bullet/打上待补充
+        if (expandedSecs.has(s.key)) continue;
         try {
           const sec = await optimizeSection({
             template_version: ver, section: s.key, fields: fields.value,

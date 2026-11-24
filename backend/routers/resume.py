@@ -411,6 +411,14 @@ def _init_prefill(tpl, fields: dict, auth_user: dict | None,
                 edu[0][key] = v.strip()
                 evidence_map[f"education.0.{key}"] = [
                     {"msg_id": "init_profile", "quote": v.strip()}]
+    # 初始化照片同步进简历（data-url 字符串，与 render.isValidResumePhoto 对齐）
+    photo = init.get("photo")
+    url = photo.get("data_url") if isinstance(photo, dict) \
+        else photo if isinstance(photo, str) else None
+    meta = fields.setdefault("_meta", {})
+    if (isinstance(url, str) and url.startswith("data:image/jpeg;base64,")
+            and not meta.get("photo")):
+        meta["photo"] = url
     return fields
 
 
@@ -543,10 +551,6 @@ def expand_entries(req: ExpandReq, request: Request,
     _, anon = security.require_identity(request, authorization, x_anon_id)
     security.charge_turn(anon)
     try:
-        from ..resume_optimizer import _numeric_atoms
-    except ImportError:
-        from resume_optimizer import _numeric_atoms
-    try:
         from .. import kb as _kb
     except ImportError:
         import kb as _kb
@@ -561,7 +565,7 @@ def expand_entries(req: ExpandReq, request: Request,
     if req.jd:
         prompt += f"\n目标岗位 JD（突出相关素材，不新增事实）：{req.jd[:1500]}\n"
 
-    expanded, kept, placeholders = 0, 0, []
+    expanded, kept, placeholders, expanded_secs = 0, 0, [], set()
     for sec in tpl.sections:
         if sec.type != "entries":
             continue
@@ -574,14 +578,13 @@ def expand_entries(req: ExpandReq, request: Request,
             source = _entry_source(sec, entry)
             if not source:
                 continue
-            # KB 检索只补细节词（§3.3）：高分命中给措辞参考，不新增事实；
-            # 检索失败/低分静默降级，不阻塞扩写。
+            # KB 检索：素材单薄时以命中内容为基底补写；检索失败静默降级。
             kb_hints = ""
             try:
                 hits = _kb.search(llm.embed(source[:200]), source[:200], "all", 3)
                 hits = [h for h in hits if h.get("score", 0) >= _min_score]
                 if hits:
-                    kb_hints = ("\n知识库措辞参考（只借细节词，不得新增事实）：\n"
+                    kb_hints = ("\n知识库参考（素材单薄时以其为基底按 STAR 补写）：\n"
                                 + "\n".join(h.get("text", "")[:150]
                                             for h in hits[:3]))
             except Exception:
@@ -599,21 +602,18 @@ def expand_entries(req: ExpandReq, request: Request,
             if not isinstance(paragraph, str) or not paragraph.strip():
                 kept += 1
                 continue
-            paragraph = paragraph.strip()
-            # 数字守卫：段落中的数字原子必须都能在素材语料或【待补充】占位里找到
-            src_atoms = _numeric_atoms(source) | _numeric_atoms(req.confirmed_facts)
-            novel = [n for n in _numeric_atoms(paragraph) - src_atoms]
-            if novel:
+            # 用户拍板：素材不足也按知识库+STAR 直接扩写，不做数字/占位拦截；
+            # 模型万一漏出占位标记则清掉兜底。
+            paragraph = re.sub(r"【[^】]*待补充[^】]*】", "", paragraph).strip()
+            if not paragraph:
                 kept += 1
                 continue
             entry["bullets"] = [paragraph]
             expanded += 1
-            if "【待补充" in paragraph:
-                placeholders.append({"field_path": f"{sec.key}.{i}.bullets.0",
-                                     "label": f"{sec.title} {i + 1}",
-                                     "placeholder": "【待补充】"})
+            expanded_secs.add(sec.key)
     return {"template_version": tpl.template_version, "fields": fields,
-            "expanded": expanded, "kept": kept, "placeholders": placeholders}
+            "expanded": expanded, "kept": kept,
+            "sections": sorted(expanded_secs), "placeholders": placeholders}
 
 
 # ---------------- optimize：分段黑箱优化（§9） ----------------
